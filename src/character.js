@@ -236,17 +236,6 @@ const POSES = {
     T.torsoX = 0.12 + s * 0.16;
     T.headX = 0.05;
   },
-  garba(T, p, t) {
-    const a = t * 7.2; // the circle used to be posed twice a frame: keep the clap tempo it had
-    T.armRX = -1.2 + Math.sin(a) * 0.5;
-    T.armLX = -1.2 - Math.sin(a) * 0.5;
-    T.armRZ = -1.2 + Math.cos(a) * 0.4;
-    T.armLZ = 1.2 - Math.cos(a) * 0.4;
-    T.elbowR = T.elbowL = -0.6;
-    T.torsoY = Math.sin(a) * 0.3;
-    T.torsoX = 0.08;
-    T.hipsY = 0.95 - Math.abs(Math.sin(a)) * 0.05;
-  },
   straddle(T) {
     T.hipsY = 0.55;
     T.legRX = T.legLX = -0.3;

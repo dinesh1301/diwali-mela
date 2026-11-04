@@ -12,7 +12,7 @@ import { seg } from './lod.js';
 
 /*
   Layout (metres, +z towards the entrance):
-    gate z=58 → bazaar z 47..17 → rangoli chowk at origin → cross path z=-18
+    gate z=58 → bazaar z 47..17 → the chowk (deepstambh) at origin → cross path z=-18
     (giant wheel west, fireworks field east) → ghat steps at z=-44 → river.
 */
 export const SITES = {
@@ -333,66 +333,7 @@ function buildBazaar(ctx) {
   }
 }
 
-// ---------- rangoli chowk ----------
-
-function rangoliTexture() {
-  return canvasTexture(1024, 1024, (c, w, h) => {
-    c.translate(w / 2, h / 2);
-    const disc = (r, color) => {
-      c.fillStyle = color;
-      c.beginPath();
-      c.arc(0, 0, r, 0, Math.PI * 2);
-      c.fill();
-    };
-    const ring = (r, n, len, wid, color, offset = 0) => {
-      c.fillStyle = color;
-      for (let i = 0; i < n; i++) {
-        c.save();
-        c.rotate((i / n) * Math.PI * 2 + offset);
-        c.beginPath();
-        c.ellipse(r + len / 2, 0, len / 2, wid / 2, 0, 0, Math.PI * 2);
-        c.fill();
-        c.restore();
-      }
-    };
-    const dots = (r, n, size, color, offset = 0) => {
-      c.fillStyle = color;
-      for (let i = 0; i < n; i++) {
-        const a = (i / n) * Math.PI * 2 + offset;
-        c.beginPath();
-        c.arc(Math.cos(a) * r, Math.sin(a) * r, size, 0, Math.PI * 2);
-        c.fill();
-      }
-    };
-    disc(508, '#3a0f4f');
-    dots(492, 96, 7, '#fff7e0');
-    ring(380, 24, 100, 56, '#e0218a');
-    ring(392, 24, 70, 26, '#ffd166');
-    disc(380, '#ff7a00');
-    ring(270, 16, 105, 70, '#1f9d55');
-    ring(285, 16, 70, 30, '#b7f5c9');
-    ring(300, 16, 60, 22, '#ffd166', Math.PI / 16);
-    dots(372, 48, 6, '#fff7e0');
-    disc(270, '#c1121f');
-    ring(160, 12, 105, 60, '#ffd166');
-    ring(172, 12, 70, 24, '#ff7a00');
-    dots(262, 32, 6, '#fff7e0');
-    disc(160, '#3a86ff');
-    ring(70, 8, 85, 50, '#ffffff');
-    ring(70, 8, 70, 30, '#8ecae6', Math.PI / 8);
-    dots(152, 24, 6, '#fff7e0');
-    disc(70, '#ffd166');
-    disc(40, '#e0218a');
-    disc(16, '#ffffff');
-    // powdery grain
-    for (let i = 0; i < 20000; i++) {
-      const a = Math.random() * Math.PI * 2;
-      const r = Math.sqrt(Math.random()) * 505;
-      c.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.1)';
-      c.fillRect(Math.cos(a) * r, Math.sin(a) * r, 2, 2);
-    }
-  });
-}
+// ---------- the chowk ----------
 
 function buildPlaza(ctx) {
   const { scene, lights, diyas } = ctx;
@@ -424,14 +365,31 @@ function buildPlaza(ctx) {
   paving.position.y = 0.04;
   scene.add(paving);
 
-  const tex = rangoliTexture();
-  const rangoli = new THREE.Mesh(
-    new THREE.CircleGeometry(5, 96),
-    std(0xffffff, 1, { map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.18, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 })
-  );
-  rangoli.rotation.x = -Math.PI / 2;
-  rangoli.position.y = 0.06;
-  scene.add(rangoli);
+  // the centrepiece: a two-tier stone chabutra with a deepstambh (a lamp pillar ringed with diya
+  // trays). One material, so the whole thing merges into a single draw call with its cell.
+  const sand = std(0xcdb08a, 0.85);
+  const piece = (geo, y) => {
+    const m = new THREE.Mesh(geo, sand);
+    m.position.y = y;
+    scene.add(m);
+  };
+  piece(new THREE.CylinderGeometry(2.4, 2.6, 0.36, seg(40, 24)), 0.18);
+  piece(new THREE.CylinderGeometry(1.5, 1.6, 0.3, seg(32, 20)), 0.51);
+  piece(new THREE.CylinderGeometry(0.16, 0.26, 2.0, seg(14, 10)), 1.66);
+  const trays = [[1.05, 0.62], [1.5, 0.46], [1.95, 0.32], [2.45, 0.2]];
+  for (const [y, r] of trays) piece(new THREE.CylinderGeometry(r, r * 0.8, 0.07, seg(20, 12)), y);
+  for (const [y, r] of trays) {
+    const n = Math.round(r * 22);
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      diyas.add(Math.cos(a) * (r - 0.06), y + 0.04, Math.sin(a) * (r - 0.06));
+    }
+  }
+  for (let i = 0; i < 28; i++) {
+    const a = ((i + 0.5) / 28) * Math.PI * 2;
+    diyas.add(Math.cos(a) * 2.3, 0.36, Math.sin(a) * 2.3);
+  }
+  ctx.colliders.push({ type: 'circle', x: 0, z: 0, r: 2.7 });
 
   for (let i = 0; i < 40; i++) {
     const a = (i / 40) * Math.PI * 2;
@@ -454,7 +412,7 @@ function buildPlaza(ctx) {
     if (i < N / 2) lights.addStrand(tops[i], tops[i + N / 2], { sag: 2.6, spacing: 0.6 });
   }
 
-  // hanging star lantern (akash kandil) above the rangoli
+  // hanging star lantern (akash kandil) above the deepstambh
   const shape = new THREE.Shape();
   for (let i = 0; i < 10; i++) {
     const r = i % 2 ? 0.42 : 1;
@@ -465,12 +423,12 @@ function buildPlaza(ctx) {
   const starGeo = new THREE.ExtrudeGeometry(shape, { depth: 0.3, bevelEnabled: true, bevelSize: 0.06, bevelThickness: 0.06, bevelSegments: 2 });
   starGeo.center();
   const star = new THREE.Mesh(starGeo, new THREE.MeshBasicMaterial({ color: hdr(0xff6a1c, 2.4) }));
-  star.position.set(0, 3.6, 0);
+  star.position.set(0, 4.0, 0);
   scene.add(star);
   ctx.live.add(star);
   ctx.updaters.push((dt, t) => {
     star.rotation.y = t * 0.4;
-    star.position.y = 3.6 + Math.sin(t * 0.8) * 0.05;
+    star.position.y = 4.0 + Math.sin(t * 0.8) * 0.05;
   });
   warmLight(scene, 0, 6, 0, 70, 30, 0xffa860);
 }

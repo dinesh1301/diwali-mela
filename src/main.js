@@ -36,13 +36,9 @@ import { DayNight } from './daynight.js';
 import { Ambience } from './ambience.js';
 import { Net } from './net.js';
 import { buildDecor } from './decor.js';
-import { Creators } from './creators.js';
 import { Walls } from './wall.js';
 import { Train } from './train.js';
-import { Columbus } from './columbus.js';
 import { Ravan } from './ravan.js';
-import { Tambola } from './games/tambola.js';
-import { Kuan } from './kuan.js';
 import { CrowdScenes } from './extras.js';
 import { StringLights } from './stringLights.js';
 import { CONFIG } from './config.js';
@@ -53,20 +49,15 @@ import { TOUCH, tk } from './touch.js';
 
 const ZONES = [
   { id: 'gate', x: 0, z: 62, r: 9, msg: '🪔 Welcome to the Topmate Diwali Mela!' },
-  { id: 'creators', x: 16, z: 65, r: 8, msg: '🤝 Creator Corner: meet Topmate creators and book a session' },
   { id: 'selfie', x: 15, z: 56, r: 6, msg: '📸 Selfie Point: get your mela poster to share' },
-  { id: 'tambola', x: 33, z: 58, r: 8, msg: '🎟️ Tambola Tent: join a round of housie' },
   { id: 'deepmala', x: -12, z: 65, r: 6, msg: '🪔 The Deepmala wall: bring a diya or kandeel and press Q to add yours', tap: '🪔 The Deepmala wall: bring a diya or kandeel, then tap the button to add yours' },
   { id: 'ramleela', x: -30, z: 62, r: 14, msg: '📽️ Ramleela Maidan: take a seat for the Ramayan show' },
   { id: 'ravan', x: -56, z: 64, r: 10, msg: '🔥 Ravan Dahan: the effigy burns on the countdown, or light the fuse yourself' },
   { id: 'bazaar', x: 0, z: 32, r: 13, msg: '🛍️ The Bazaar: walk up to a stall and press E', tap: '🛍️ The Bazaar: walk up to a stall and tap the glowing button' },
   { id: 'games', x: 22, z: 27, r: 12, msg: '🎯 Khel Gali: four mela games, win prizes!' },
   { id: 'carousel', x: -20, z: 30, r: 9, msg: '🎠 The Carousel: hop on!' },
-  { id: 'columbus', x: -26, z: 50, r: 7, msg: '🚢 The Columbus swing: board at the steps' },
   { id: 'cars', x: -53, z: 24, r: 24, msg: '🏁 Chakri Cars: a go-kart circuit · press E at a car', tap: '🏁 Chakri Cars: a go-kart circuit · walk to a car and tap “Drive”' },
   { id: 'airfield', x: 52, z: 22, r: 20, msg: '✈️ Pushpak Viman Airfield: fly the plane or the heli' },
-  { id: 'plaza', x: 0, z: 0, r: 10, msg: '🌸 Rangoli Chowk: join the garba!' },
-  { id: 'kuan', x: -24, z: 6, r: 10, msg: '🏍️ Maut ka Kuan: climb the stairs to watch the riders' },
   { id: 'wheel', x: -34, z: -18, r: 12, msg: '🎡 The Giant Wheel: walk to the steps and press E', tap: '🎡 The Giant Wheel: walk to the steps and tap the button' },
   { id: 'fireworks', x: 36, z: -30, r: 15, msg: '🚀 Fireworks Zone: press 1 to launch a rocket', tap: '🚀 Fireworks Zone: tap 🚀 Rocket below to launch one' },
   { id: 'ghat', x: 0, z: -42, r: 12, msg: '🏮 The Ghat: float a diya, release a lantern, or take a boat ride from the jetty' },
@@ -75,20 +66,16 @@ const ZONES = [
 const face = (x, z, tx, tz) => Math.atan2(tx - x, tz - z);
 const PLACES = {
   gate: [0, 70, Math.PI],
-  creators: [16, 70, 0],
   selfie: [12.6, 56.4, Math.PI / 2],
-  tambola: [33, 67, Math.PI],
   ramleela: [-30, 52, 0],
   ravan: [-48, 66, -Math.PI / 2],
   bazaar: [0, 50, Math.PI],
   games: [19, 27, Math.PI / 2],
   train: [12.5, 36, Math.PI / 2],
   carousel: [-16, 30, -Math.PI / 2],
-  columbus: [-26, 55, Math.PI],
   cars: [-37.5, 21, -Math.PI / 2],
   airfield: [44, 18, Math.PI / 2],
-  plaza: [0, 12, Math.PI],
-  kuan: [-14, 10, -Math.PI / 2],
+  plaza: [0, 12, Math.PI], // the open chowk (no chip; the bench and ?place= use it)
   wheel: [-34, -12, Math.PI],
   fireworks: [8, -2, face(8, -2, 36, -30)],
   ghat: [0, -38, Math.PI],
@@ -465,8 +452,6 @@ async function init() {
       if (boat.state !== 'docked') boat.abort();
       if (ramayan.seated) ramayan.standUp();
       train.abort();
-      columbus.abort();
-      kuan.abort();
       if (player.mode === 'ride') rides.getOff();
       if (player.mode === 'busy' || player.mode === 'anim') return;
       player.teleport(...PLACES[id]);
@@ -523,15 +508,11 @@ async function init() {
   const vehicles = new Vehicles(ctx);
   const poster = new Poster(ctx);
   const extraLights = new StringLights(scene);
-  const creators = new Creators(ctx, extraLights);
   const walls = new Walls(ctx);
   ctx.walls = walls;
   walls.claimFrom(shops.placed);
   const train = new Train(ctx, extraLights);
-  const columbus = new Columbus(ctx, extraLights);
   const ravan = new Ravan(ctx);
-  const tambola = new Tambola(ctx, extraLights);
-  const kuan = new Kuan(ctx, extraLights);
   const scenes = low ? null : new CrowdScenes(ctx);
   extraLights.build();
   await loading();
@@ -552,7 +533,6 @@ async function init() {
   });
   ctx.customizer = customizer;
   void food;
-  void creators;
 
   // smoke follows the crackers
   fireworks.onBurst = (p) => smoke.puff(p.x, p.y, p.z, { kind: 'smoke', count: low ? 3 : 8, size: 3, grow: 2.2, rise: 0.3, drift: 0.6, life: 7, peak: 0.1, spread: 1.5 });
@@ -700,7 +680,7 @@ async function init() {
     if (!params.has('noyt')) ramayan.start();
     if (!params.has('nonet')) net.connect();
     ui.showCoach();
-    window.__mela = { ...ctx, games, rides, crowd, vehicles, ramayan, poster, customizer, nameTag, boat, train, columbus, ravan, tambola, kuan, walls, dayNight, scenes, decor, voice, lightPool, governor, get gov() { return { ...governor.state, gpu: settings.gpu, midGpu: settings.midGpu }; } }; // for automated checks
+    window.__mela = { ...ctx, games, rides, crowd, vehicles, ramayan, poster, customizer, nameTag, boat, train, ravan, walls, dayNight, scenes, decor, voice, lightPool, governor, get gov() { return { ...governor.state, gpu: settings.gpu, midGpu: settings.midGpu }; } }; // for automated checks
   } else {
     customizer.open('intro');
   }
@@ -754,7 +734,6 @@ async function init() {
   // behind the intro card and other full-screen panels the scene is only a blurred backdrop, so it is
   // drawn at a few frames a second (or every 3rd frame) while the simulation keeps running
   const introEl = document.getElementById('intro');
-  const tambolaEl = document.getElementById('tambola');
   let frame = 0;
   let lastDraw = 0;
   let lastTime = 0;
@@ -776,8 +755,6 @@ async function init() {
     vehicles.update(dt, t);
     boat.update(dt, t);
     train.update(dt, t);
-    columbus.update(dt, t);
-    kuan.update(dt, t);
     ramayan.update(dt, t, { started, muted });
     player.update(dt);
     world.update(dt, t);
@@ -786,7 +763,6 @@ async function init() {
     scenes?.update(dt, t);
     shops.update(dt, t);
     poster.update(t);
-    tambola.update(dt);
     ravan.update(dt, t);
     decor.update(dt, t);
     updateFlames(t);
@@ -799,7 +775,7 @@ async function init() {
 
     // prompts and help: whoever owns the seat (vehicle, show, ride) supplies them
     const mode = games.active ? 'game' : player.mode;
-    const owner = vehicles.active ? vehicles : ramayan.seated ? ramayan : boat.riding ? boat : train.riding ? train : columbus.state === 'ride' || columbus.state === 'stopping' ? columbus : kuan.watching ? kuan : null;
+    const owner = vehicles.active ? vehicles : ramayan.seated ? ramayan : boat.riding ? boat : train.riding ? train : null;
     const ownerKey = owner === vehicles ? `veh:${vehicles.active.kind}` : owner ? owner.constructor.name : 'ride';
     const key = mode === 'ride' ? ownerKey : mode;
     if (key !== helpKey) {
@@ -859,7 +835,7 @@ async function init() {
     ui.updateBubbles(camera);
 
     const intro = !introEl.classList.contains('hidden');
-    const covered = intro || (ui.modalOpen && tambolaEl?.classList.contains('hidden') !== false);
+    const covered = intro || ui.modalOpen;
     const draw = !covered || (intro ? time - lastDraw > 140 : frame % 3 === 0);
     if (covered !== throttled) {
       throttled = covered;

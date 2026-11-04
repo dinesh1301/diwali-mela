@@ -4,8 +4,8 @@ import { balloonMesh } from './items.js';
 import { setLayer, rand, pick } from './utils.js';
 
 /*
-  Scripted crowd scenes layered over the wandering NPCs: a garba circle on the chowk, kids
-  running with sparklers, a queue at the giant wheel, families on the ghat steps, a balloon
+  Scripted crowd scenes layered over the wandering NPCs: kids running with sparklers round the
+  chowk, a queue at the giant wheel, families on the ghat steps, a balloon
   seller doing his rounds and a cotton-candy cart.
 */
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -27,14 +27,6 @@ export class CrowdScenes {
       this.all.push(ch);
       return ch;
     };
-
-    // ---- garba circle on the chowk ----
-    this.garba = [];
-    for (let i = 0; i < 7; i++) {
-      const ch = person(randomLook(), 0, 0, 0, 'garba');
-      ch.t = i * 0.6;
-      this.garba.push({ ch, a: (i / 7) * Math.PI * 2 });
-    }
 
     // ---- kids with sparklers racing around the chowk ----
     this.kids = [];
@@ -113,21 +105,12 @@ export class CrowdScenes {
     this.candyMan = person(randomLook(), 8.3, 54, -Math.PI / 2);
     this.candyNext = 3;
     // everyone not animated by a scene above (the families on the ghat) just idles
-    const busy = new Set([...this.garba.map((g) => g.ch), ...this.kids.map((k) => k.ch), parent, ...this.queue.map((q) => q.ch), this.vendor, this.candyMan]);
+    const busy = new Set([...this.kids.map((k) => k.ch), parent, ...this.queue.map((q) => q.ch), this.vendor, this.candyMan]);
     this.idle = this.all.filter((ch) => !busy.has(ch));
   }
 
   update(dt, t) {
     const { world } = this.ctx;
-    // garba: circle anticlockwise, bodies turned a little inwards
-    for (const g of this.garba) {
-      g.a += dt * 0.32;
-      const r = 4.3;
-      g.ch.root.position.set(Math.cos(g.a) * r, 0, Math.sin(g.a) * r);
-      g.ch.root.rotation.y = Math.atan2(-Math.sin(g.a), Math.cos(g.a)) + 0.5;
-      g.ch.actionParam = t;
-      g.ch.update(dt, { speed: 1.4 });
-    }
     for (const k of this.kids) {
       k.a += dt * k.speed;
       const wob = Math.sin(t * 1.3 + k.a) * 0.6;

@@ -25,11 +25,7 @@ export const STAMPS = [
   { id: 'poster', icon: '📸', name: 'Selfie Point' },
   { id: 'boat', icon: '🛶', name: 'Naav ki Sair' },
   { id: 'train', icon: '🚂', name: 'Toy Train' },
-  { id: 'columbus', icon: '🚢', name: 'Columbus Swing' },
-  { id: 'tambola', icon: '🎟️', name: 'Tambola' },
-  { id: 'kuan', icon: '🏍️', name: 'Maut ka Kuan' },
   { id: 'ravan', icon: '🔥', name: 'Ravan Dahan' },
-  { id: 'creator', icon: '🤝', name: 'Met a Creator' },
 ];
 
 const KEY = 'melaPassport';
@@ -41,7 +37,8 @@ export class Passport {
     this.audio = audio;
     this.done = new Set();
     try {
-      JSON.parse(localStorage.getItem(KEY) || '[]').forEach((id) => this.done.add(id));
+      // stamps of attractions the mela no longer has are dropped, so the count stays out of STAMPS.length
+      for (const id of JSON.parse(localStorage.getItem(KEY) || '[]')) if (STAMPS.some((x) => x.id === id)) this.done.add(id);
     } catch {
       // storage unavailable: the passport just won't persist
     }

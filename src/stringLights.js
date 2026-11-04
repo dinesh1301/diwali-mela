@@ -11,9 +11,9 @@ const colorHz = () => (lowDetail() ? 20 : 30); // read at run time: the tier is 
 /** Every fairy-light bulb in the mela, drawn as one instanced mesh and animated per strand. */
 /** Seconds into the evening at which the lights around a point come on (gate first, river last). */
 function switchOnDelay(p) {
-  if (p.z > 52) return p.x > 10 ? 6 : p.x < -14 ? 10 : 3; // gate, then Selfie Point / creators, then Ramleela
+  if (p.z > 52) return p.x > 10 ? 6 : p.x < -14 ? 10 : 3; // gate, then Selfie Point, then Ramleela
   if (p.z > 12) return p.x > 14 ? 16 : p.x < -14 ? 20 : 9; // bazaar, then games, then carousel / cars
-  if (p.z > -12) return 13; // rangoli chowk
+  if (p.z > -12) return 13; // the chowk
   if (p.z > -40) return p.x < -14 ? 24 : p.x > 14 ? 28 : 18; // wheel, fireworks lane, cross path
   return 22; // ghat and temple
 }

@@ -151,7 +151,7 @@ export function createUI(h) {
     resultResolve = null;
   };
 
-  // ---------- passport, boards, settings, creator ----------
+  // ---------- passport, boards, settings ----------
 
   const passportEl = $('#passport');
   passportEl.querySelector('[data-close]').addEventListener('click', () => closeModal(passportEl));
@@ -168,22 +168,6 @@ export function createUI(h) {
   settingsEl.querySelector('[data-close]').addEventListener('click', () => closeModal(settingsEl));
   // a tap on the dimmed backdrop (outside the card) closes these too
   for (const el of [passportEl, boardsEl, settingsEl]) el.addEventListener('click', (e) => e.target === el && closeModal(el));
-  const creatorEl = $('#creatorCard');
-  let creatorResolve = null;
-  const closeCreator = (v) => {
-    closeModal(creatorEl);
-    creatorResolve?.(v);
-    creatorResolve = null;
-  };
-  creatorEl.querySelector('[data-book]').addEventListener('click', () => closeCreator('book'));
-  creatorEl.querySelector('[data-close]').addEventListener('click', () => closeCreator('close'));
-
-  // ---------- tambola ----------
-
-  const tambolaEl = $('#tambola');
-  let tambolaLeave = null;
-  $('#tambolaLeave').addEventListener('click', () => tambolaLeave?.());
-
   addEventListener('keydown', (e) => {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) {
       if (e.code === 'Escape') closeWish(null);
@@ -205,14 +189,6 @@ export function createUI(h) {
         if (e.code === 'Escape' || (el === passportEl && e.code === settings.keys.passport) || (el === boardsEl && e.code === settings.keys.board)) closeModal(el);
         return;
       }
-    }
-    if (!creatorEl.classList.contains('hidden')) {
-      if (e.code === 'Escape') closeCreator('close');
-      return;
-    }
-    if (!tambolaEl.classList.contains('hidden')) {
-      if (e.code === 'Escape') tambolaLeave?.();
-      return;
     }
     if (!intro.classList.contains('hidden') || e.repeat || modals || h.input.capture) return;
     const k = settings.keys;
@@ -477,25 +453,6 @@ export function createUI(h) {
       if (!boardsEl.classList.contains('hidden')) renderBoards();
     },
 
-    creatorCard({ name, handle, headline, image }) {
-      creatorEl.querySelector('h2').textContent = name;
-      creatorEl.querySelector('.cc-handle').textContent = `topmate.io/${handle}`;
-      creatorEl.querySelector('.cc-headline').textContent = headline || '';
-      const img = creatorEl.querySelector('img');
-      const ph = creatorEl.querySelector('.cc-initial');
-      if (image) {
-        img.src = image;
-        img.classList.remove('hidden');
-        ph.classList.add('hidden');
-      } else {
-        img.classList.add('hidden');
-        ph.textContent = (name || '?').charAt(0).toUpperCase();
-        ph.classList.remove('hidden');
-      }
-      openModal(creatorEl);
-      return new Promise((r) => (creatorResolve = r));
-    },
-
     openSettings() {
       const box = settingsEl.querySelector('.settings-body');
       const keysHtml = Object.keys(DEFAULT_KEYS)
@@ -545,44 +502,6 @@ export function createUI(h) {
         api.openSettings();
       });
       openModal(settingsEl);
-    },
-
-    tambola: {
-      open({ ticket, onLeave }) {
-        tambolaLeave = onLeave;
-        const grid = tambolaEl.querySelector('.ticket');
-        grid.innerHTML = ticket.map((row) => row.map((v) => `<div class="cell ${v === null ? 'blank' : ''}" data-n="${v ?? ''}">${v ?? ''}</div>`).join('')).join('');
-        tambolaEl.querySelector('.tb-current').textContent = '–';
-        tambolaEl.querySelector('.tb-call').textContent = 'Eyes down…';
-        tambolaEl.querySelector('.tb-count').textContent = '';
-        tambolaEl.querySelector('.tb-prizes').innerHTML = ['Early Five', 'Top Line', 'Middle Line', 'Bottom Line', 'Full House'].map((p) => `<span class="prize" data-prize="${p}">${p}</span>`).join('');
-        tambolaEl.querySelector('.tb-recent').innerHTML = '';
-        openModal(tambolaEl);
-        return {
-          called(n, call, count) {
-            tambolaEl.querySelector('.tb-current').textContent = n;
-            tambolaEl.querySelector('.tb-call').textContent = call || '';
-            tambolaEl.querySelector('.tb-count').textContent = `${count} of 90 called`;
-            const cell = grid.querySelector(`[data-n="${n}"]`);
-            if (cell) cell.classList.add('marked');
-            const recent = tambolaEl.querySelector('.tb-recent');
-            const chip = document.createElement('span');
-            chip.textContent = n;
-            recent.prepend(chip);
-            while (recent.children.length > 8) recent.lastChild.remove();
-          },
-          prize(prize, who) {
-            const el = tambolaEl.querySelector(`[data-prize="${prize.name}"]`);
-            if (!el) return;
-            el.classList.add(who === 'you' ? 'mine' : 'gone');
-            el.textContent = `${prize.icon} ${prize.name} · ${who === 'you' ? 'you!' : who}`;
-          },
-        };
-      },
-      close() {
-        tambolaLeave = null;
-        closeModal(tambolaEl);
-      },
     },
 
     bubble(getPos, text, seconds = 2.5) {

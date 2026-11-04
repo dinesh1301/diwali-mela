@@ -47,7 +47,6 @@ signalling; there is no TURN relay, so two visitors behind very strict NATs may 
 
 `src/config.js`:
 
-- `creators`: Topmate usernames shown at Creator Corner (fetched live).
 - `publicBuild`: `true` forces the royalty-free band instead of the song. The bundled song in
   `public/audio/diwali-song.m4a` (AAC, 72 kbps) is a commercial track: fine for a private demo, replace it or set
   `publicBuild` before hosting publicly.
@@ -66,7 +65,7 @@ signalling; there is no TURN relay, so two visitors behind very strict NATs may 
 - `src/world.js`, `src/water.js`, `src/sky.js`, `src/daynight.js`, `src/decor.js`: the grounds.
 - `src/character.js`, `src/player.js`, `src/npcs.js`, `src/extras.js`: people.
 - `src/activities/`, `src/games/`, `src/rides.js`, `src/vehicles/`, `src/boat.js`, `src/train.js`,
-  `src/columbus.js`, `src/kuan.js`, `src/ravan.js`, `src/ramayan.js`: things to do.
+  `src/ravan.js`, `src/ramayan.js`: things to do.
 - `src/fireworks.js`, `src/smoke.js`, `src/debris.js`, `src/lanterns.js`, `src/audio.js`,
   `src/ambience.js`: effects and sound (all synthesised; the song is the only audio file).
-- `src/net.js`, `src/wall.js`, `src/creators.js`, `src/poster.js`: the social layer.
+- `src/net.js`, `src/wall.js`, `src/poster.js`: the social layer.
