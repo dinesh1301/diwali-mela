@@ -431,6 +431,23 @@ export class Character {
     }
   }
 
+  /**
+   * Frees this character's GPU resources and detaches it (remote visitors who leave). Shared
+   * materials stay; per-character ones (ownMaterial) are disposed. Props parented to the rig are
+   * the caller's to free: dispose before attaching anything you still need, or detach it first.
+   */
+  dispose() {
+    this.root.removeFromParent();
+    const geos = new Set();
+    // sprites share one module-level quad in three.js: never free that
+    this.root.traverse((o) => o.geometry && !o.isSprite && geos.add(o.geometry));
+    for (const g of geos) g.dispose();
+    if (this.material !== charMaterial) this.material.dispose();
+    if (this.headMaterial !== charMaterial) this.headMaterial.dispose();
+    this.meshes = [];
+    this.disposed = true;
+  }
+
   setLook(partial) {
     Object.assign(this.look, partial);
     this.build();
