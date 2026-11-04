@@ -13,6 +13,8 @@ const NEAR = 4; // full volume inside this radius (metres)
 const FAR = 34; // silent beyond this
 const MAX_PEERS = 12;
 const SPEAK_RMS = 0.02;
+const PLACE_S = 1 / 18; // listener and voice positions are pushed to Web Audio at ~18 Hz
+const SMOOTH = 0.06; // ...and glide between updates
 
 const rms = (analyser, buf) => {
   analyser.getByteTimeDomainData(buf);
@@ -36,6 +38,7 @@ export class Voice {
     this.localTalking = false; // our own level is above the threshold
     this.listeners = {};
     this.levelT = 0;
+    this.placeT = 0;
     this.buf = new Uint8Array(256);
     this.warnedPeers = false;
   }
@@ -209,7 +212,8 @@ export class Voice {
       p.source = ac.createMediaStreamSource(stream);
       if (!p.panner) {
         p.panner = ac.createPanner();
-        p.panner.panningModel = 'HRTF';
+        // HRTF convolves every voice: phones get the cheap stereo pan instead
+        p.panner.panningModel = settings.tier === 'low' ? 'equalpower' : 'HRTF';
         p.panner.distanceModel = 'linear';
         p.panner.refDistance = NEAR;
         p.panner.maxDistance = FAR;
@@ -278,21 +282,27 @@ export class Voice {
 
   update(dt, camera) {
     const ac = this.ac;
-    if (ac && this.peers.size) {
+    this.placeT += dt;
+    if (ac && this.peers.size && this.placeT >= PLACE_S) {
+      this.placeT = 0;
       const L = ac.listener;
       const pos = camera.position;
       const fwd = camera.getWorldDirection(this._fwd ??= pos.clone());
       if (L.positionX) {
         const t = ac.currentTime;
-        L.positionX.setTargetAtTime(pos.x, t, 0.05);
-        L.positionY.setTargetAtTime(pos.y, t, 0.05);
-        L.positionZ.setTargetAtTime(pos.z, t, 0.05);
-        L.forwardX.setTargetAtTime(fwd.x, t, 0.05);
-        L.forwardY.setTargetAtTime(fwd.y, t, 0.05);
-        L.forwardZ.setTargetAtTime(fwd.z, t, 0.05);
-        L.upX.setTargetAtTime(0, t, 0.05);
-        L.upY.setTargetAtTime(1, t, 0.05);
-        L.upZ.setTargetAtTime(0, t, 0.05);
+        L.positionX.setTargetAtTime(pos.x, t, SMOOTH);
+        L.positionY.setTargetAtTime(pos.y, t, SMOOTH);
+        L.positionZ.setTargetAtTime(pos.z, t, SMOOTH);
+        L.forwardX.setTargetAtTime(fwd.x, t, SMOOTH);
+        L.forwardY.setTargetAtTime(fwd.y, t, SMOOTH);
+        L.forwardZ.setTargetAtTime(fwd.z, t, SMOOTH);
+        if (!this.upSet) {
+          // "up" never changes: set it once rather than scheduling it every update
+          this.upSet = true;
+          L.upX.value = 0;
+          L.upY.value = 1;
+          L.upZ.value = 0;
+        }
       } else {
         L.setPosition(pos.x, pos.y, pos.z);
         L.setOrientation(fwd.x, fwd.y, fwd.z, 0, 1, 0);
@@ -305,9 +315,9 @@ export class Voice {
         if (p.panner) {
           if (p.panner.positionX) {
             const t = ac.currentTime;
-            p.panner.positionX.setTargetAtTime(x, t, 0.05);
-            p.panner.positionY.setTargetAtTime(y, t, 0.05);
-            p.panner.positionZ.setTargetAtTime(z, t, 0.05);
+            p.panner.positionX.setTargetAtTime(x, t, SMOOTH);
+            p.panner.positionY.setTargetAtTime(y, t, SMOOTH);
+            p.panner.positionZ.setTargetAtTime(z, t, SMOOTH);
           } else p.panner.setPosition(x, y, z);
         } else if (p.el) {
           const d = Math.hypot(x - pos.x, z - pos.z);

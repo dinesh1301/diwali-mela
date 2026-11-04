@@ -3,6 +3,25 @@ import { rand } from './utils.js';
 
 const MUSIC_URL = `${import.meta.env.BASE_URL}audio/diwali-song.m4a`; // AAC 72 kbps (2.5 MB)
 const MUSIC_LEVEL = 0.32;
+const QUIET = 0.004; // a spatial sound peaking below this is skipped: no nodes are created for it
+const CRACKLE_RATE = 20; // clicks per second in the pre-rendered crackle buffers
+const CRACKLE_SECS = 3;
+
+/**
+ * setTargetAtTime only when the value moved enough to hear: called every frame, the unchanged
+ * calls otherwise pile up automation events. `eps` is absolute below 1 and relative above.
+ */
+export function rampTo(param, value, time, tc, eps = 0.003) {
+  const last = param._target;
+  if (last !== undefined && Math.abs(value - last) <= eps * Math.max(1, Math.abs(value))) return;
+  param._target = value;
+  param.setTargetAtTime(value, time, tc);
+}
+
+/** Forgets what rampTo last set (after something else scheduled the param directly). */
+export function rampReset(param) {
+  param._target = undefined;
+}
 
 /**
  * Background song plus synthesised effects (no other audio files). Effects are attenuated and
@@ -32,6 +51,10 @@ export class MelaAudio {
     this.noise = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
     const d = this.noise.getChannelData(0);
     for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    this.crackles = null;
+    // render the crackle click tracks while nothing is happening (or on the first crackle)
+    const idle = window.requestIdleCallback ?? ((f) => setTimeout(f, 1500));
+    idle(() => (this.crackles ??= this.renderCrackles()));
 
     this.startCrowd();
     this.startMusic();
@@ -80,6 +103,7 @@ export class MelaAudio {
     if (!this.musicGain) return;
     const on = this.songPlaying;
     this.musicGain.gain.setTargetAtTime(on ? MUSIC_LEVEL : 0, this.ctx.currentTime, 0.2);
+    rampReset(this.musicGain.gain);
     if (on) this.songElement().play().catch(() => {});
     else if (this.music) setTimeout(() => !this.songPlaying && this.music.pause(), 600);
   }
@@ -89,9 +113,11 @@ export class MelaAudio {
     if (!this.musicGain || !this.songPlaying) return;
     const g = this.musicGain.gain;
     const t = this.ctx.currentTime;
+    const level = MUSIC_LEVEL * (1 - 0.92 * (this.duckK ?? 0));
     g.cancelScheduledValues(t);
-    g.setTargetAtTime(MUSIC_LEVEL * 0.35, t, 0.08);
-    g.setTargetAtTime(MUSIC_LEVEL, t + seconds, 0.4);
+    g.setTargetAtTime(level * 0.35, t, 0.08);
+    g.setTargetAtTime(level, t + seconds, 0.4); // back to wherever the Ramleela duck has it
+    g._target = level;
   }
 
   // ---------- building blocks ----------
@@ -99,6 +125,13 @@ export class MelaAudio {
   spatial(pos) {
     const d = pos ? this.listener.distanceTo(pos) : 0;
     return { gain: Math.min(1, 18 / (d + 6)), delay: d / 343 };
+  }
+
+  /** spatial(), or null when the sound would be too quiet to hear (or we're muted / suspended). */
+  audible(pos, peak) {
+    if (!this.ctx || this.muted || this.ctx.state !== 'running') return null;
+    const s = this.spatial(pos);
+    return s.gain < 0.03 || s.gain * peak < QUIET ? null : s;
   }
 
   noiseSource() {
@@ -145,8 +178,9 @@ export class MelaAudio {
   // ---------- fireworks ----------
 
   boom(pos, size = 1) {
-    if (!this.ctx) return;
-    const { gain, delay } = this.spatial(pos);
+    const sp = this.audible(pos, 0.9 * size);
+    if (!sp) return;
+    const { gain, delay } = sp;
     const t = this.ctx.currentTime + delay;
     const src = this.noiseSource();
     const lp = this.ctx.createBiquadFilter();
@@ -164,24 +198,83 @@ export class MelaAudio {
     osc.stop(t + 0.6);
   }
 
+  /**
+   * `count` crackles spread over `spread` seconds. Plays a slice of a pre-rendered click track (a
+   * buffer source and a gain per layer) instead of three nodes per click: a finale could ask for
+   * a few hundred clicks a second.
+   */
   crackle(pos, count = 24, spread = 0.9, startDelay = 0) {
-    if (!this.ctx) return;
-    const { gain, delay } = this.spatial(pos);
-    for (let i = 0; i < count; i++) {
-      this.noiseHit({ at: delay + startDelay + Math.random() * spread, type: 'highpass', freq: 2500, level: 0.35 * gain, dur: 0.03 });
+    const sp = this.audible(pos, 0.35);
+    if (!sp) return;
+    const { gain, delay } = sp;
+    const bufs = (this.crackles ??= this.renderCrackles());
+    const dur = Math.min(CRACKLE_SECS - 0.1, Math.max(0.1, spread));
+    // how many copies of the click track it takes to reach the asked-for density
+    const want = count / (dur * CRACKLE_RATE);
+    const layers = Math.max(1, Math.min(3, Math.round(want)));
+    const level = 0.35 * gain * Math.min(1.4, Math.max(0.5, want / layers));
+    const t = this.ctx.currentTime + delay + startDelay;
+    for (let i = 0; i < layers; i++) {
+      const src = this.ctx.createBufferSource();
+      src.buffer = bufs[(Math.random() * bufs.length) | 0];
+      const g = this.ctx.createGain();
+      g.gain.value = level;
+      src.connect(g).connect(this.master);
+      src.start(t, Math.random() * (CRACKLE_SECS - dur), dur);
     }
   }
 
+  /** A few seconds of random high-passed noise clicks (what crackle() used to build node by node). */
+  renderCrackles() {
+    const rate = this.ctx.sampleRate;
+    const n = Math.floor(rate * CRACKLE_SECS);
+    // RBJ high-pass biquad at 2.5 kHz, Q 1: the filter noiseHit() used for each click
+    const w = (2 * Math.PI * 2500) / rate;
+    const alpha = Math.sin(w) / 2;
+    const cw = Math.cos(w);
+    const a0 = 1 + alpha;
+    const b0 = (1 + cw) / 2 / a0;
+    const b1 = -(1 + cw) / a0;
+    const a1 = (-2 * cw) / a0;
+    const a2 = (1 - alpha) / a0;
+    const atk = Math.floor(0.003 * rate);
+    const len = Math.floor(0.035 * rate);
+    const k = Math.log(0.0001) / (len - atk);
+    const out = [];
+    for (let b = 0; b < 3; b++) {
+      const buf = this.ctx.createBuffer(1, n, rate);
+      const d = buf.getChannelData(0);
+      for (let c = 0; c < CRACKLE_SECS * CRACKLE_RATE; c++) {
+        const s0 = Math.floor(Math.random() * (n - len));
+        let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+        for (let i = 0; i < len; i++) {
+          const x = Math.random() * 2 - 1;
+          const y = b0 * x + b1 * x1 + b0 * x2 - a1 * y1 - a2 * y2;
+          x2 = x1;
+          x1 = x;
+          y2 = y1;
+          y1 = y;
+          const env = i < atk ? i / atk : Math.exp(k * (i - atk));
+          d[s0 + i] += y * env;
+        }
+      }
+      out.push(buf);
+    }
+    return out;
+  }
+
   whistle(pos) {
-    if (!this.ctx) return;
-    const { gain, delay } = this.spatial(pos);
+    const sp = this.audible(pos, 0.06);
+    if (!sp) return;
+    const { gain, delay } = sp;
     this.tone(2600, 1.4, { type: 'triangle', level: 0.04 * gain, at: delay, to: 900, attack: 0.05 });
     this.noiseHit({ at: delay, freq: 4000, level: 0.06 * gain, dur: 1.2, attack: 0.05 });
   }
 
   hiss(pos, duration, { freq = 3500, level = 0.15 } = {}) {
-    if (!this.ctx) return;
-    const { gain, delay } = this.spatial(pos);
+    const sp = this.audible(pos, level);
+    if (!sp) return;
+    const { gain, delay } = sp;
     const t = this.ctx.currentTime + delay;
     const src = this.noiseSource();
     const bp = this.ctx.createBiquadFilter();
@@ -223,9 +316,9 @@ export class MelaAudio {
   }
 
   templeBell(pos = null) {
-    if (!this.ctx) return;
-    const { gain, delay } = this.spatial(pos);
-    if (gain < 0.03) return;
+    const sp = this.audible(pos, 0.22);
+    if (!sp) return;
+    const { gain, delay } = sp;
     [[520, 2.6, 0.22], [523, 2.6, 0.16], [1040, 1.8, 0.1], [1404, 1.4, 0.07], [1976, 0.9, 0.05]].forEach(([f, d, l]) => this.tone(f, d, { level: l * gain, at: delay }));
     this.noiseHit({ at: delay, type: 'highpass', freq: 3000, level: 0.15 * gain, dur: 0.03 });
   }
@@ -341,20 +434,20 @@ export class MelaAudio {
     const t = this.ctx.currentTime;
     if (e.kind === 'car') {
       const f = 48 + throttle * 55 + speed * 150;
-      e.osc.frequency.setTargetAtTime(f, t, 0.12);
-      e.osc2.frequency.setTargetAtTime(f / 2, t, 0.12);
-      e.lp.frequency.setTargetAtTime(380 + speed * 1200 + throttle * 300, t, 0.12);
-      e.gain.gain.setTargetAtTime(0.05 + throttle * 0.09 + speed * 0.05, t, 0.1);
+      rampTo(e.osc.frequency, f, t, 0.12);
+      rampTo(e.osc2.frequency, f / 2, t, 0.12);
+      rampTo(e.lp.frequency, 380 + speed * 1200 + throttle * 300, t, 0.12);
+      rampTo(e.gain.gain, 0.05 + throttle * 0.09 + speed * 0.05, t, 0.1);
     } else if (e.kind === 'heli') {
-      e.lfo.frequency.setTargetAtTime(5 + throttle * 7, t, 0.5);
-      e.osc.frequency.setTargetAtTime(70 + throttle * 50, t, 0.5);
-      e.gain.gain.setTargetAtTime(throttle * 0.26, t, 0.3);
+      rampTo(e.lfo.frequency, 5 + throttle * 7, t, 0.5);
+      rampTo(e.osc.frequency, 70 + throttle * 50, t, 0.5);
+      rampTo(e.gain.gain, throttle * 0.26, t, 0.3);
     } else {
       const f = 55 + throttle * 130 + speed * 40;
-      e.osc.frequency.setTargetAtTime(f, t, 0.3);
-      e.osc2.frequency.setTargetAtTime(f * 1.02, t, 0.3);
-      e.lp.frequency.setTargetAtTime(450 + throttle * 1600, t, 0.3);
-      e.gain.gain.setTargetAtTime(0.04 + throttle * 0.16 + speed * 0.04, t, 0.3);
+      rampTo(e.osc.frequency, f, t, 0.3);
+      rampTo(e.osc2.frequency, f * 1.02, t, 0.3);
+      rampTo(e.lp.frequency, 450 + throttle * 1600, t, 0.3);
+      rampTo(e.gain.gain, 0.04 + throttle * 0.16 + speed * 0.04, t, 0.3);
     }
   }
 
@@ -407,7 +500,7 @@ export class MelaAudio {
   ambientDuck(k) {
     this.duckK = k;
     if (!this.musicGain || !this.songPlaying) return;
-    this.musicGain.gain.setTargetAtTime(MUSIC_LEVEL * (1 - 0.92 * k), this.ctx.currentTime, 0.3);
+    rampTo(this.musicGain.gain, MUSIC_LEVEL * (1 - 0.92 * k), this.ctx.currentTime, 0.3);
   }
 
   /** A soft crowd murmur under everything. */

@@ -31,13 +31,6 @@ export class NameTag {
     this.redraw();
   }
 
-  /** Frees the tag's texture and material (its owner is leaving for good). */
-  dispose() {
-    this.sprite.removeFromParent();
-    this.texture.dispose();
-    this.sprite.material.dispose();
-  }
-
   /** Shows a 🎤 in front of the name while this person is talking. */
   setSpeaking(on) {
     if (!!on === !!this.speaking) return;
@@ -103,5 +96,13 @@ export class NameTag {
 
   setVisible(v) {
     this.sprite.visible = v && !!this.name;
+  }
+
+  /** Frees the label's texture and material (for visitors who leave). */
+  dispose() {
+    this.sprite.removeFromParent();
+    this.texture.dispose();
+    this.sprite.material.dispose();
+    this.canvas.width = this.canvas.height = 0;
   }
 }

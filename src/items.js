@@ -2,9 +2,34 @@ import * as THREE from 'three';
 import { hdr } from './utils.js';
 import { shape, merged } from './character.js';
 
-/* Hand-sized props. Each factory returns a Group whose origin sits where the palm holds it. */
+/*
+  Hand-sized props. Each factory returns a Group whose origin sits where the palm holds it.
+  Geometries and materials are shared between every copy (cached by shape and colour), so the
+  props handed out all evening (sweets, rings, balls, prizes) never pile up on the GPU: dropping
+  a prop with removeFromParent() is all the cleanup it needs. Don't mutate a prop's material.
+*/
 
-const std = (color, roughness = 0.6, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness, ...extra });
+const mats = new Map();
+const std = (color, roughness = 0.6, extra = {}) => {
+  const key = `${color}|${roughness}|${Object.entries(extra).map(([k, v]) => `${k}:${v?.isColor ? v.getHex() : v}`).join(',')}`;
+  let m = mats.get(key);
+  if (!m) mats.set(key, (m = new THREE.MeshStandardMaterial({ color, roughness, ...extra })));
+  return m;
+};
+const basicMats = new Map();
+const glow = (color, k) => {
+  const key = `${color}|${k}`;
+  let m = basicMats.get(key);
+  if (!m) basicMats.set(key, (m = new THREE.MeshBasicMaterial({ color: hdr(color, k) })));
+  return m;
+};
+const geos = new Map();
+/** One geometry per shape: `make` runs the first time `key` is asked for. */
+const geo = (key, make) => {
+  let g = geos.get(key);
+  if (!g) geos.set(key, (g = make()));
+  return g;
+};
 const flameMat = new THREE.MeshBasicMaterial({ color: hdr(0xffa040, 5) });
 const flameGeo = new THREE.SphereGeometry(0.03, 8, 6).scale(1, 2.2, 1);
 
@@ -57,28 +82,28 @@ export const FOOD_COLORS = {
 export function foodMesh(kind, color) {
   switch (kind) {
     case 'laddoo':
-      return group(mesh(new THREE.IcosahedronGeometry(0.06, 2), std(0xf2a03d, 0.85), 0, 0.06));
+      return group(mesh(geo('laddoo', () => new THREE.IcosahedronGeometry(0.06, 2)), std(0xf2a03d, 0.85), 0, 0.06));
     case 'kaju': {
-      const m = mesh(new THREE.BoxGeometry(0.08, 0.018, 0.08), std(0xf3ead8, 0.35, { metalness: 0.4 }), 0, 0.02);
+      const m = mesh(geo('kaju', () => new THREE.BoxGeometry(0.08, 0.018, 0.08)), std(0xf3ead8, 0.35, { metalness: 0.4 }), 0, 0.02);
       m.rotation.y = Math.PI / 4;
       m.scale.x = 1.5;
       return group(m);
     }
     case 'jamun':
-      return group(mesh(new THREE.SphereGeometry(0.055, 14, 10), std(0x5a2a14, 0.2), 0, 0.055));
+      return group(mesh(geo('jamun', () => new THREE.SphereGeometry(0.055, 14, 10)), std(0x5a2a14, 0.2), 0, 0.055));
     case 'barfi':
-      return group(mesh(new THREE.BoxGeometry(0.08, 0.04, 0.08), std(0xc8e6a0, 0.8), 0, 0.03));
+      return group(mesh(geo('barfi', () => new THREE.BoxGeometry(0.08, 0.04, 0.08)), std(0xc8e6a0, 0.8), 0, 0.03));
     case 'jalebi':
-      return group(mesh(jalebiGeometry(), std(0xff8f1f, 0.3, { emissive: 0x4a1a00 }), 0, 0.03));
+      return group(mesh(geo('jalebi', jalebiGeometry), std(0xff8f1f, 0.3, { emissive: 0x4a1a00 }), 0, 0.03));
     case 'kulfi':
       return group(
-        mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.12, 5), std(0xd9b38c), 0, 0.02),
-        mesh(new THREE.ConeGeometry(0.035, 0.13, 12), std(color ?? 0xfff1c1, 0.5), 0, 0.14)
+        mesh(geo('stick', () => new THREE.CylinderGeometry(0.006, 0.006, 0.12, 5)), std(0xd9b38c), 0, 0.02),
+        mesh(geo('kulfi', () => new THREE.ConeGeometry(0.035, 0.13, 12)), std(color ?? 0xfff1c1, 0.5), 0, 0.14)
       );
     case 'puri': {
-      const puri = mesh(new THREE.SphereGeometry(0.045, 12, 10), std(0xd9a441, 0.6), 0, 0.045);
+      const puri = mesh(geo('puri', () => new THREE.SphereGeometry(0.045, 12, 10)), std(0xd9a441, 0.6), 0, 0.045);
       puri.scale.y = 0.85;
-      const pani = mesh(new THREE.CircleGeometry(0.02, 12), std(0x6fbf73, 0.1, { emissive: 0x1a4a1a }), 0, 0.083);
+      const pani = mesh(geo('pani', () => new THREE.CircleGeometry(0.02, 12)), std(0x6fbf73, 0.1, { emissive: 0x1a4a1a }), 0, 0.083);
       pani.rotation.x = -Math.PI / 2;
       return group(puri, pani);
     }
@@ -116,14 +141,14 @@ export function kandeelMesh(color = 0xff3d6e) {
   const K = kandeelParts();
   return group(
     mesh(K.string, K.stringMat, 0, 0.15),
-    mesh(K.body, new THREE.MeshBasicMaterial({ color: hdr(color, 1.8) }), 0, -0.24),
+    mesh(K.body, glow(color, 1.8), 0, -0.24),
     mesh(K.tassel, K.goldMat, 0, -0.6)
   );
 }
 
 export function balloonMesh(color = 0xff006e) {
-  const b = mesh(new THREE.SphereGeometry(0.2, 16, 12).scale(1, 1.18, 1), std(color, 0.3, { emissive: new THREE.Color(color).multiplyScalar(0.25) }));
-  const knot = mesh(new THREE.ConeGeometry(0.03, 0.05, 8).rotateX(Math.PI), std(color), 0, -0.25);
+  const b = mesh(geo('balloon', () => new THREE.SphereGeometry(0.2, 16, 12).scale(1, 1.18, 1)), std(color, 0.3, { emissive: new THREE.Color(color).multiplyScalar(0.25) }));
+  const knot = mesh(geo('knot', () => new THREE.ConeGeometry(0.03, 0.05, 8).rotateX(Math.PI)), std(color), 0, -0.25);
   return group(b, knot);
 }
 
@@ -165,7 +190,7 @@ export function giftMesh() {
 }
 
 export function thaliMesh() {
-  const plate = mesh(new THREE.CylinderGeometry(0.17, 0.15, 0.02, 24), std(0xd4a017, 0.25, { metalness: 0.85 }));
+  const plate = mesh(geo('thali', () => new THREE.CylinderGeometry(0.17, 0.15, 0.02, 24)), std(0xd4a017, 0.25, { metalness: 0.85 }));
   const diya = diyaMesh();
   diya.scale.setScalar(0.6);
   diya.position.y = 0.01;
@@ -173,7 +198,7 @@ export function thaliMesh() {
   const petals = [0xff7b00, 0xffc300, 0xe0218a];
   for (let i = 0; i < 9; i++) {
     const a = (i / 9) * Math.PI * 2;
-    g.add(mesh(new THREE.SphereGeometry(0.022, 6, 4), std(petals[i % 3], 0.8), Math.cos(a) * 0.11, 0.02, Math.sin(a) * 0.11));
+    g.add(mesh(geo('petal', () => new THREE.SphereGeometry(0.022, 6, 4)), std(petals[i % 3], 0.8), Math.cos(a) * 0.11, 0.02, Math.sin(a) * 0.11));
   }
   return g;
 }
@@ -183,21 +208,21 @@ export function thaliMesh() {
 export function toyGunMesh() {
   const wood = std(0x6b3f22, 0.6);
   const metal = std(0x444444, 0.4, { metalness: 0.7 });
-  return group(mesh(new THREE.BoxGeometry(0.06, 0.08, 0.32), wood, 0, 0, -0.02), mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.4).rotateX(Math.PI / 2), metal, 0, 0.03, 0.3));
+  return group(mesh(geo('gunStock', () => new THREE.BoxGeometry(0.06, 0.08, 0.32)), wood, 0, 0, -0.02), mesh(geo('gunBarrel', () => new THREE.CylinderGeometry(0.015, 0.015, 0.4).rotateX(Math.PI / 2)), metal, 0, 0.03, 0.3));
 }
 
 /** Handle runs down the hand's local -y, so it follows the forearm while swinging. */
 export function hammerMesh() {
   return group(
-    mesh(new THREE.CylinderGeometry(0.022, 0.026, 0.85, 8), std(0xc8a06a, 0.6), 0, -0.3, 0),
-    mesh(new THREE.BoxGeometry(0.3, 0.16, 0.16), std(0xb3122e, 0.4), 0, -0.72, 0)
+    mesh(geo('hammerHandle', () => new THREE.CylinderGeometry(0.022, 0.026, 0.85, 8)), std(0xc8a06a, 0.6), 0, -0.3, 0),
+    mesh(geo('hammerHead', () => new THREE.BoxGeometry(0.3, 0.16, 0.16)), std(0xb3122e, 0.4), 0, -0.72, 0)
   );
 }
 
 export function ringMesh(color) {
-  return mesh(new THREE.TorusGeometry(0.13, 0.018, 8, 28).rotateX(Math.PI / 2), std(color, 0.4));
+  return mesh(geo('ring', () => new THREE.TorusGeometry(0.13, 0.018, 8, 28).rotateX(Math.PI / 2)), std(color, 0.4));
 }
 
 export function ballMesh() {
-  return mesh(new THREE.SphereGeometry(0.07, 14, 10), std(0xf1faee, 0.5));
+  return mesh(geo('ball', () => new THREE.SphereGeometry(0.07, 14, 10)), std(0xf1faee, 0.5));
 }

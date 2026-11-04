@@ -33,6 +33,8 @@ const LABELS = {
   bangles: 'Try on bangles 💍',
   toys: 'Buy a balloon 🎈',
 };
+let STRING_MAT = null; // one material for every balloon string
+
 const MAKERS = {
   diya: () => diyaMesh(),
   kandeel: (c) => kandeelMesh(c),
@@ -163,7 +165,7 @@ export class Shops {
     await tasks.wait(0.5);
     st.keeper.clearAction();
     const balloon = balloonMesh(color);
-    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xdddddd }));
+    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), (STRING_MAT ??= new THREE.LineBasicMaterial({ color: 0xdddddd })));
     line.frustumCulled = false;
     const obj = new THREE.Group();
     obj.add(balloon, line);
@@ -344,6 +346,7 @@ export class Shops {
       p.needsUpdate = true;
       if (f.age > 30) {
         f.obj.removeFromParent();
+        f.line.geometry.dispose(); // the balloon itself uses shared geometry and materials
         this.flyaways.splice(i, 1);
       }
     }

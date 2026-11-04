@@ -490,18 +490,27 @@ export class Character {
     this.meshes = [mesh];
   }
 
+  /**
+   * Frees this character's GPU resources and detaches it (remote visitors who leave). Shared
+   * materials stay; per-character ones (ownMaterial) are disposed. Props parented to the rig are
+   * the caller's to free: dispose before attaching anything you still need, or detach it first.
+   */
+  dispose() {
+    this.root.removeFromParent();
+    const geos = new Set();
+    // sprites share one module-level quad in three.js: never free that
+    this.root.traverse((o) => o.geometry && !o.isSprite && geos.add(o.geometry));
+    for (const g of geos) g.dispose();
+    this.mesh?.skeleton.dispose(); // the bone texture of the skinned body
+    if (this.material !== charMaterial) this.material.dispose();
+    if (this.headMaterial !== charMaterial) this.headMaterial.dispose();
+    this.meshes = [];
+    this.disposed = true;
+  }
+
   setLook(partial) {
     Object.assign(this.look, partial);
     this.build();
-  }
-
-  /** Frees the GPU side (geometry, bone texture, own materials) of a character that is gone for good. */
-  dispose() {
-    this.root.removeFromParent();
-    this.mesh.geometry.dispose();
-    this.mesh.skeleton.dispose();
-    if (this.material !== charMaterial) this.material.dispose();
-    if (this.headMaterial !== charMaterial) this.headMaterial.dispose();
   }
 
   /** Flushes the face red (for the pani puri challenge). */

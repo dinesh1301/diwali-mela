@@ -32,6 +32,21 @@ function initialTexture(letter) {
   });
 }
 
+/**
+ * A creator photo square-cropped and scaled down to PHOTO px: profile pictures can be 1000s of
+ * pixels, which is megabytes of GPU memory for a 1.1 m frame.
+ */
+const PHOTO = 256;
+function photoTexture(img) {
+  const w = img.naturalWidth || img.width;
+  const h = img.naturalHeight || img.height;
+  const s = Math.min(w, h);
+  return canvasTexture(PHOTO, PHOTO, (c) => {
+    c.imageSmoothingQuality = 'high';
+    c.drawImage(img, (w - s) / 2, (h - s) / 2, s, s, 0, 0, PHOTO, PHOTO);
+  });
+}
+
 export class Creators {
   constructor(ctx, lights) {
     this.ctx = ctx;
@@ -97,18 +112,18 @@ export class Creators {
     if (!data?.found) return;
     entry.data = data;
     entry.tag.set({ name: data.name, handle: data.username });
-    entry.stall.sign.material.map = signTexture(data.name, data.headline ? data.headline.slice(0, 48) : 'Topmate creator', entry.def.sign);
-    entry.stall.sign.material.needsUpdate = true;
+    const sign = entry.stall.sign?.material;
+    if (sign) {
+      sign.map?.dispose();
+      sign.map = signTexture(data.name, data.headline ? data.headline.slice(0, 48) : 'Topmate creator', entry.def.sign);
+      sign.needsUpdate = true;
+    }
     if (data.image) {
-      new THREE.TextureLoader().load(data.image, (tex) => {
-        tex.colorSpace = THREE.SRGBColorSpace;
-        // square-crop whatever aspect the photo has
-        const img = tex.image;
-        const a = img.width / img.height;
-        tex.repeat.set(a > 1 ? 1 / a : 1, a > 1 ? 1 : a);
-        tex.offset.set(a > 1 ? (1 - 1 / a) / 2 : 0, a > 1 ? 0 : (1 - a) / 2);
-        entry.photo.material.map = tex;
-        entry.photo.material.needsUpdate = true;
+      new THREE.ImageLoader().load(data.image, (img) => {
+        const mat = entry.photo.material;
+        mat.map?.dispose(); // the initial-letter placeholder
+        mat.map = photoTexture(img);
+        mat.needsUpdate = true;
       });
     }
   }

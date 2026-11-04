@@ -4,6 +4,10 @@ import { toyGunMesh } from '../items.js';
 import { tintEmissive } from '../merge.js';
 import { seg } from '../lod.js';
 
+// bullet holes share one geometry and material, so a round's marks cost nothing to throw away
+const MARK_GEO = new THREE.CircleGeometry(0.025, 10);
+const MARK_MAT = new THREE.MeshBasicMaterial({ color: 0x111111 });
+
 const COLORS = [0xff006e, 0xffbe0b, 0x3a86ff, 0x06d6a0, 0xfb5607, 0x8338ec, 0xff5d8f];
 const SHOTS = 10;
 const TO_WIN = 7;
@@ -116,7 +120,7 @@ export class BalloonShoot {
     } else {
       const b = this.ray.intersectObject(this.board, false)[0];
       if (b) {
-        const mark = new THREE.Mesh(new THREE.CircleGeometry(0.025, 10), new THREE.MeshBasicMaterial({ color: 0x111111 }));
+        const mark = new THREE.Mesh(MARK_GEO, MARK_MAT);
         this.booth.group.add(mark);
         this.booth.group.worldToLocal(mark.position.copy(b.point));
         mark.position.z += 0.01;
