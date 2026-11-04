@@ -2605,3 +2605,99 @@ body.touch #ctxHelp {
     top: calc(64px + env(safe-area-inset-top));
   }
 }
+
+/* toasts on phones: a rounded card, not a pill that turns into a circle on narrow screens; below
+   the status chips; and held back while the coach card is up */
+body.touch #toast {
+  border-radius: 18px;
+}
+
+body.coaching #toast {
+  visibility: hidden;
+}
+
+@media (max-width: 760px) {
+  body.touch #toast {
+    top: calc(170px + env(safe-area-inset-top));
+  }
+}
+
+@media (max-height: 500px) and (orientation: landscape) {
+  body.touch #toast {
+    max-width: calc(100% - 460px);
+  }
+}
+
+/* booth games on phones: a compact score card at the very top, Leave in its corner, and the nav,
+   fireworks bar and chips out of the way so the bottles, balloons and cans stay visible and tappable */
+body.touch.in-booth #places,
+body.touch.in-booth #actionbar,
+body.touch.in-booth #chips {
+  display: none;
+}
+
+body.touch #gameHud {
+  top: calc(60px + env(safe-area-inset-top));
+  justify-items: start;
+  gap: 2px;
+  padding: 8px 104px 8px 14px;
+  text-align: left;
+}
+
+body.touch #gameHud .gh-title {
+  font-size: 17px;
+  line-height: 1.2;
+}
+
+body.touch #gameHud .gh-stats {
+  font-size: 14px;
+}
+
+body.touch #gameHud .gh-help {
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+body.touch #gameExit {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  min-height: 44px;
+  margin: 0;
+}
+
+@media (max-height: 500px) and (orientation: landscape) {
+  body.touch #gameHud {
+    top: calc(8px + env(safe-area-inset-top));
+    width: min(460px, calc(100% - 32px));
+  }
+
+  body.touch.in-booth #hud-top {
+    visibility: hidden;
+  }
+}
+
+body.touch.in-booth #toast {
+  top: calc(176px + env(safe-area-inset-top));
+}
+
+@media (max-height: 500px) and (orientation: landscape) {
+  body.touch.in-booth #toast {
+    top: calc(104px + env(safe-area-inset-top));
+  }
+}
+
+body.touch #toast {
+  width: max-content;
+}
+
+/* short portrait phones (iPhone SE): the look hint sits higher so it clears the walk hint */
+@media (max-height: 700px) and (orientation: portrait) {
+  #coach .coach-ok {
+    top: 20%;
+  }
+
+  #coach .coach-look {
+    top: 31%;
+  }
+}

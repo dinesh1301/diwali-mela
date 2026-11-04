@@ -374,12 +374,14 @@ async function init() {
     ramayan.start();
     net.connect();
     if (profile.handle) profile.fetchTopmate();
-    ui.toast(
-      tk(`🪔 Welcome, ${profile.name}! Walk up to anything glowing and press ${settings.keys.interact.replace('Key', '')}`, `🪔 Welcome, ${profile.name}! Use the joystick to walk up to anything glowing, then tap the button`),
-      4500,
-      { important: true }
-    );
-    ui.showCoach();
+    const welcome = () =>
+      ui.toast(
+        tk(`🪔 Welcome, ${profile.name}! Walk up to anything glowing and press ${settings.keys.interact.replace('Key', '')}`, `🪔 Welcome, ${profile.name}! Use the joystick to walk up to anything glowing, then tap the button`),
+        4500,
+        { important: true }
+      );
+    // phones: the coach card explains the controls first, the welcome follows once it's tapped away
+    if (!ui.showCoach(welcome)) welcome();
     if (profile.golden && profile.ref) setTimeout(() => ui.toast(`✨ Invited by @${profile.ref}: a golden kandeel is waiting for you at Kandeel House`, 5000, { important: true }), 5000);
   }
 

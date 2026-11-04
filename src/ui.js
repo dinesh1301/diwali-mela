@@ -97,9 +97,14 @@ export function createUI(h) {
   // ---------- touch: first-run coach card ----------
 
   const coachEl = $('#coach');
+  let coachDone = null;
   const hideCoach = (e) => {
     e?.preventDefault();
     coachEl.classList.add('hidden');
+    document.body.classList.remove('coaching');
+    const done = coachDone;
+    coachDone = null;
+    done?.();
     try {
       localStorage.setItem('melaCoach', '1');
     } catch {
@@ -340,15 +345,21 @@ export function createUI(h) {
       el.classList.toggle('empty', !lines.length);
     },
 
-    /** Touch: the first time someone plays on a phone, a card shows where the controls are. */
-    showCoach() {
-      if (!TOUCH) return;
+    /**
+     * Touch: the first time someone plays on a phone, a card shows where the controls are. Returns
+     * true when it is showing; `onDone` then runs once it is tapped away (toasts wait behind it).
+     */
+    showCoach(onDone) {
+      if (!TOUCH) return false;
       try {
-        if (localStorage.getItem('melaCoach')) return;
+        if (localStorage.getItem('melaCoach')) return false;
       } catch {
         // no storage: show it anyway, it goes away on a tap
       }
       coachEl.classList.remove('hidden');
+      document.body.classList.add('coaching');
+      coachDone = onDone || null;
+      return true;
     },
 
     get coachOpen() {
@@ -606,6 +617,8 @@ export function createUI(h) {
         hudEl.help.textContent = help;
         api.gameHud.stats('');
         $('#gameExit').classList.toggle('hidden', !exit);
+        // a booth game (one you can leave): phones clear the nav and the fireworks bar out of its way
+        document.body.classList.toggle('in-booth', exit);
         api.gameHud.bar(null);
         api.gameHud.timer(null);
       },
@@ -644,6 +657,7 @@ export function createUI(h) {
       },
       hide() {
         hud.classList.add('hidden');
+        document.body.classList.remove('in-booth');
       },
     },
 
