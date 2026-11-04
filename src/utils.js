@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { settings } from './settings.js';
 
 export const rand = (a, b) => a + Math.random() * (b - a);
 export const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
@@ -16,7 +17,7 @@ export function canvasTexture(width, height, draw) {
   draw(canvas.getContext('2d'), width, height);
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 8;
+  tex.anisotropy = settings.tier === 'low' ? 2 : 8; // three clamps this to the GPU's maximum
   return tex;
 }
 

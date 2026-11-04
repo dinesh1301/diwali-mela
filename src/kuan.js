@@ -75,10 +75,13 @@ export class Kuan {
         c.fillStyle = `rgba(${i % 2 ? '40,22,8' : '120,85,50'},0.5)`;
         c.fillRect((i * w) / 24, 0, 3, h);
       }
+      // grain: one fill colour, the strength varied with globalAlpha (no per-stroke colour parsing)
+      c.fillStyle = '#000';
       for (let i = 0; i < 3000; i++) {
-        c.fillStyle = `rgba(0,0,0,${Math.random() * 0.2})`;
+        c.globalAlpha = Math.random() * 0.2;
         c.fillRect(Math.random() * w, Math.random() * h, 1, 5);
       }
+      c.globalAlpha = 1;
     });
     planks.wrapS = planks.wrapT = THREE.RepeatWrapping;
     planks.repeat.set(6, 1);
