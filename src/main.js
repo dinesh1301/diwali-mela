@@ -594,12 +594,26 @@ async function init() {
     renderer.setSize(w, h);
     composer.setPixelRatio(pr);
     composer.setSize(w, h);
-    // bloom is a blur: phones run it at half of 1x whatever the pixel ratio (composer.setSize just reset it)
-    if (low) bloom.setSize(Math.round(w / 2), Math.round(h / 2));
+    // bloom is a blur: phones run it at 1x whatever the pixel ratio (composer.setSize just reset it).
+    // Not lower: below 1x the 2-4 px diya flames average away in the first mip and lose their halo.
+    if (low) bloom.setSize(w, h);
     fireworks.setViewportHeight(h * pr);
     smoke.setViewportHeight(h * pr, camera.fov);
     ramayan.resize();
   }
+  /** Runs fn (a render + grab) at a pixel ratio of at least minPr, then puts the governor's back. */
+  ctx.atLeastPixelRatio = (minPr, fn) => {
+    const pr = renderer.getPixelRatio();
+    if (pr >= minPr) return fn();
+    renderer.setPixelRatio(minPr);
+    resize();
+    try {
+      return fn();
+    } finally {
+      renderer.setPixelRatio(pr);
+      resize();
+    }
+  };
   const governor = new ResolutionGovernor({
     levels,
     start: renderer.getPixelRatio(),
@@ -780,6 +794,7 @@ async function init() {
     const key = mode === 'ride' ? ownerKey : mode;
     if (key !== helpKey) {
       helpKey = key;
+      nameTag.setVisible(mode !== 'game'); // the close game cameras sit right behind the head
       ui.setPrompt(null);
       ui.setPrompt2(null);
       if (mode === 'ride') ui.setHelp(owner === vehicles ? vehicles.active.help : owner ? owner.help : HELP.ride);

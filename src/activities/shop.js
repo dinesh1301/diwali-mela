@@ -3,6 +3,7 @@ import { diyaMesh, kandeelMesh, balloonMesh, teddyMesh, giftMesh, forgetFlames }
 import { rand } from '../utils.js';
 import { profile } from '../profile.js';
 import { InstanceBatcher } from '../merge.js';
+import { KANDEEL_DROP } from '../wall.js';
 
 const _v = new THREE.Vector3();
 const PLACED_KEY = 'melaPlaced';
@@ -263,7 +264,7 @@ export class Shops {
     if (slot) {
       slot.taken = true;
       obj.position.copy(slot.pos);
-      if (kind === 'kandeel') obj.position.y += 0.62;
+      if (kind === 'kandeel') obj.position.y += KANDEEL_DROP;
       obj.rotation.set(0, Math.PI / 2, 0);
       if (kind === 'kandeel') this.ctx.passport.stamp('kandeel');
     } else {
@@ -285,6 +286,8 @@ export class Shops {
     this.placed.push({ kind, color, obj });
     while (this.placed.length > MAX_PLACED) {
       const old = this.placed.shift();
+      const slot = this.ctx.walls?.slotOf(old.kind, old.obj.position);
+      if (slot) slot.taken = false;
       forgetFlames(old.obj);
       this.batch.remove(old.obj);
       old.obj.removeFromParent();

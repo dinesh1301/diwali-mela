@@ -11,6 +11,8 @@ import { mergeStatic, mergeAdded } from './merge.js';
 */
 const std = (color, roughness = 0.8, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness, ...extra });
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
+/** how far above its shelf niche a kandeel hangs on the Deepmala */
+export const KANDEEL_DROP = 0.62;
 const fmtLap = (ms) => {
   const s = ms / 1000;
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${(s % 60).toFixed(1).padStart(4, '0')}`;
@@ -200,9 +202,21 @@ export class Walls {
   /** Marks niches already filled by things restored from a previous visit. */
   claimFrom(placed) {
     for (const p of placed) {
-      const slot = this.slots.find((s) => s.pos.distanceTo(p.obj.position) < 0.12);
+      const slot = this.slotOf(p.kind, p.obj.position);
       if (slot) slot.taken = true;
     }
+  }
+
+  /** The niche a placed diya/kandeel sits in (a kandeel hangs KANDEEL_DROP above its shelf), or null. */
+  slotOf(kind, pos) {
+    const y = pos.y - (kind === 'kandeel' ? KANDEEL_DROP : 0);
+    let best = null;
+    let bestD = 0.06;
+    for (const s of this.slots) {
+      const d = Math.hypot(s.pos.x - pos.x, s.pos.y - y, s.pos.z - pos.z);
+      if (d < bestD) (best = s), (bestD = d);
+    }
+    return best;
   }
 }
 

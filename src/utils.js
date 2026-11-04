@@ -97,33 +97,5 @@ export function shadowify(obj) {
   return obj;
 }
 
-const TEXTURE_KEYS = ['map', 'emissiveMap', 'alphaMap', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'bumpMap', 'lightMap', 'envMap'];
-
-/**
- * Frees the GPU resources under obj (geometries, materials and their textures) and detaches it.
- * `keep` lists shared geometries/materials/textures that other objects still use (they're left
- * alone); `materials: false` frees geometry only, for meshes drawn with a shared material.
- */
-export function disposeTree(obj, { keep = null, materials = true, textures = true } = {}) {
-  if (!obj) return;
-  const kept = (x) => keep && (keep.has ? keep.has(x) : keep.includes(x));
-  const done = new Set();
-  const free = (x) => {
-    if (!x || done.has(x) || kept(x)) return;
-    done.add(x);
-    x.dispose?.();
-  };
-  obj.traverse((o) => {
-    if (o.geometry) free(o.geometry);
-    if (!materials || !o.material) return;
-    for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
-      if (!m || kept(m)) continue;
-      if (textures) for (const k of TEXTURE_KEYS) if (m[k]?.isTexture) free(m[k]);
-      free(m);
-    }
-  });
-  obj.removeFromParent();
-}
-
 export const BULB_PALETTE = [0xffb347, 0xff4f6d, 0x5bd1ff, 0x8cff6b, 0xffe066, 0xc77dff];
 export const WARM_PALETTE = [0xffc46b, 0xffe2a0, 0xff9a3c];

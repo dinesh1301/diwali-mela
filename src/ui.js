@@ -120,6 +120,8 @@ export function createUI(h) {
   });
   const settingsEl = $('#settingsPanel');
   settingsEl.querySelector('[data-close]').addEventListener('click', () => closeModal(settingsEl));
+  // a tap on the dimmed backdrop (outside the card) closes these too
+  for (const el of [passportEl, boardsEl, settingsEl]) el.addEventListener('click', (e) => e.target === el && closeModal(el));
   const creatorEl = $('#creatorCard');
   let creatorResolve = null;
   const closeCreator = (v) => {

@@ -423,7 +423,7 @@ export class Poster {
 
   /** Renders one frame from the tripod and grabs it before the browser composites. */
   capture() {
-    const { camera, renderer, composer, interactions, bloom } = this.ctx;
+    const { camera, renderer, interactions, bloom } = this.ctx;
     const S = this.S;
     const exposure = renderer.toneMappingExposure;
     const strength = bloom?.strength;
@@ -439,8 +439,7 @@ export class Poster {
     camera.updateMatrixWorld(true);
     const marker = interactions.marker.visible;
     interactions.marker.visible = false;
-    composer.render();
-    const shot = grabFrame(renderer.domElement);
+    const shot = this.grab();
     renderer.toneMappingExposure = exposure;
     if (bloom) bloom.strength = strength;
     interactions.marker.visible = marker;
@@ -524,13 +523,22 @@ export class Poster {
   }
 
   captureCurrent() {
-    const { renderer, composer, interactions } = this.ctx;
+    const { interactions } = this.ctx;
     const marker = interactions.marker.visible;
     interactions.marker.visible = false;
-    composer.render();
-    const shot = grabFrame(renderer.domElement);
+    const shot = this.grab();
     interactions.marker.visible = marker;
     return shot;
+  }
+
+  /** Renders and grabs a frame at no less than 1.25x, so a phone the governor has dropped to 0.8x still gives a sharp poster. */
+  grab() {
+    const { renderer, composer, atLeastPixelRatio } = this.ctx;
+    const shoot = () => {
+      composer.render();
+      return grabFrame(renderer.domElement);
+    };
+    return atLeastPixelRatio ? atLeastPixelRatio(1.25, shoot) : shoot();
   }
 
   async open() {

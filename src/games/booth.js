@@ -66,11 +66,12 @@ export function buildBooth(ctx, lights, { z, title, sub, c1, c2, sign, rail = tr
   }
 
   // one warm light for each pair of neighbouring booths (Khel Gali puts them 9 m apart and asks
-  // every 2nd one for it), hung above the walls in front of the gap towards the next booth (+x is
-  // world +z) so it shines into both open fronts
+  // every 2nd one for it), hung out in the lane 2 m in front of the gap towards the next booth (+x
+  // is world +z) and below the roof line, so it reaches into both counters rather than flaring the
+  // side walls that meet at the gap
   if (lamp) {
     const light = new THREE.PointLight(0xffc27a, 50, 15, 2);
-    light.position.set(4.5, H + 1.0, D / 2 + 0.6);
+    light.position.set(4.5, H - 0.3, D / 2 + 2);
     g.add(light);
   }
 

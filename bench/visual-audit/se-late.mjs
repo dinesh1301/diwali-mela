@@ -1,0 +1,10 @@
+import { chromium, devices } from 'playwright';
+const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] });
+const ctx = await browser.newContext({ ...devices['iPhone SE'] }); const page = await ctx.newPage();
+await page.goto(`http://localhost:4460/?play&noyt&nonet&night&tier=low&place=bazaar`);
+await page.waitForFunction(() => window.__mela && document.getElementById('loader')?.classList.contains('done'), null, { timeout: 180000 });
+await page.waitForTimeout(800); await page.screenshot({ path: process.argv[2] + '/se-early.png' });
+await page.waitForTimeout(7000); await page.screenshot({ path: process.argv[2] + '/se-late.png' });
+const r = await page.evaluate(() => [...document.querySelectorAll('#hud-top button.icon')].map(b => b.getBoundingClientRect().width + 'x' + b.getBoundingClientRect().height + '@' + Math.round(b.getBoundingClientRect().right)));
+console.log(r.join(' '));
+await browser.close();

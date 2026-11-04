@@ -1,0 +1,14 @@
+import { chromium, devices } from 'playwright';
+const [port, out, place] = process.argv.slice(2);
+const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] });
+const ctx = await browser.newContext({ ...devices['Pixel 7'] });
+const page = await ctx.newPage();
+await page.goto(`http://localhost:${port}/?play&noyt&nonet&night&tier=low&gov=0&place=${place}`);
+await page.waitForFunction(() => window.__mela && document.getElementById('loader')?.classList.contains('done'), null, { timeout: 180000 });
+await page.waitForTimeout(6000);
+await page.evaluate(() => { window.__mela.dayNight; });
+await page.screenshot({ path: `${out}-half.png` });
+await page.evaluate(() => window.__mela.bloom.setSize(innerWidth, innerHeight));
+await page.waitForTimeout(300);
+await page.screenshot({ path: `${out}-full.png` });
+await browser.close(); process.exit(0);
