@@ -55,7 +55,7 @@ export function directorParams(params) {
   } catch {
     // ignore
   }
-  return { shot, width: w || 1080, height: h || 1920 };
+  return { shot, width: w || 1080, height: h || 1920, cfgGiven: params.has('cfg') };
 }
 
 /** Freezes the page's clocks and timers; they advance only through advance(ms). */
@@ -237,6 +237,11 @@ export function startDirector(opts, m) {
   window.__director = api;
   if (!def) {
     rejectReady(new Error(`unknown shot "${id}"; known: ${Object.keys(SHOTS).join(', ')}`));
+    return;
+  }
+  // a capture that asked for a creator must never silently come out as the plain mela
+  if (opts.cfgGiven && !m.creator?.cfg) {
+    rejectReady(new Error('director: ?cfg= could not be decoded into a CreatorConfig (needs base64url JSON with a name)'));
     return;
   }
 

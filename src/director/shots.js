@@ -359,7 +359,7 @@ export const SHOTS = {
     warm: 9,
     setup({ m }) {
       m.ravan.burn();
-      m.player.teleport(-45.4, 81, Math.PI * 1.1);
+      m.player.teleport(-49.8, 80.8, Math.PI * 1.1); // silhouetted against the fire, clear of the banner text
       m.player.char.setAction('cheer');
     },
     update({ sec, m }) {
