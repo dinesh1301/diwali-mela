@@ -1,12 +1,17 @@
 import * as THREE from 'three';
 import { rand, pick } from './utils.js';
+import { rampTo } from './audio.js';
 
 /*
   Positional ambience, all synthesised: dhol at the gate, the jalebi kadhai sizzling, water
   lapping at the ghat, the giant wheel's hum, a generator chugging behind the stalls, temple
-  bells and far-off crackers. Each source has a gain that follows the listener's distance.
-  Also hosts the "mela band": a royalty-free dhol-and-drone loop that can replace the song.
+  bells and far-off crackers. Each source has a gain that follows the listener's distance; a
+  source out of earshot is unplugged from the master bus, so the browser stops computing it.
+  Also hosts the "mela band": a royalty-free dhol-and-drone loop that can replace the song; its
+  nodes are only built the first time the band is chosen.
 */
+const UNPLUG_S = 1.5; // silent this long (after the fade) before a source is disconnected
+const _off = new THREE.Vector3();
 const _v = new THREE.Vector3();
 const PATTERN = ['BT', '', 'T', 'B', 'BT', '', 'T', 'T']; // dha . ta dhin dha . ta ta
 const BPM = 112;
@@ -46,7 +51,7 @@ export class Ambience {
     };
     const add = (this.addSource = (name, x, z, r0, r1, level, build) => {
       const out = gainTo(master);
-      const src = { name, pos: new THREE.Vector3(x, 0, z), r0, r1, level, out, tick: build(out) };
+      const src = { name, pos: new THREE.Vector3(x, 0, z), r0, r1, level, out, tick: build(out), plugged: true, quietFor: 0 };
       this.sources.push(src);
       return src;
     });
@@ -94,10 +99,6 @@ export class Ambience {
     // the dhol party at the gate (a scheduled pattern)
     this.dhol = add('dhol', 0, 60, 7, 48, 0.55, (out) => this.makeDhol(out, 1));
 
-    // the band: not positional, replaces the song when chosen
-    this.band = gainTo(master);
-    this.bandDhol = this.makeDhol(this.band, 0.7, true);
-    this.makeDrone(this.band);
     this.setBand(this.bandOn);
 
     this.nextBell = 8;
@@ -137,12 +138,15 @@ export class Ambience {
       s.start(t, Math.random());
       s.stop(t + 0.12);
     };
-    return () => {
+    // silent: keep the beat moving (so it comes back in time) without building any nodes
+    return (dt, t, silent = false) => {
       while (next < ctx.currentTime + 0.35) {
         const p = PATTERN[i % 8];
-        if (p.includes('B')) bass(next);
-        if (p.includes('T')) treble(next, false);
-        if (withTin && i % 16 === 14) treble(next, true);
+        if (!silent) {
+          if (p.includes('B')) bass(next);
+          if (p.includes('T')) treble(next, false);
+          if (withTin && i % 16 === 14) treble(next, true);
+        }
         next += step;
         i++;
       }
@@ -171,19 +175,45 @@ export class Ambience {
 
   setBand(on) {
     this.bandOn = on;
+    const { ctx, master } = this.audio;
+    if (!this.started) return;
+    if (on && !this.band) {
+      // the band: not positional, replaces the song when chosen
+      this.band = ctx.createGain();
+      this.band.gain.value = 0;
+      this.band.connect(master);
+      this.bandDhol = this.makeDhol(this.band, 0.7, true);
+      this.makeDrone(this.band);
+    }
     if (!this.band) return;
-    this.band.gain.setTargetAtTime(on ? 0.5 : 0, this.audio.ctx.currentTime, 0.5);
+    if (on) this.band.connect(master);
+    this.band.gain.setTargetAtTime(on ? 0.5 : 0, ctx.currentTime, 0.5);
+    clearTimeout(this.bandOff);
+    // once faded out, unplug the drone so its oscillators stop costing anything
+    if (!on) this.bandOff = setTimeout(() => !this.bandOn && this.band.disconnect(), 3000);
   }
 
   update(dt, t, listener) {
     if (!this.started) return;
     const { audio } = this;
+    const now = audio.ctx.currentTime;
     for (const s of this.sources) {
       const d = _v.copy(listener).setY(0).distanceTo(s.pos);
       const k = Math.min(1, Math.max(0, 1 - (d - s.r0) / (s.r1 - s.r0)));
       const target = k * k * s.level;
-      s.out.gain.setTargetAtTime(target, audio.ctx.currentTime, 0.25);
-      if (target > 0.001 || s.name === 'dhol') s.tick(dt, t);
+      const heard = target > 0.001;
+      s.quietFor = heard ? 0 : s.quietFor + dt;
+      if (heard && !s.plugged) {
+        s.out.connect(audio.master);
+        s.plugged = true;
+      }
+      rampTo(s.out.gain, heard ? target : 0, now, 0.25, 0.002);
+      if (s.plugged && s.quietFor > UNPLUG_S) {
+        s.out.disconnect();
+        s.plugged = false;
+      }
+      if (heard || s.quietFor < 1) s.tick(dt, t);
+      else if (s.name === 'dhol') s.tick(dt, t, true);
     }
     if (this.bandOn) this.bandDhol();
 
@@ -197,7 +227,7 @@ export class Ambience {
       this.nextCracker = rand(5, 13);
       const a = rand(0, Math.PI * 2);
       const r = rand(70, 150);
-      const p = _v.copy(listener).add(new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r));
+      const p = _v.copy(listener).add(_off.set(Math.cos(a) * r, 0, Math.sin(a) * r));
       if (Math.random() < 0.5) audio.crackle(p, 10, 0.6);
       else audio.boom(p, pick([0.25, 0.35, 0.5]));
     }
