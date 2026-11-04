@@ -55,6 +55,8 @@ const CAR_GAP = 3.3;
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const std = (color, roughness = 0.7, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness, ...extra });
 const ZERO = new THREE.Vector3();
+const _p = new THREE.Vector3();
+const _t = new THREE.Vector3();
 
 export class Train {
   constructor(ctx, lights) {
@@ -256,12 +258,14 @@ export class Train {
   // ---------- running ----------
 
   place() {
+    if (this.s === this.placedS) return; // standing at a station: the cars are already there
+    this.placedS = this.s;
     for (let i = 0; i < this.cars.length; i++) {
       let s = this.s - i * CAR_GAP;
       s = ((s % this.length) + this.length) % this.length;
       const u = s / this.length;
-      const p = this.curve.getPointAt(u);
-      const t = this.curve.getTangentAt(u);
+      const p = this.curve.getPointAt(u, _p);
+      const t = this.curve.getTangentAt(u, _t);
       const c = this.cars[i];
       c.position.set(p.x, 0.02, p.z);
       c.rotation.set(0, Math.atan2(t.x, t.z), 0);

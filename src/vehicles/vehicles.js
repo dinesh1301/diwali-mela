@@ -187,6 +187,11 @@ class Car extends Vehicle {
 
   step(dt) {
     this.syncHeadlight();
+    // a parked car that has come to rest: nothing moves, so skip collision, ground and pose work
+    if (!this.occupied && this.vel.x * this.vel.x + this.vel.z * this.vel.z < 1e-6 && Math.abs(this.lean.x) + Math.abs(this.lean.y) + Math.abs(this.steer) < 1e-4) {
+      this.vel.set(0, 0, 0);
+      return;
+    }
     const { world, audio, input } = this.ctx;
     const { f: throttle, s: steer, up: brake } = this.controls();
     const fx = Math.sin(this.heading);

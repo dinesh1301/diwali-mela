@@ -37,6 +37,8 @@ const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const std = (color, roughness = 0.8, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness, ...extra });
 const ZERO = new THREE.Vector3();
 const _v = new THREE.Vector3();
+const _p = new THREE.Vector3();
+const _t = new THREE.Vector3();
 
 function plankTexture(base = '#6b3f22', along = 'y') {
   const t = canvasTexture(256, 256, (c, w, h) => {
@@ -395,8 +397,8 @@ export class BoatRide {
         this.u = 0;
         this.land();
       } else {
-        const p = this.curve.getPointAt(this.u);
-        const tan = this.curve.getTangentAt(this.u);
+        const p = this.curve.getPointAt(this.u, _p);
+        const tan = this.curve.getTangentAt(this.u, _t);
         const want = Math.atan2(tan.x, tan.z);
         let d = want - this.heading;
         d = Math.atan2(Math.sin(d), Math.cos(d));

@@ -18,6 +18,7 @@ const _m = new THREE.Matrix4();
 const _f = new THREE.Vector3();
 const _u = new THREE.Vector3();
 const _r = new THREE.Vector3();
+const _p = new THREE.Vector3();
 
 /** A stunt bike: local +z is forward, local +y is up, the origin sits at the wheels' contact line. */
 function bikeModel(color) {
@@ -255,7 +256,7 @@ export class Kuan {
       const h = 2.5 + 1.9 * Math.sin(t * 0.33 + b.hPhase);
       const a = b.phase;
       const r = R - 0.04; // wheels on the planks
-      const p = V(Math.cos(a) * r, h, Math.sin(a) * r);
+      const p = _p.set(Math.cos(a) * r, h, Math.sin(a) * r);
       _f.set(-Math.sin(a), 0, Math.cos(a)); // direction of travel
       _u.set(-Math.cos(a), 0.06, -Math.sin(a)).normalize(); // bike "up" points to the centre
       _r.crossVectors(_u, _f).normalize(); // right-handed: x = y × z (the other order mirrors the bike)
