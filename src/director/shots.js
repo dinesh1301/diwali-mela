@@ -74,7 +74,7 @@ export const SHOTS = {
   stall: {
     duration: 6,
     warm: 1,
-    setup({ m, state, H }) {
+    setup({ m, state }) {
       const s = creatorStall(m);
       const g = s.group;
       g.updateMatrixWorld(true);
@@ -95,7 +95,6 @@ export const SHOTS = {
       // the visitor walks in from behind the camera on the stall side of the wall, never across the posters
       state.from = s.stand.clone().addScaledVector(out, 6.2).addScaledVector(along, 2.4);
       m.player.teleport(state.from.x, state.from.z);
-      void H;
     },
     update({ sec, m, state }) {
       const k = Math.min(1, (sec + 1) / 5.6);

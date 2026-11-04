@@ -345,7 +345,7 @@ export function createStall(def) {
   mergeStatic(g, { skip: (o) => o === keeper.root || o === sign });
 
   const { W } = STALL;
-const ex = W / 2 + 0.25;
+  const ex = W / 2 + 0.25;
   const ez = D / 2 + 0.25;
   const apex = new THREE.Vector3(0, H + 1.3, 0);
   const strands = [[new THREE.Vector3(-ex, H, ez), new THREE.Vector3(ex, H, ez), 0.05]];

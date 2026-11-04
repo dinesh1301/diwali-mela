@@ -48,7 +48,13 @@ function normalise(raw) {
   const first = String(raw.first ?? '').trim().slice(0, 24) || name.split(/\s+/)[0];
   const stallNo = Math.max(1, Math.floor(Number(raw.stallNo) || 1));
   const photoUrl = typeof raw.photoUrl === 'string' ? raw.photoUrl : '';
-  const text = (v, n) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '');
+  // collapse whitespace; an over-long phrase is cut at a word boundary, never mid-word
+  const text = (v, n) => {
+    const t = typeof v === 'string' ? v.replace(/\s+/g, ' ').trim() : '';
+    if (t.length <= n) return t;
+    const cut = t.slice(0, n + 1).lastIndexOf(' ');
+    return (cut > n * 0.5 ? t.slice(0, cut) : t.slice(0, n)).replace(/[\s,;:·-]+$/, '');
+  };
   const stallTitle = text(raw.stallTitle, 48);
   const stallTheme = STALL_THEMES.includes(raw.stallTheme) ? raw.stallTheme : 'general';
   const knownFor = text(raw.knownFor, 40);
