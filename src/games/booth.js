@@ -3,13 +3,12 @@ import { stripes, signTexture } from '../stalls.js';
 import { setLayer, WARM_PALETTE } from '../utils.js';
 
 export const BOOTH = { W: 7, D: 5, H: 3.6, X: 29 };
-let boothCount = 0;
 
 /**
  * A game booth on Khel Gali. Built in local space with its open front facing +z, then turned
  * to face west, so local (x, y, z) maps to world (X - z, y, boothZ + x).
  */
-export function buildBooth(ctx, lights, { z, title, sub, c1, c2, sign, rail = true, roof = true }) {
+export function buildBooth(ctx, lights, { z, title, sub, c1, c2, sign, rail = true, roof = true, lamp = true }) {
   const { W, D, H, X } = BOOTH;
   const g = new THREE.Group();
   g.position.set(X, 0, z);
@@ -66,9 +65,10 @@ export function buildBooth(ctx, lights, { z, title, sub, c1, c2, sign, rail = tr
     lights.addStrand(w(-ex, H, -ez), w(ex, H, -ez), { sag: 0.05, spacing: 0.32, wire: false, palette: WARM_PALETTE });
   }
 
-  // one warm light for each pair of neighbouring booths (Khel Gali builds them 9 m apart, in order),
-  // hung above the walls in front of the gap between them so it shines into both open fronts
-  if (boothCount++ % 2 === 0) {
+  // one warm light for each pair of neighbouring booths (Khel Gali puts them 9 m apart and asks
+  // every 2nd one for it), hung above the walls in front of the gap towards the next booth (+x is
+  // world +z) so it shines into both open fronts
+  if (lamp) {
     const light = new THREE.PointLight(0xffc27a, 50, 15, 2);
     light.position.set(4.5, H + 1.0, D / 2 + 0.6);
     g.add(light);

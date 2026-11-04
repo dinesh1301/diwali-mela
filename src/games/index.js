@@ -20,8 +20,8 @@ export class Games {
     this.lights = new StringLights(ctx.scene);
     this.active = null;
     this.camLook = new THREE.Vector3();
-    this.games = BOOTHS.map((d) => {
-      const booth = buildBooth(ctx, this.lights, d);
+    this.games = BOOTHS.map((d, i) => {
+      const booth = buildBooth(ctx, this.lights, { ...d, lamp: i % 2 === 0 });
       const game = new d.Game(ctx, booth);
       game.finish = (r) => this.finish(game, r);
       ctx.interactions.add({
