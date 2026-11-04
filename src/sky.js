@@ -25,6 +25,7 @@ export function createSky(scene, horizonColor) {
         void main() {
           vDir = normalize(position);
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          gl_Position.z = gl_Position.w; // on the far plane: drawn only where nothing else is
         }`,
       fragmentShader: /* glsl */ `
         uniform vec3 uTop;
@@ -44,7 +45,10 @@ export function createSky(scene, horizonColor) {
         }`,
     })
   );
-  dome.renderOrder = -10;
+  // Drawn last of the opaque objects, so the depth test throws away every sky pixel the mela
+  // already covers instead of shading the full screen first and painting over it.
+  dome.renderOrder = 1000;
+  dome.frustumCulled = false;
   group.add(dome);
 
   const N = 2200;
@@ -92,7 +96,7 @@ export function createSky(scene, horizonColor) {
       }`,
   });
   const stars = new THREE.Points(geo, starMat);
-  stars.renderOrder = -9;
+  stars.renderOrder = -9; // first of the transparent things (which all come after the dome)
   stars.frustumCulled = false;
   group.add(stars);
 
