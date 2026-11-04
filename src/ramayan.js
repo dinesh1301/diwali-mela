@@ -225,7 +225,8 @@ export class Ramayan {
    */
   start() {
     this.wanted = true;
-    if (this.near) this.load();
+    // not this.near: with ?play, start() runs before the first update() has settled it
+    if (this.seated || this.ctx.camera.position.distanceToSquared(this.center) < NEAR * NEAR) this.load();
   }
 
   load() {
