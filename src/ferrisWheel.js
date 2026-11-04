@@ -1,3 +1,4 @@
+import { tk } from './touch.js';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { beamGeometry, canvasTexture, hdr, DAY } from './utils.js';
@@ -191,7 +192,7 @@ export class FerrisWheel {
     this.group.add(booth);
     const sign = new THREE.Mesh(
       new THREE.PlaneGeometry(3.4, 0.95),
-      new THREE.MeshBasicMaterial({ map: signTexture('Giant Wheel', 'Press R or tap Ride Wheel', '#6a0d2b'), color: new THREE.Color(1.2, 1.2, 1.2) })
+      new THREE.MeshBasicMaterial({ map: signTexture('Giant Wheel', tk('Press R or tap Ride Wheel', 'Walk to the steps and tap the button'), '#6a0d2b'), color: new THREE.Color(1.2, 1.2, 1.2) })
     );
     sign.position.set(5.5, 2.95, 5.92);
     this.group.add(sign);

@@ -1,3 +1,4 @@
+import { tk } from './touch.js';
 import * as THREE from 'three';
 import { shape, merged } from './character.js';
 import { canvasTexture, setLayer, DAY } from './utils.js';
@@ -143,7 +144,7 @@ export class Carousel {
     // a sign out front
     const sign = new THREE.Mesh(
       new THREE.PlaneGeometry(3, 0.85),
-      new THREE.MeshBasicMaterial({ map: signTexture('Carousel', 'Press E to ride', '#6a0d2b'), color: new THREE.Color(1.2, 1.2, 1.2) })
+      new THREE.MeshBasicMaterial({ map: signTexture('Carousel', tk('Press E to ride', 'Tap the button to ride'), '#6a0d2b'), color: new THREE.Color(1.2, 1.2, 1.2) })
     );
     sign.position.set(7.6, 2.2, 2.6);
     sign.rotation.y = Math.PI / 2;
@@ -226,7 +227,7 @@ export class Rides {
     player.cam.pitch = 0.15;
     player.cam.targetDist = 3.5;
     this.active = 'wheel';
-    ui.toast('🎡 Enjoy the view! Press E to get off.');
+    ui.toast(tk('🎡 Enjoy the view! Press E to get off.', '🎡 Enjoy the view! Tap “Get off” when you are done.'));
     passport.stamp('wheel');
   }
 
@@ -237,7 +238,7 @@ export class Rides {
     player.cam.targetDist = 4;
     this.active = 'carousel';
     this.rideTime = 0;
-    ui.toast('🎠 Wheee! Press E to get off.');
+    ui.toast(tk('🎠 Wheee! Press E to get off.', '🎠 Wheee! Tap “Get off” when you are done.'));
     passport.stamp('carousel');
   }
 

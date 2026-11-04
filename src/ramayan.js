@@ -1,3 +1,4 @@
+import { tk } from './touch.js';
 import * as THREE from 'three';
 import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
 import { StringLights } from './stringLights.js';
@@ -315,7 +316,7 @@ export class Ramayan {
     this.seated = true;
     passport.stamp('ramayan');
     const title = this.nowPlaying().split(/\s[-|–]\s/)[0].trim();
-    ui.toast(title ? `📽️ Now playing: ${title} · Press Q for another episode` : '📽️ Enjoy the show! Press Q for another episode.', 4500);
+    ui.toast(title ? `📽️ Now playing: ${title} · ${tk('Press Q for another episode', 'Tap “Next episode” for another')}` : tk('📽️ Enjoy the show! Press Q for another episode.', '📽️ Enjoy the show! Tap “Next episode” for another one.'), 4500);
   }
 
   standUp() {
@@ -337,7 +338,7 @@ export class Ramayan {
   }
 
   get help() {
-    return [['E', 'Get up'], ['Q', 'Next episode'], ['Drag', 'Look around']];
+    return { key: [['E', 'Get up'], ['Q', 'Next episode'], ['Drag', 'Look around']], tap: [['👆', 'Get up'], ['⏭️', 'Next episode'], ['👉', 'Drag to look around']] };
   }
 
   /** Plays the video only while the screen is near and the tab is visible. */

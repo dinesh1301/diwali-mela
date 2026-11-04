@@ -4,6 +4,7 @@ import { collide } from '../physics.js';
 import { clamp, setLayer } from '../utils.js';
 import { linear } from '../tasks.js';
 import { settings } from '../settings.js';
+import { tk } from '../touch.js';
 import { carModel, heliModel, planeModel } from './models.js';
 import { buildAirfield, buildCarGround } from './spots.js';
 
@@ -149,7 +150,7 @@ class Car extends Vehicle {
       radius: 1.6,
       stamp: 'drive',
       climb: [new THREE.Vector3(1.75, 0, -0.4)],
-      help: [['W S', 'Accelerate / reverse'], ['A D', 'Steer'], ['Space', 'Handbrake drift'], ['H', 'Horn'], ['E', 'Get out']],
+      help: { key: [['W S', 'Accelerate / reverse'], ['A D', 'Steer'], ['Space', 'Handbrake drift'], ['H', 'Horn'], ['E', 'Get out']], tap: [['🕹️', 'Drive & steer'], ['✋', 'Drift'], ['📯', 'Horn'], ['👆', 'Get out']] },
     });
     this.steer = 0;
     this.lean = new THREE.Vector2();
@@ -268,7 +269,7 @@ class Heli extends Vehicle {
       radius: 2.6,
       stamp: 'fly',
       climb: [new THREE.Vector3(1.9, 0, 0.3), new THREE.Vector3(0.85, 0.2, 0.3)], // ground, then the skid
-      help: [['Space', 'Ascend'], ['Shift', 'Descend'], ['W S', 'Forward / back'], ['A D', 'Turn'], ['E', 'Land & get out']],
+      help: { key: [['Space', 'Ascend'], ['Shift', 'Descend'], ['W S', 'Forward / back'], ['A D', 'Turn'], ['E', 'Land & get out']], tap: [['▲', 'Hold to go up'], ['▼', 'Hold to go down'], ['🕹️', 'Fly & turn'], ['👆', 'Land, then get out']] },
     });
     this.rotor = 0;
     this.tilt = new THREE.Vector2();
@@ -362,7 +363,7 @@ class Plane extends Vehicle {
       radius: 3.2,
       stamp: 'fly',
       climb: [new THREE.Vector3(1.7, 0, -1.3), new THREE.Vector3(0.95, 0.86, -0.15)], // behind the wing, then onto it
-      help: [['W S', 'Throttle up / down'], ['A D', 'Bank & turn'], ['Space', 'Pull up'], ['Shift', 'Nose down'], ['E', 'Land & get out']],
+      help: { key: [['W S', 'Throttle up / down'], ['A D', 'Bank & turn'], ['Space', 'Pull up'], ['Shift', 'Nose down'], ['E', 'Land & get out']], tap: [['🕹️', 'Throttle & turn'], ['▲', 'Pull up'], ['▼', 'Dive'], ['👆', 'Land, then get out']] },
     });
     this.throttle = 0;
     this.pitch = 0;
@@ -746,9 +747,9 @@ export class Vehicles {
     passport.stamp(v.stamp);
     ui.setHelp(v.help);
     const tips = {
-      car: '🏁 W to go, A/D to steer, Space to drift. Cross the start line to time a lap. E to get out.',
-      heli: '🚁 Hold Space to lift off, W to fly forward, A/D to turn. Land and press E to get out.',
-      plane: '✈️ Hold W for full throttle down the runway, then Space to pull up. Land and press E to get out.',
+      car: tk('🏁 W to go, A/D to steer, Space to drift. Cross the start line to time a lap. E to get out.', '🏁 Push the joystick up to go, sideways to steer, hold ✋ to drift. Cross the start line to time a lap.'),
+      heli: tk('🚁 Hold Space to lift off, W to fly forward, A/D to turn. Land and press E to get out.', '🚁 Hold ▲ to lift off, then the joystick to fly and turn. Land, then tap “Get out”.'),
+      plane: tk('✈️ Hold W for full throttle down the runway, then Space to pull up. Land and press E to get out.', '✈️ Hold the joystick up for full throttle down the runway, then hold ▲ to pull up. Land, then tap “Get out”.'),
     };
     ui.toast(tips[v.kind], 5000, { important: true });
     if (v.kind === 'car') {

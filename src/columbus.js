@@ -1,3 +1,4 @@
+import { tk } from './touch.js';
 import * as THREE from 'three';
 import { shape, merged } from './character.js';
 import { beam, hdr, setLayer, WARM_PALETTE } from './utils.js';
@@ -87,7 +88,7 @@ export class Columbus {
     }
     const sign = new THREE.Mesh(
       new THREE.PlaneGeometry(3.2, 0.9),
-      new THREE.MeshBasicMaterial({ map: signTexture('Columbus', 'Swinging boat · press E to ride', '#6a0d2b', '#ffe7a3', 1024, 288), color: new THREE.Color(1.2, 1.2, 1.2), side: THREE.DoubleSide })
+      new THREE.MeshBasicMaterial({ map: signTexture('Columbus', tk('Swinging boat · press E to ride', 'Swinging boat · tap the button to ride'), '#6a0d2b', '#ffe7a3', 1024, 288), color: new THREE.Color(1.2, 1.2, 1.2), side: THREE.DoubleSide })
     );
     sign.position.set(0, PIVOT_H + 0.9, 1.9);
     this.group.add(sign);
@@ -138,7 +139,7 @@ export class Columbus {
     this.state = 'ride';
     this.rideT = 0;
     passport.stamp('columbus');
-    ui.toast('🚢 Hold tight! Press E when you want it to stop.', 4000, { important: true });
+    ui.toast(tk('🚢 Hold tight! Press E when you want it to stop.', '🚢 Hold tight! Tap “Stop the ride” when you want it to stop.'), 4000, { important: true });
   }
 
   alight() {
@@ -164,7 +165,7 @@ export class Columbus {
   }
 
   get help() {
-    return [['E', 'Stop the ride'], ['Drag', 'Look around']];
+    return { key: [['E', 'Stop the ride'], ['Drag', 'Look around']], tap: [['👆', 'Stop the ride'], ['👉', 'Drag to look around']] };
   }
 
   update(dt, t) {

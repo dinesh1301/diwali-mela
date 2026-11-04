@@ -1,3 +1,4 @@
+import { tk } from './touch.js';
 import * as THREE from 'three';
 import { ParametricGeometry } from 'three/addons/geometries/ParametricGeometry.js';
 import { Character, randomLook } from './character.js';
@@ -250,7 +251,7 @@ export class BoatRide {
     }
     const sign = new THREE.Mesh(
       new THREE.PlaneGeometry(2.6, 0.73),
-      new THREE.MeshBasicMaterial({ map: signTexture('Naav ki Sair', 'Boat ride · press E at the jetty', '#13306b'), color: new THREE.Color(1.2, 1.2, 1.2), side: THREE.DoubleSide })
+      new THREE.MeshBasicMaterial({ map: signTexture('Naav ki Sair', tk('Boat ride · press E at the jetty', 'Boat ride · tap the button at the jetty'), '#13306b'), color: new THREE.Color(1.2, 1.2, 1.2), side: THREE.DoubleSide })
     );
     sign.position.set(x + 2.6, 2.2, -43.4);
     scene.add(sign);
@@ -316,7 +317,7 @@ export class BoatRide {
     this.nextLine = 6;
     passport.stamp('boat');
     ui.bubble((o) => this.boatman.headTop.getWorldPosition(o), 'Baithiye! Enjoy the river 🙏', 2.5);
-    ui.toast('🛶 Sit back and enjoy the ride. Press E to head back, Q to release a wish lantern.', 5000, { important: true });
+    ui.toast(tk('🛶 Sit back and enjoy the ride. Press E to head back, Q to release a wish lantern.', '🛶 Sit back and enjoy the ride. Tap “Return to the jetty” to head back, or 🏮 to release a wish lantern.'), 5000, { important: true });
   }
 
   async land() {
@@ -381,7 +382,7 @@ export class BoatRide {
   }
 
   get help() {
-    return [['E', 'Head back'], ['Q', 'Wish lantern'], ['Drag', 'Look around'], ['Scroll', 'Zoom']];
+    return { key: [['E', 'Head back'], ['Q', 'Wish lantern'], ['Drag', 'Look around'], ['Scroll', 'Zoom']], tap: [['👆', 'Head back'], ['🏮', 'Wish lantern'], ['👉', 'Drag to look around']] };
   }
 
   // ---------- per frame ----------

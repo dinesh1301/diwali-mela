@@ -1,3 +1,4 @@
+import { tk } from './touch.js';
 import * as THREE from 'three';
 import { canvasTexture, beam, setLayer } from './utils.js';
 import { signTexture } from './stalls.js';
@@ -94,7 +95,7 @@ export class Walls {
     world.colliders.push({ type: 'box', minX: wx - 0.3, maxX: wx + 0.65, minZ: z0, maxZ: z0 + len });
     const sign = new THREE.Mesh(
       new THREE.PlaneGeometry(3.2, 0.9),
-      new THREE.MeshBasicMaterial({ map: signTexture('Deepmala', 'Bring a diya or kandeel and press Q here', '#5c0a10', '#ffe7a3', 1024, 288), color: new THREE.Color(1.2, 1.2, 1.2) })
+      new THREE.MeshBasicMaterial({ map: signTexture('Deepmala', tk('Bring a diya or kandeel and press Q here', 'Bring a diya or kandeel and tap the button here'), '#5c0a10', '#ffe7a3', 1024, 288), color: new THREE.Color(1.2, 1.2, 1.2) })
     );
     sign.position.set(wx + 0.3, 2.6, z0 + len / 2);
     sign.rotation.y = Math.PI / 2;

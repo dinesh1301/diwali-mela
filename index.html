@@ -94,9 +94,9 @@
             <span>Drag to turn the camera</span>
           </div>
           <div class="controls-hint touch-only intro-only">
-            <span>Left thumb to walk</span>
-            <span>Drag to look</span>
-            <span>Tap the prompt to interact</span>
+            <span>🕹️ Joystick (bottom left) to walk</span>
+            <span>👉 Drag anywhere else to look</span>
+            <span>👆 Tap the glowing button to do things</span>
           </div>
         </div>
       </form>
@@ -140,11 +140,11 @@
     <div id="stampToast"></div>
 
     <div id="prompts">
-      <button id="prompt" class="prompt hidden"><kbd>E</kbd><span></span></button>
-      <button id="prompt2" class="prompt alt hidden"><kbd>Q</kbd><span></span></button>
+      <button id="prompt" class="prompt hidden"><kbd>E</kbd><i class="tap" aria-hidden="true">👆</i><span></span></button>
+      <button id="prompt2" class="prompt alt hidden"><kbd>Q</kbd><i class="tap" aria-hidden="true">👆</i><span></span></button>
     </div>
 
-    <div id="ctxHelp" class="desktop-only"></div>
+    <div id="ctxHelp"></div>
 
     <div id="actionbar">
       <button data-action="rocket" title="1"><span>🚀</span>Rocket</button>
@@ -158,8 +158,9 @@
 
     <button id="jumpBtn" class="touch-only">⤒</button>
     <div id="vehicleBtns" class="touch-only hidden">
-      <button id="vehUp">▲</button>
-      <button id="vehDown">▼</button>
+      <button id="vehHorn" class="hidden"><b>📯</b><small>Horn</small></button>
+      <button id="vehUp"><b>▲</b><small>Up</small></button>
+      <button id="vehDown"><b>▼</b><small>Down</small></button>
     </div>
 
     <div id="crosshair" class="hidden"></div>
@@ -294,7 +295,15 @@
       </div>
     </div>
 
-    <div id="joystick"><div class="knob"></div></div>
+    <div id="joystick" class="touch-only" aria-hidden="true"><div class="knob"></div><span class="joy-label">Walk</span></div>
+
+    <!-- touch: a one-time "how to play" card over the controls it describes -->
+    <div id="coach" class="hidden" role="dialog" aria-label="How to play on a phone">
+      <div class="coach-walk"><b>👈</b><span>Drag here<br />to walk</span></div>
+      <div class="coach-look"><b>👉</b><span>Drag anywhere else<br />to look around</span></div>
+      <div class="coach-tap"><b>👆</b><span>Tap the glowing button<br />to do things</span></div>
+      <div class="coach-ok">Tap anywhere to start</div>
+    </div>
 
     <script type="module" src="/src/main.js"></script>
   </body>

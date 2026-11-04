@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { STAMPS } from './passport.js';
 import { settings, keyLabel, KEY_LABELS, DEFAULT_KEYS } from './settings.js';
+import { TOUCH, tk } from './touch.js';
 
 const $ = (s) => document.querySelector(s);
 const _v = new THREE.Vector3();
@@ -14,7 +15,9 @@ const rank = (p) => RANKS.find(([max]) => p < max)[1];
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
 export function createUI(h) {
-  if (matchMedia('(pointer: coarse)').matches) document.body.classList.add('touch');
+  if (TOUCH) document.body.classList.add('touch');
+  // the header icons' tooltips name their shortcut keys; a phone has none
+  if (TOUCH) document.querySelectorAll('#hud-top button[title]').forEach((b) => (b.title = b.title.replace(/ \([A-Z]\)$/, '')));
 
   const intro = $('#intro');
   const toastEl = $('#toast');
@@ -58,7 +61,30 @@ export function createUI(h) {
   iconBtn('#avatarBtn', () => h.onAvatar());
   iconBtn('#boardsBtn', () => api.openBoards());
   iconBtn('#settingsBtn', () => api.openSettings());
-  iconBtn('#micBtn', () => h.onMic());
+  // push-to-talk on a phone: hold the 🎤 button to talk; a quick tap still switches the mic on or off
+  let micDownAt = 0;
+  let micHeldLong = false;
+  if (TOUCH) {
+    const mic = $('#micBtn');
+    const up = () => {
+      if (!micDownAt) return;
+      micHeldLong = performance.now() - micDownAt > 350;
+      micDownAt = 0;
+      api.micHeld = false;
+    };
+    mic.addEventListener('pointerdown', () => {
+      micDownAt = performance.now();
+      micHeldLong = false;
+      api.micHeld = true;
+    });
+    mic.addEventListener('pointerup', up);
+    mic.addEventListener('pointercancel', up);
+    mic.addEventListener('pointerleave', up);
+  }
+  iconBtn('#micBtn', () => {
+    if (TOUCH && micHeldLong && settings.voice === 'ptt') return; // that was a hold to talk, not a tap
+    h.onMic();
+  });
   $('#prompt').addEventListener('click', () => h.onPromptTap(settings.keys.interact));
   $('#prompt2').addEventListener('click', () => h.onPromptTap(settings.keys.use));
   $('#jumpBtn').addEventListener('click', () => h.onPromptTap(settings.keys.jump));
@@ -66,6 +92,26 @@ export function createUI(h) {
   const vehBtns = $('#vehicleBtns');
   h.input.bindHold($('#vehUp'), 'jump');
   h.input.bindHold($('#vehDown'), 'run');
+  h.input.bindHold($('#vehHorn'), 'horn');
+
+  // ---------- touch: first-run coach card ----------
+
+  const coachEl = $('#coach');
+  let coachDone = null;
+  const hideCoach = (e) => {
+    e?.preventDefault();
+    coachEl.classList.add('hidden');
+    document.body.classList.remove('coaching');
+    const done = coachDone;
+    coachDone = null;
+    done?.();
+    try {
+      localStorage.setItem('melaCoach', '1');
+    } catch {
+      // ignore
+    }
+  };
+  coachEl.addEventListener('pointerdown', hideCoach);
 
   // ---------- wish modal ----------
 
@@ -286,12 +332,43 @@ export function createUI(h) {
       writePrompt('#prompt2', text, settings.keys.use);
     },
 
-    /** lines: [[keysOrActions, label]]; action names are shown as their bound keys. */
+    /**
+     * lines: [[keysOrActions, label]]; action names are shown as their bound keys. A `{ key, tap }`
+     * pair picks the touch lines on a phone, where the first item is an icon rather than keys.
+     */
     setHelp(lines) {
-      $('#ctxHelp').innerHTML = lines
-        .map(([k, label]) => `<div>${k.split(' ').map((x) => `<kbd>${x in settings.keys ? keyLabel(settings.keys[x]) : x}</kbd>`).join('')}<span>${label}</span></div>`)
-        .join('');
+      if (!Array.isArray(lines)) lines = TOUCH ? lines.tap : lines.key;
+      const el = $('#ctxHelp');
+      el.innerHTML = TOUCH
+        ? lines.map(([icon, label]) => `<div><i>${icon}</i><span>${label}</span></div>`).join('')
+        : lines
+            .map(([k, label]) => `<div>${k.split(' ').map((x) => `<kbd>${x in settings.keys ? keyLabel(settings.keys[x]) : x}</kbd>`).join('')}<span>${label}</span></div>`)
+            .join('');
+      el.classList.toggle('empty', !lines.length);
     },
+
+    /**
+     * Touch: the first time someone plays on a phone, a card shows where the controls are. Returns
+     * true when it is showing; `onDone` then runs once it is tapped away (toasts wait behind it).
+     */
+    showCoach(onDone) {
+      if (!TOUCH) return false;
+      try {
+        if (localStorage.getItem('melaCoach')) return false;
+      } catch {
+        // no storage: show it anyway, it goes away on a tap
+      }
+      coachEl.classList.remove('hidden');
+      document.body.classList.add('coaching');
+      coachDone = onDone || null;
+      return true;
+    },
+
+    get coachOpen() {
+      return !coachEl.classList.contains('hidden');
+    },
+
+    micHeld: false,
 
     setMuted(m) {
       $('#muteBtn').textContent = m ? '🔇' : '🔊';
@@ -299,14 +376,17 @@ export function createUI(h) {
 
     setMusic(on) {
       $('#musicBtn').classList.toggle('off', !on);
-      $('#musicBtn').title = on ? 'Music on (B)' : 'Music off (B)';
+      $('#musicBtn').title = tk(on ? 'Music on (B)' : 'Music off (B)', on ? 'Music on' : 'Music off');
     },
 
     setMic(live, talking) {
       const b = $('#micBtn');
       b.classList.toggle('live', live);
       b.classList.toggle('talking', live && talking);
-      b.title = live ? `Mic on · ${keyLabel(settings.keys.talk)} to switch off` : `Voice chat · ${keyLabel(settings.keys.talk)} to switch on`;
+      const k = keyLabel(settings.keys.talk);
+      b.title = live
+        ? tk(`Mic on · ${k} to switch off`, settings.voice === 'ptt' ? 'Mic on · hold to talk, tap to switch off' : 'Mic on · tap to switch off')
+        : tk(`Voice chat · ${k} to switch on`, 'Voice chat · tap to switch on');
     },
 
     /** Small status chips under the header: online count, Ravan countdown, buffs. */
@@ -325,13 +405,17 @@ export function createUI(h) {
       if (el.textContent !== text) el.textContent = text;
     },
 
+    /** Touch buttons for whatever you're driving or flying (the stick steers); null hides them. */
     setVehicleButtons(kind) {
       vehBtns.classList.toggle('hidden', !kind);
+      document.body.classList.toggle('veh-ui', !!kind);
       $('#jumpBtn').classList.toggle('veh-hidden', !!kind);
-      const labels = { car: ['✋', ''], heli: ['▲', '▼'], plane: ['▲', '▼'] }[kind] ?? ['▲', '▼'];
-      $('#vehUp').textContent = labels[0];
-      $('#vehDown').classList.toggle('hidden', !labels[1]);
-      $('#vehDown').textContent = labels[1];
+      // [up icon, up label, down icon, down label]
+      const labels = { car: ['✋', 'Drift', '', ''], heli: ['▲', 'Up', '▼', 'Down'], plane: ['▲', 'Pull up', '▼', 'Dive'] }[kind] ?? ['▲', 'Up', '▼', 'Down'];
+      $('#vehUp').innerHTML = `<b>${labels[0]}</b><small>${labels[1]}</small>`;
+      $('#vehDown').classList.toggle('hidden', !labels[2]);
+      $('#vehDown').innerHTML = `<b>${labels[2]}</b><small>${labels[3]}</small>`;
+      $('#vehHorn').classList.toggle('hidden', kind !== 'car');
     },
 
     askWish() {
@@ -424,9 +508,9 @@ export function createUI(h) {
           <select data-set="music"><option value="song">Diwali song</option><option value="band">Mela band (royalty-free)</option></select></label>
         <label class="srow check"><input type="checkbox" data-set="reduceMotion" /><span>Reduce motion (gentler camera and rides)</span></label>
         <label class="srow"><span>Voice chat</span>
-          <select data-set="voice"><option value="open">Open mic (voice activated)</option><option value="ptt">Push to talk (hold the Talk key)</option></select></label>
+          <select data-set="voice"><option value="open">Open mic (voice activated)</option><option value="ptt">${tk('Push to talk (hold the Talk key)', 'Push to talk (hold the 🎤 button)')}</option></select></label>
         <label class="srow"><span>Voice volume</span><input type="range" min="0" max="1" step="0.05" data-set="voiceVolume" /></label>
-        <div class="keys"><div class="keys-title">Key bindings <button type="button" class="ghost tiny" data-resetkeys>Reset</button></div>${keysHtml}
+        <div class="keys desktop-only"><div class="keys-title">Key bindings <button type="button" class="ghost tiny" data-resetkeys>Reset</button></div>${keysHtml}
           <p class="muted small">Movement is W A S D or the arrow keys. Click a key to change it, then press the new key.</p></div>
         <p class="srow-note muted small" data-note></p>`;
       box.querySelector('[data-set="quality"]').value = settings.quality;
@@ -535,6 +619,8 @@ export function createUI(h) {
         hudEl.help.textContent = help;
         api.gameHud.stats('');
         $('#gameExit').classList.toggle('hidden', !exit);
+        // a booth game (one you can leave): phones clear the nav and the fireworks bar out of its way
+        document.body.classList.toggle('in-booth', exit);
         api.gameHud.bar(null);
         api.gameHud.timer(null);
       },
@@ -573,6 +659,7 @@ export function createUI(h) {
       },
       hide() {
         hud.classList.add('hidden');
+        document.body.classList.remove('in-booth');
       },
     },
 

@@ -1,3 +1,4 @@
+import { tk } from '../touch.js';
 import * as THREE from 'three';
 import { hammerMesh } from '../items.js';
 import { canvasTexture } from '../utils.js';
@@ -26,6 +27,8 @@ export class Striker {
     this.title = '🔔 Taakat Pariksha';
     this.help = `Click, tap or press Space when the power is in the green zone. ${SWINGS} swings to ring the bell!`;
     this.helpLines = [['Click', 'Swing the hammer'], ['Space', 'Swing'], ['Esc', 'Leave']];
+    this.tapHelp = `Tap anywhere when the power is in the green zone. ${SWINGS} swings to ring the bell!`;
+    this.tapLines = [['👆', 'Tap to swing'], ['✕', 'Leave']];
     const g = booth.group;
 
     const scale = canvasTexture(128, 1024, (c, w, h) => {

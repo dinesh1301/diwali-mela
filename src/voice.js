@@ -1,3 +1,4 @@
+import { tk } from './touch.js';
 import { settings } from './settings.js';
 
 /*
@@ -86,7 +87,7 @@ export class Voice {
     for (const p of this.peers.values()) this.attachLocal(p);
     for (const id of this.net.remote.keys()) this.ensurePeer(id);
     this.announce();
-    ui.toast(settings.voice === 'ptt' ? `🎤 Mic ready: hold ${settings.keys.talk.replace('Key', '')} to talk. People within ~30 m hear you.` : '🎤 Mic is live: people within ~30 m can hear you. Press V to switch it off.', 4500, { important: true });
+    ui.toast(settings.voice === 'ptt' ? tk(`🎤 Mic ready: hold ${settings.keys.talk.replace('Key', '')} to talk. People within ~30 m hear you.`, '🎤 Mic ready: hold the 🎤 button to talk. People within ~30 m hear you.') : tk('🎤 Mic is live: people within ~30 m can hear you. Press V to switch it off.', '🎤 Mic is live: people within ~30 m can hear you. Tap 🎤 to switch it off.'), 4500, { important: true });
     return true;
   }
 

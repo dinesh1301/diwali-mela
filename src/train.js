@@ -1,3 +1,4 @@
+import { tk } from './touch.js';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Character, randomLook } from './character.js';
@@ -129,7 +130,7 @@ export class Train {
       plat.receiveShadow = plat.castShadow = true;
       scene.add(plat);
       const signPos = centre.clone().add(right.clone().multiplyScalar(st.side * 1.0));
-      const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.75), new THREE.MeshBasicMaterial({ map: signTexture(st.name, 'Toy train · press E when it stops', '#13306b', '#ffe7a3', 1024, 288), color: new THREE.Color(1.2, 1.2, 1.2), side: THREE.DoubleSide }));
+      const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.75), new THREE.MeshBasicMaterial({ map: signTexture(st.name, tk('Toy train · press E when it stops', 'Toy train · tap the button when it stops'), '#13306b', '#ffe7a3', 1024, 288), color: new THREE.Color(1.2, 1.2, 1.2), side: THREE.DoubleSide }));
       sign.position.set(signPos.x, 2.4, signPos.z);
       sign.rotation.y = Math.atan2(t.x, t.z) + Math.PI / 2;
       scene.add(sign);
@@ -307,7 +308,7 @@ export class Train {
     player.cam.pitch = 0.25;
     passport.stamp('train');
     audio.ding(0.2);
-    ui.toast(`🚂 All aboard! Press E to get off at the next station.`, 4000, { important: true });
+    ui.toast(tk('🚂 All aboard! Press E to get off at the next station.', '🚂 All aboard! Tap “Get off” to step down at the next station.'), 4000, { important: true });
     this.dwell = Math.min(this.dwell, 1.2);
   }
 
@@ -334,7 +335,7 @@ export class Train {
   }
 
   get help() {
-    return [['E', 'Get off next stop'], ['Drag', 'Look around'], ['Scroll', 'Zoom']];
+    return { key: [['E', 'Get off next stop'], ['Drag', 'Look around'], ['Scroll', 'Zoom']], tap: [['👆', 'Get off next stop'], ['👉', 'Drag to look around']] };
   }
 
   update(dt, t) {

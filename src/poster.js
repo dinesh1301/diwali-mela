@@ -1,3 +1,4 @@
+import { tk } from './touch.js';
 import * as THREE from 'three';
 import { StringLights } from './stringLights.js';
 import { Garlands } from './garlands.js';
@@ -350,7 +351,7 @@ export class Poster {
 
     const sign = new THREE.Mesh(
       new THREE.PlaneGeometry(3.4, 0.95),
-      new THREE.MeshBasicMaterial({ map: signTexture('Selfie Point', 'Press E · get your mela poster', '#6a0d2b'), color: new THREE.Color(1.2, 1.2, 1.2), side: THREE.DoubleSide })
+      new THREE.MeshBasicMaterial({ map: signTexture('Selfie Point', tk('Press E · get your mela poster', 'Tap the button · get your mela poster'), '#6a0d2b'), color: new THREE.Color(1.2, 1.2, 1.2), side: THREE.DoubleSide })
     );
     sign.position.set(S.x - 3.2, 2.6, S.z - 3.6);
     sign.rotation.y = -Math.PI / 2;
