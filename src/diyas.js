@@ -43,6 +43,23 @@ export class Diyas {
     this.scene.add(this.bowls, this.flames);
   }
 
+  /** Hides the diyas standing at these points (e.g. a re-stocked stall's old shelf of diyas). */
+  hideAt(points, eps = 0.02) {
+    if (!points?.length) return;
+    const d = this.dummy;
+    this.items.forEach((it, i) => {
+      if (!points.some((p) => Math.abs(p.x - it.x) < eps && Math.abs(p.y - it.y) < eps && Math.abs(p.z - it.z) < eps)) return;
+      it.y = -50;
+      if (!this.bowls) return;
+      d.position.set(it.x, it.y, it.z);
+      d.rotation.set(0, it.rot, 0);
+      d.scale.setScalar(it.s);
+      d.updateMatrix();
+      this.bowls.setMatrixAt(i, d.matrix);
+      this.bowls.instanceMatrix.needsUpdate = true;
+    });
+  }
+
   update(t) {
     if (!this.bowls) return;
     const d = this.dummy;

@@ -103,6 +103,7 @@ export function buildWorld(scene, { reflectionScale = 0.5 } = {}) {
   return {
     colliders: ctx.colliders,
     stalls: ctx.stalls,
+    diyas: ctx.diyas,
     wheel,
     water: ctx.water,
     bounds: BOUNDS,
@@ -325,6 +326,8 @@ function buildBazaar(ctx) {
         def,
         group: g,
         keeper: stall.keeper,
+        sign: stall.sign,
+        diyaSpots: stall.diyaSpots.map(w),
         stand: w(new THREE.Vector3(0, 0, D / 2 + 1.1)), // where a customer stands
         center: w(new THREE.Vector3(0, 0, D / 2 - 0.45)), // the counter
       });

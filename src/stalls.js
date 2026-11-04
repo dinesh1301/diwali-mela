@@ -280,14 +280,10 @@ function addGoods(g, type, diyaSpots) {
 
 // ---------- the stall ----------
 
-/**
- * Builds one stall in local space with its front (counter) facing +z.
- * Returns local positions for diyas and bulb strands so the world can add them to shared systems.
- */
-export function createStall(def) {
+/** The stall itself (platform, cloth walls, poles, roof, valance, counter, inside bulb), without sign, keeper or goods. */
+function buildShell(g, def) {
   const { W, D, H } = STALL;
   const GEO = geo();
-  const g = new THREE.Group();
   const fabric = std(0xffffff, 0.9, { map: stripes(def.c1, def.c2), side: THREE.DoubleSide });
   const add = (mesh, x, y, z) => {
     mesh.position.set(x, y, z);
@@ -319,13 +315,25 @@ export function createStall(def) {
   add(new THREE.Mesh(new THREE.PlaneGeometry(W - 0.4, 0.9), std(0xffffff, 0.9, { map: stripes(def.c2, def.trim, 16) })), 0, 0.68, cz + 0.355);
   add(new THREE.Mesh(new THREE.BoxGeometry(W - 0.3, 0.04, 0.8), std(def.c2, 0.9)), 0, 1.2, cz);
 
+  add(new THREE.Mesh(GEO.bulb, MAT.bulb), 0, H - 0.6, 0.4);
+}
+
+/**
+ * Builds one stall in local space with its front (counter) facing +z.
+ * Returns local positions for diyas and bulb strands so the world can add them to shared systems.
+ */
+export function createStall(def) {
+  const { D, H } = STALL;
+  const g = new THREE.Group();
+  buildShell(g, def);
+  const cz = D / 2 - 0.45;
+
   const sign = new THREE.Mesh(
     new THREE.PlaneGeometry(3.6, 1.0),
     new THREE.MeshBasicMaterial({ map: signTexture(def.name, def.sub, def.sign), color: new THREE.Color(1.2, 1.2, 1.2) })
   );
-  add(sign, 0, H + 0.55, D / 2 + 0.3);
-
-  add(new THREE.Mesh(GEO.bulb, MAT.bulb), 0, H - 0.6, 0.4);
+  sign.position.set(0, H + 0.55, D / 2 + 0.3);
+  g.add(sign);
 
   const keeper = new Character(randomLook());
   keeper.root.position.set(rand(-0.6, 0.6), 0.18, cz - 0.85);
@@ -336,6 +344,7 @@ export function createStall(def) {
   // ~70-200 little meshes become one per material look (keeper and sign stay their own)
   mergeStatic(g, { skip: (o) => o === keeper.root || o === sign });
 
+  const { W } = STALL;
   const ex = W / 2 + 0.25;
   const ez = D / 2 + 0.25;
   const apex = new THREE.Vector3(0, H + 1.3, 0);
@@ -351,3 +360,31 @@ export function createStall(def) {
     garland: [new THREE.Vector3(-ex, H - 0.02, ez + 0.02), new THREE.Vector3(ex, H - 0.02, ez + 0.02)],
   };
 }
+
+/**
+ * Re-stocks a built stall with different goods (a creator's stall themed to their niche): the merged
+ * shell + goods are rebuilt with `addGoodsFn(group)` in place of the original goods. The keeper, the
+ * sign and anything named "creator*" stay. Returns the local diya spots of the old goods (if it was
+ * the diya stall) so the caller can hide those diyas.
+ */
+export function restockStall(stall, addGoodsFn) {
+  const g = stall.group;
+  const keep = (o) => o === stall.keeper?.root || o === stall.sign || o.name?.startsWith('creator');
+  const shared = new Set(Object.values(geo()));
+  for (const o of g.children.slice()) {
+    if (keep(o)) continue;
+    g.remove(o);
+    o.traverse((x) => {
+      if (x.geometry && !shared.has(x.geometry)) x.geometry.dispose();
+    });
+  }
+  const before = new Set(g.children);
+  buildShell(g, stall.def);
+  addGoodsFn(g);
+  const mask = g.layers.mask;
+  for (const o of g.children) if (!before.has(o)) o.traverse((x) => (x.layers.mask = mask));
+  mergeStatic(g, { skip: keep });
+  g.updateMatrixWorld(true);
+}
+
+export { TOP as STALL_TOP };

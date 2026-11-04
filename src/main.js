@@ -46,6 +46,8 @@ import { shadowify } from './utils.js';
 import { Voice } from './voice.js';
 import { LightPool } from './lightpool.js';
 import { TOUCH, tk } from './touch.js';
+import { startDirector, directorParams } from './director/director.js';
+import { loadCreatorConfig, applyCreator, personaliseIntro, stallIndexFor } from './creatorStage.js';
 
 const ZONES = [
   { id: 'gate', x: 0, z: 62, r: 9, msg: '🪔 Welcome to the Topmate Diwali Mela!' },
@@ -220,6 +222,10 @@ async function loadFonts() {
 async function init() {
   const fontsReady = loadFonts(); // fetched while the renderer and lights are set up
   const params = new URLSearchParams(location.search);
+  const director = directorParams(params); // ?director=<shot>: frame-stepped capture (see director/)
+  const viewW0 = () => director?.width ?? innerWidth;
+  const viewH0 = () => director?.height ?? innerHeight;
+  const creatorCfg = loadCreatorConfig(params); // ?c=<slug> / ?cfg=: a creator's own mela
   settings.load();
   profile.load();
   const look = { ...randomPlayerLook(), ...(profile.look || {}) };
@@ -260,7 +266,7 @@ async function init() {
   const pinnedPr = Number(params.get('dpr')) || 0;
   renderer.setPixelRatio(pinnedPr || startPr);
   document.body.classList.toggle('low', low); // style.css drops the backdrop blur on the phone tier
-  renderer.setSize(innerWidth, innerHeight);
+  renderer.setSize(viewW0(), viewH0());
   renderer.setClearColor(0x000000, 0);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
@@ -272,7 +278,7 @@ async function init() {
   const fogColor = new THREE.Color(0x1a0d2c);
   scene.fog = new THREE.FogExp2(fogColor, 0.0075);
 
-  const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 700);
+  const camera = new THREE.PerspectiveCamera(60, viewW0() / viewH0(), 0.1, 700);
   camera.layers.enable(1);
   scene.add(camera);
   const hemi = new THREE.HemisphereLight(0x6a5aa0, 0x2a1a12, 0.8);
@@ -315,7 +321,7 @@ async function init() {
 
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.85, 0.55, 0.82); // sized in resize()
+  const bloom = new UnrealBloomPass(new THREE.Vector2(viewW0(), viewH0()), 0.85, 0.55, 0.82); // sized in resize()
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
 
@@ -516,6 +522,9 @@ async function init() {
   const ravan = new Ravan(ctx);
   const scenes = low ? null : new CrowdScenes(ctx);
   extraLights.build();
+  const cfg = await creatorCfg;
+  const creator = applyCreator(scene, cfg, { stallAnchor: cfg && world.stalls[stallIndexFor(cfg.stallNo, world.stalls.length)], ravanAnchor: { pos: new THREE.Vector3(-46.6, 0, 76.5), facing: 0.22 }, colliders: world.colliders, diyas: world.diyas });
+  personaliseIntro(cfg);
   await loading();
   const dayNight = new DayNight({ scene, sky, hemi, sun, lightSystems: [world.lights, games.lights, vehicles.lights, poster.lights, ramayan.lights, extraLights].filter(Boolean) });
   const customizer = new Customizer({
@@ -574,8 +583,8 @@ async function init() {
   let viewW = 0;
   let viewH = 0;
   function resize() {
-    const w = innerWidth;
-    const h = innerHeight;
+    const w = viewW0();
+    const h = viewH0();
     const pr = renderer.getPixelRatio();
     viewW = w;
     viewH = h;
@@ -617,12 +626,12 @@ async function init() {
   // the new size a moment late, so check again shortly after
   let resizeTimer = 0;
   const onResize = () => {
-    if (innerWidth !== viewW || innerHeight !== viewH) {
+    if (!director && (innerWidth !== viewW || innerHeight !== viewH)) {
       resize();
       governor.reset();
     }
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => (innerWidth !== viewW || innerHeight !== viewH) && (resize(), governor.reset()), 300);
+    resizeTimer = setTimeout(() => !director && (innerWidth !== viewW || innerHeight !== viewH) && (resize(), governor.reset()), 300);
   };
   addEventListener('resize', onResize);
   addEventListener('orientationchange', onResize);
@@ -636,7 +645,9 @@ async function init() {
   } catch {
     // ignore
   }
-  if (savedPos && !params.has('place') && !params.has('pos') && vehicles.walkable(savedPos)) player.teleport(savedPos.x, savedPos.z, savedPos.h);
+  const atStall = creator.stallBoard && world.stalls[stallIndexFor(cfg.stallNo, world.stalls.length)];
+  if (atStall && !params.has('place') && !params.has('pos')) player.teleport(0, atStall.center.z + 5, face(0, atStall.center.z + 5, atStall.center.x, atStall.center.z)); // facing their stall
+  else if (savedPos && !params.has('place') && !params.has('pos') && vehicles.walkable(savedPos)) player.teleport(savedPos.x, savedPos.z, savedPos.h);
   setInterval(() => {
     if (started && player.mode === 'walk') {
       try {
@@ -674,14 +685,14 @@ async function init() {
     customizer.close();
     profile.name = params.get('name') || profile.name || 'Mela Visitor';
     if (params.has('handle')) profile.handle = params.get('handle');
-    started = true;
+    started = !director; // director shots: no prompts, markers or keeper bubbles
     nameTag.set({ name: profile.name, handle: profile.handle });
     dayNight.start({ night: params.has('night') });
     ravan.start();
     if (!params.has('noyt')) ramayan.start();
     if (!params.has('nonet')) net.connect();
-    ui.showCoach();
-    window.__mela = { ...ctx, games, rides, crowd, vehicles, ramayan, poster, customizer, nameTag, boat, train, ravan, walls, dayNight, scenes, decor, voice, lightPool, governor, get gov() { return { ...governor.state, gpu: settings.gpu, midGpu: settings.midGpu }; } }; // for automated checks
+    if (!director) ui.showCoach();
+    window.__mela = { ...ctx, creator, games, rides, crowd, vehicles, ramayan, poster, customizer, nameTag, boat, train, ravan, walls, dayNight, scenes, decor, voice, lightPool, governor, get gov() { return { ...governor.state, gpu: settings.gpu, midGpu: settings.midGpu }; } }; // for automated checks
   } else {
     customizer.open('intro');
   }
@@ -737,21 +748,18 @@ async function init() {
   // behind the intro card and other full-screen panels the scene is only a blurred backdrop, so it is
   // drawn at a few frames a second (or every 3rd frame) while the simulation keeps running
   const introEl = document.getElementById('intro');
-  let frame = 0;
+  let frameNo = 0;
   let lastDraw = 0;
   let lastTime = 0;
   let throttled = false;
   let sinceShadow = 0;
 
-  const loop = (time) => {
-    const t0 = performance.now();
-    const rafDt = lastTime ? time - lastTime : 0;
-    lastTime = time;
-    frame++;
-    timer.update(time);
-    const dt = Math.min(timer.getDelta(), 0.05);
-    const t = timer.getElapsed();
+  // the director takes the camera (and the clock) for frame-stepped capture
+  let cameraHook = null;
 
+  /** One simulation step and (unless render is false) one draw. `time` is the rAF timestamp. */
+  function frame(dt, t, { time = performance.now(), render = true } = {}) {
+    frameNo++;
     tasks.update(dt);
     games.update(dt, t);
     rides.update(dt, t);
@@ -768,10 +776,12 @@ async function init() {
     poster.update(t);
     ravan.update(dt, t);
     decor.update(dt, t);
+    creator.update(dt, t);
     updateFlames(t);
     dayNight.update(dt);
 
-    if (games.active) games.applyCamera(camera, dt);
+    if (cameraHook) cameraHook(camera, dt, t);
+    else if (games.active) games.applyCamera(camera, dt);
     else if (vehicles.active) vehicles.applyCamera(camera, dt);
     else if (boat.riding) boat.applyCamera(camera, dt);
     else player.updateCamera(dt);
@@ -787,7 +797,7 @@ async function init() {
       // the stick says what it does now
       if (TOUCH) joyLabel.textContent = owner === boat ? 'Row' : owner === vehicles ? (vehicles.active.kind === 'car' ? 'Drive' : 'Fly') : 'Walk';
       if (TOUCH) jumpBtn.classList.toggle('boat-hidden', owner === boat); // nothing to jump in a boat
-      nameTag.setVisible(mode !== 'game'); // the close game cameras sit right behind the head
+      nameTag.setVisible(mode !== 'game' && !director); // the close game cameras sit right behind the head; director shots have no tag
       ui.setPrompt(null);
       ui.setPrompt2(null);
       if (mode === 'ride') ui.setHelp(owner === vehicles ? vehicles.active.help : owner ? owner.help : HELP.ride);
@@ -843,7 +853,7 @@ async function init() {
 
     const intro = !introEl.classList.contains('hidden');
     const covered = intro || ui.modalOpen;
-    const draw = !covered || (intro ? time - lastDraw > 140 : frame % 3 === 0);
+    const draw = render && (!covered || (intro ? time - lastDraw > 140 : frameNo % 3 === 0));
     if (covered !== throttled) {
       throttled = covered;
       governor.reset(); // frame times behind a panel say nothing about the full scene
@@ -866,8 +876,22 @@ async function init() {
       ramayan.render(camera);
     }
     input.endFrame();
+    return covered;
+  }
+
+  const loop = (time) => {
+    const t0 = performance.now();
+    const rafDt = lastTime ? time - lastTime : 0;
+    lastTime = time;
+    timer.update(time);
+    const covered = frame(Math.min(timer.getDelta(), 0.05), timer.getElapsed(), { time });
     if (!covered) governor.sample(rafDt, performance.now() - t0);
   };
+  if (director) {
+    nameTag.setVisible(false);
+    startDirector(director, { ...window.__mela, frame, setCameraHook: (fn) => (cameraHook = fn) });
+    return;
+  }
   renderer.setAnimationLoop(loop);
 
   // a hidden tab draws nothing at all (some browsers keep firing rAF for a while)
