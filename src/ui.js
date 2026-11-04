@@ -188,6 +188,42 @@ export function createUI(h) {
 
   const hud = $('#gameHud');
   const crosshair = $('#crosshair');
+  // HUD parts are looked up once; per-frame setters write the DOM only when a value changes, and
+  // the bars move by transform (no layout) rather than width
+  const hudEl = {
+    title: hud.querySelector('.gh-title'),
+    help: hud.querySelector('.gh-help'),
+    stats: hud.querySelector('.gh-stats'),
+    bar: hud.querySelector('.gh-bar'),
+    timer: hud.querySelector('.gh-timer'),
+  };
+  hudEl.barFill = hudEl.bar.querySelector('.fill');
+  hudEl.barLabel = hudEl.bar.querySelector('.label');
+  hudEl.zone = hudEl.bar.querySelector('.zone');
+  hudEl.timerFill = hudEl.timer.querySelector('.fill');
+  for (const f of [hudEl.barFill, hudEl.timerFill]) {
+    f.style.width = '100%';
+    f.style.transformOrigin = '0 50%';
+    f.style.transform = 'scaleX(0)';
+  }
+  const hudLast = { stats: null, bar: undefined, barScale: -1, hot: null, label: null, zone: undefined, timer: undefined, timerScale: -1 };
+  const prompts = {};
+  const promptRef = (id) =>
+    (prompts[id] ??= (() => {
+      const el = $(id);
+      return { el, span: el.querySelector('span'), kbd: el.querySelector('kbd'), text: undefined, key: undefined };
+    })());
+  const writePrompt = (id, text, code) => {
+    const p = promptRef(id);
+    if (text === p.text && (!text || code === p.key)) return;
+    if (!text !== !p.text) p.el.classList.toggle('hidden', !text);
+    p.text = text;
+    if (text) {
+      p.span.textContent = text;
+      p.kbd.textContent = keyLabel(code);
+      p.key = code;
+    }
+  };
 
   const renderBoards = () => {
     const boards = h.boards?.() ?? {};
@@ -241,21 +277,11 @@ export function createUI(h) {
     },
 
     setPrompt(text) {
-      const el = $('#prompt');
-      el.classList.toggle('hidden', !text);
-      if (text) {
-        el.querySelector('span').textContent = text;
-        el.querySelector('kbd').textContent = keyLabel(settings.keys.interact);
-      }
+      writePrompt('#prompt', text, settings.keys.interact);
     },
 
     setPrompt2(text) {
-      const el = $('#prompt2');
-      el.classList.toggle('hidden', !text);
-      if (text) {
-        el.querySelector('span').textContent = text;
-        el.querySelector('kbd').textContent = keyLabel(settings.keys.use);
-      }
+      writePrompt('#prompt2', text, settings.keys.use);
     },
 
     /** lines: [[keysOrActions, label]]; action names are shown as their bound keys. */
@@ -503,34 +529,45 @@ export function createUI(h) {
     gameHud: {
       show({ title, help, exit = true }) {
         hud.classList.remove('hidden');
-        hud.querySelector('.gh-title').textContent = title;
-        hud.querySelector('.gh-help').textContent = help;
-        hud.querySelector('.gh-stats').innerHTML = '';
+        hudEl.title.textContent = title;
+        hudEl.help.textContent = help;
+        api.gameHud.stats('');
         $('#gameExit').classList.toggle('hidden', !exit);
         api.gameHud.bar(null);
         api.gameHud.timer(null);
       },
       stats(html) {
-        hud.querySelector('.gh-stats').innerHTML = html;
+        if (html === hudLast.stats) return;
+        hudLast.stats = html;
+        hudEl.stats.innerHTML = html;
       },
       bar(value, { label = '', zone = null, hot = false } = {}) {
-        const el = hud.querySelector('.gh-bar');
-        el.classList.toggle('hidden', value === null);
+        const el = hudEl.bar;
+        if ((value === null) !== (hudLast.bar === null)) el.classList.toggle('hidden', value === null);
+        hudLast.bar = value;
         if (value === null) return;
-        el.classList.toggle('hot', hot);
-        el.querySelector('.fill').style.width = `${Math.round(value * 100)}%`;
-        el.querySelector('.label').textContent = label;
-        const z = el.querySelector('.zone');
-        z.style.display = zone ? '' : 'none';
-        if (zone) {
-          z.style.left = `${zone[0] * 100}%`;
-          z.style.width = `${(zone[1] - zone[0]) * 100}%`;
+        if (hot !== hudLast.hot) el.classList.toggle('hot', (hudLast.hot = hot));
+        const sc = Math.round(value * 100) / 100;
+        if (sc !== hudLast.barScale) hudEl.barFill.style.transform = `scaleX(${(hudLast.barScale = sc)})`;
+        if (label !== hudLast.label) hudEl.barLabel.textContent = hudLast.label = label;
+        const zk = zone ? `${zone[0]},${zone[1]}` : '';
+        if (zk !== hudLast.zone) {
+          hudLast.zone = zk;
+          const z = hudEl.zone;
+          z.style.display = zone ? '' : 'none';
+          if (zone) {
+            z.style.left = `${zone[0] * 100}%`;
+            z.style.width = `${(zone[1] - zone[0]) * 100}%`;
+          }
         }
       },
       timer(value) {
-        const el = hud.querySelector('.gh-timer');
-        el.classList.toggle('hidden', value === null);
-        if (value !== null) el.querySelector('.fill').style.width = `${Math.max(0, value) * 100}%`;
+        const el = hudEl.timer;
+        if ((value === null) !== (hudLast.timer === null)) el.classList.toggle('hidden', value === null);
+        hudLast.timer = value;
+        if (value === null) return;
+        const sc = Math.round(Math.max(0, value) * 1000) / 1000;
+        if (sc !== hudLast.timerScale) hudEl.timerFill.style.transform = `scaleX(${(hudLast.timerScale = sc)})`;
       },
       hide() {
         hud.classList.add('hidden');
