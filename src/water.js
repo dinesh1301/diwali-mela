@@ -162,10 +162,30 @@ export function createWater(scene, { width = 600, depth = 112, y = -1.35, z = -1
   mesh.position.set(0, y, z);
   scene.add(mesh);
   const u = mesh.material.uniforms;
+
+  // The reflection is a whole second render of the scene. The waves smear it and its texture matrix
+  // stays matched to the image it last drew, so redrawing it every 2nd or 3rd frame is not visible:
+  // every frame near the river on high, less often from further away and on phones.
+  const low = settings.tier === 'low';
+  const reflect = mesh.onBeforeRender;
+  let frame = 0;
+  let drawn = -1e9;
+  mesh.onBeforeRender = function (renderer, sc, camera, ...rest) {
+    const p = camera.position;
+    const dx = Math.max(0, Math.abs(p.x) - width / 2);
+    const dz = Math.max(0, Math.abs(p.z - z) - depth / 2);
+    const far = dx * dx + dz * dz > 60 * 60;
+    const every = (low ? 2 : 1) + (far ? 1 : 0);
+    if (frame - drawn < every) return;
+    drawn = frame;
+    reflect.call(this, renderer, sc, camera, ...rest);
+  };
+
   return {
     mesh,
     update(t) {
       u.time.value = t;
+      frame++;
     },
     setBoat(x, z, strength) {
       u.uBoat.value.set(x, strength, z);
