@@ -11,7 +11,11 @@ import { SHOTS } from './shots.js';
   setInterval and requestAnimationFrame only move when the capture calls step(), which advances
   exactly 1/30 s and renders one frame. So a capture is smooth and identical on any machine.
 
-    window.__director = { ready: Promise<void>, frames: number, frame: number, step(): void, shot, duration }
+    window.__director = { ready: Promise<void>, frames: number, frame: number, step(): Promise<void>, shot, duration, lateFrames }
+
+  step() draws one frame synchronously (grab the canvas right after it) and returns a promise that
+  resolves once the next frame's video seeks are done: `await __director.step()` makes captures
+  with the Mela Screen's reels exact.
 
   ?director=free adds look(pos[3], target[3], fov?) for finding camera positions.
 */
@@ -291,6 +295,7 @@ export function startDirector(opts, m) {
       dayNight.running = def.night !== false && def.dayT == null;
       dayNight.apply();
       await m.creator?.ready;
+      await m.billboard?.ready; // reels / posts loaded (and video metadata known) before frame 0
       await document.fonts?.ready;
       await def.setup?.({ m, H, state, t });
       // pre-roll: simulate (without drawing) so the shot opens mid-action
@@ -299,10 +304,27 @@ export function startDirector(opts, m) {
       // one throwaway draw compiles anything new in view, then frame 0 is the first real step
       u = 0;
       m.frame(0, t, { render: true });
+      // Videos (the Mela Screen's reels) are seeked to each frame's time rather than played: the seek
+      // for the next frame starts as soon as a frame is drawn, and step() returns that promise. A
+      // capture that awaits step() is exact; one that doesn't usually is (the seek finishes during the
+      // grab), and a frame drawn while a seek is still pending is counted in api.lateFrames.
+      let pending = m.billboard?.prepare?.(dt) ?? null;
+      let settled = true;
+      const track = (p) => {
+        settled = !p;
+        p?.then(() => (settled = true));
+        return p;
+      };
+      track(pending);
+      await pending;
+      api.lateFrames = 0;
       api.step = () => {
+        if (!settled) api.lateFrames++;
         u = api.frames > 1 ? Math.min(1, api.frame / (api.frames - 1)) : 0;
         tick(true);
         api.frame++;
+        pending = track(m.billboard?.prepare?.(dt) ?? null);
+        return pending ?? Promise.resolve();
       };
       if (id === 'free') {
         api.look = (pos, target, fov) => {

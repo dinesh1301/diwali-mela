@@ -49,6 +49,7 @@ import { TOUCH, tk } from './touch.js';
 import { startDirector, directorParams } from './director/director.js';
 import { loadCreatorConfig, applyCreator, personaliseIntro, stallIndexFor } from './creatorStage.js';
 import { setMelaSlots, slot, melaReport } from './personalSlots.js';
+import { Billboard } from './billboard.js';
 
 // zone toasts: the line itself is a personal slot (zone.<id>); a controls hint, when there is one, is added after it
 const ZONES = [
@@ -275,19 +276,19 @@ async function init() {
   renderer.setSize(viewW0(), viewH0());
   renderer.setClearColor(0x000000, 0);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
+  renderer.toneMappingExposure = 1.18; // a bright festival night (the bloom threshold is set before this)
   renderer.shadowMap.enabled = !low;
   renderer.shadowMap.type = THREE.PCFShadowMap;
   document.getElementById('app').appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  const fogColor = new THREE.Color(0x1a0d2c);
-  scene.fog = new THREE.FogExp2(fogColor, 0.0075);
+  const fogColor = new THREE.Color(0x2c1a36);
+  scene.fog = new THREE.FogExp2(fogColor, 0.0055);
 
   const camera = new THREE.PerspectiveCamera(60, viewW0() / viewH0(), 0.1, 700);
   camera.layers.enable(1);
   scene.add(camera);
-  const hemi = new THREE.HemisphereLight(0x6a5aa0, 0x2a1a12, 0.8);
+  const hemi = new THREE.HemisphereLight(0x8e84cc, 0x5a3a24, 1.35);
   scene.add(hemi);
   // one directional light: the setting sun at dusk, a faint blue sky light at night; it casts the shadows
   const sun = new THREE.DirectionalLight(0xffa050, 1.2);
@@ -536,8 +537,13 @@ async function init() {
   // the creator's own stall shows their board, so its menu takes the board's name too (not the slot's)
   if (ownStall?.def) ownStall.def.name = cfg.stallTitle || `${cfg.name} ka Stall`;
   personaliseIntro(cfg);
+  // the Mela Screen over the entrance: the creator's reels / posts, or the festive default loop
+  const billboard = new Billboard({ scene, cfg, colliders: world.colliders, director: !!director });
+  billboard.camera = camera;
+  billboard.renderer = renderer;
+  billboard.onOverlay = (open) => (input.blocked = open); // the full-screen reel: no walking behind it
   await loading();
-  const dayNight = new DayNight({ scene, sky, hemi, sun, lightSystems: [world.lights, games.lights, vehicles.lights, poster.lights, ramayan.lights, extraLights].filter(Boolean) });
+  const dayNight = new DayNight({ scene, sky, hemi, sun, lightSystems: [world.lights, games.lights, vehicles.lights, poster.lights, ramayan.lights, extraLights, billboard.lights].filter(Boolean) });
   const customizer = new Customizer({
     onApply: (lk) => {
       player.char.setLook(lk);
@@ -622,17 +628,30 @@ async function init() {
     } finally {
       renderer.setPixelRatio(pr);
       resize();
+      composer.render(); // the resize cleared the canvas: never leave it blank until the next frame
     }
   };
+  let pendingPr = 0; // see the governor's apply()
   const governor = new ResolutionGovernor({
     levels,
     start: renderer.getPixelRatio(),
     enabled: !pinnedPr && params.get('gov') !== '0',
+    // The governor steps after a frame's render (it samples that frame's time). Resizing the canvas
+    // there would clear its drawing buffer (alpha, no preserveDrawingBuffer) and the browser would
+    // composite that blank buffer: a one-frame transparent flash. So the new ratio waits for the next
+    // frame that draws and is applied just before its render, in the same task.
     apply(pr) {
-      renderer.setPixelRatio(pr);
-      resize();
+      pendingPr = pr;
     },
   });
+  const applyPendingPr = () => {
+    if (!pendingPr) return;
+    const pr = pendingPr;
+    pendingPr = 0;
+    if (pr === renderer.getPixelRatio()) return;
+    renderer.setPixelRatio(pr);
+    resize();
+  };
   // phones: rotating, the URL bar sliding and the on-screen keyboard all resize; some browsers report
   // the new size a moment late, so check again shortly after
   let resizeTimer = 0;
@@ -699,11 +718,16 @@ async function init() {
     started = !director; // director shots: no prompts, markers or keeper bubbles
     nameTag.set({ name: profile.name, handle: profile.handle });
     dayNight.start({ night: params.has('night') });
+    // &dayT=30 holds the evening at that many seconds after dusk (screenshots, the bench's --dusk)
+    if (params.get('dayT')) {
+      dayNight.T = Number(params.get('dayT')) || 0;
+      dayNight.running = false;
+    }
     ravan.start();
     if (!params.has('noyt')) ramayan.start();
     if (!params.has('nonet')) net.connect();
     if (!director) ui.showCoach();
-    window.__mela = { ...ctx, creator, mela: melaReport(), games, rides, crowd, vehicles, ramayan, poster, customizer, nameTag, boat, train, ravan, walls, dayNight, scenes, decor, voice, lightPool, governor, get gov() { return { ...governor.state, gpu: settings.gpu, midGpu: settings.midGpu }; } }; // for automated checks
+    window.__mela = { ...ctx, creator, mela: melaReport(), billboard, games, rides, crowd, vehicles, ramayan, poster, customizer, nameTag, boat, train, ravan, walls, dayNight, scenes, decor, voice, lightPool, governor, get gov() { return { ...governor.state, gpu: settings.gpu, midGpu: settings.midGpu }; } }; // for automated checks
   } else {
     customizer.open('intro');
   }
@@ -797,6 +821,8 @@ async function init() {
     else if (boat.riding) boat.applyCamera(camera, dt);
     else player.updateCamera(dt);
     camera.updateMatrixWorld();
+    // after the camera: it wakes / sleeps by distance, and a tap on the screen opens the reel
+    billboard.update(dt, t, camera.position, started && player.mode === 'walk' && !ui.modalOpen ? input : null);
 
     // prompts and help: whoever owns the seat (vehicle, show, ride) supplies them
     const mode = games.active ? 'game' : player.mode;
@@ -882,6 +908,7 @@ async function init() {
           sinceShadow = 0;
         }
       }
+      applyPendingPr(); // a governor step from the last frame: resize and redraw in this one
       lightPool.update();
       composer.render();
       ramayan.render(camera);

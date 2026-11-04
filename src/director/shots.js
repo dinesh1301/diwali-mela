@@ -48,22 +48,28 @@ function seatDriver(m, v, pose) {
 }
 
 export const SHOTS = {
-  // ---------- 2 · walking in through the gate ----------
+  // ---------- 2 · walking in through the gate, up to the Mela Screen ----------
+  // Over the shoulder through the arch; from ~1.5 s the camera tilts up onto the Mela Screen hung
+  // over the walkway behind it, which fills the top half of the frame for the last ~2.5 s. With a
+  // cfg.billboard the screen plays the creator's reels / posts, so the shot is then personal.
   gate: {
     duration: 5,
     warm: 1,
     setup({ m }) {
-      m.player.teleport(0.6, 80, Math.PI);
+      m.player.teleport(0.6, 78, Math.PI);
     },
     update({ sec, m }) {
-      walk(m, [0.6, 80], [0.2, 61], Math.min(1, (sec + 1) / 6), 1.5);
+      walk(m, [0.6, 78], [0.2, 57.8], Math.min(1, (sec + 1) / 6), 1.5);
     },
     camera({ u, cam, m, H }) {
       const k = H.easeInOut(u);
       const p = m.player.pos;
-      // over the shoulder, then rising as the arch passes overhead to reveal the bazaar
-      cam.pos.set(p.x + H.lerp(0.9, 0.5, k), H.lerp(2.0, 2.9, k), p.z + H.lerp(5.4, 4.6, k));
-      cam.look.set(p.x * 0.5, H.lerp(3.6, 2.5, k), p.z - 12);
+      const s = m.billboard?.size;
+      cam.pos.set(p.x + H.lerp(0.9, 0.55, k), H.lerp(2.0, 2.25, k), p.z + H.lerp(5.4, 4.3, k));
+      // from down the walkway up to the screen's middle (a little above it: the header is in frame)
+      const tilt = H.smooth(Math.min(1, Math.max(0, (u - 0.22) / 0.7)));
+      const ty = s ? (s.y0 + s.top) / 2 - 0.4 : 7;
+      cam.look.set(H.lerp(p.x * 0.5, 0, tilt), H.lerp(3.6, ty, tilt), H.lerp(p.z - 12, 48, tilt));
       cam.fov = 58;
     },
   },

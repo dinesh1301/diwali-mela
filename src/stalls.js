@@ -284,7 +284,9 @@ function addGoods(g, type, diyaSpots) {
 function buildShell(g, def) {
   const { W, D, H } = STALL;
   const GEO = geo();
-  const fabric = std(0xffffff, 0.9, { map: stripes(def.c1, def.c2), side: THREE.DoubleSide });
+  // the cloth glows a little, as if lit from inside by the stall's bulbs (no real light needed)
+  const cloth = stripes(def.c1, def.c2);
+  const fabric = std(0xffffff, 0.9, { map: cloth, emissiveMap: cloth, emissive: new THREE.Color(0.34, 0.25, 0.16), side: THREE.DoubleSide });
   const add = (mesh, x, y, z) => {
     mesh.position.set(x, y, z);
     g.add(mesh);
@@ -352,6 +354,11 @@ export function createStall(def, goodsFn = null) {
   const apex = new THREE.Vector3(0, H + 1.3, 0);
   const strands = [[new THREE.Vector3(-ex, H, ez), new THREE.Vector3(ex, H, ez), 0.05]];
   for (const [sx, sz] of [[-1, 1], [1, 1], [-1, -1], [1, -1]]) strands.push([new THREE.Vector3(sx * ex, H, sz * ez), apex, 0]);
+  // inside: a string along the top of the back and side walls, so the stall glows from within
+  const ix = W / 2 - 0.12;
+  const iz = -D / 2 + 0.14;
+  strands.push([new THREE.Vector3(-ix, H - 0.12, iz), new THREE.Vector3(ix, H - 0.12, iz), 0.18]);
+  for (const sx of [-1, 1]) strands.push([new THREE.Vector3(sx * ix, H - 0.12, iz), new THREE.Vector3(sx * ix, H - 0.12, D / 2 - 0.2), 0.12]);
 
   return {
     group: g,

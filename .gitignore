@@ -12,3 +12,5 @@ bench/shots-*/
 
 # local test portrait for tools/creator-check.mjs (not shipped)
 public/test-photo.png
+# local test reels / posts for the Mela Screen (tools/billboard-check.mjs, director-check --billboard)
+public/test-billboard/

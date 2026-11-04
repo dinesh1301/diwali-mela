@@ -5,6 +5,8 @@
 //   node tools/director-check.mjs --dev --full          # vite dev server; step whole shots, save first/mid/last
 //   node tools/director-check.mjs --shots gate,stall --at 0,45,149 --cfg <b64url>
 //   node tools/director-check.mjs --shots stall --full --theme books   # default cfg with another stall theme
+//   node tools/director-check.mjs --mela sample --billboard reels       # personal slots + Mela Screen
+//   node tools/director-check.mjs --shots gate --full --billboard reels  # Mela Screen with public/test-billboard/ media
 //
 // Test posters for the Wall of Fame are served from bench/shots-posts/ at /__posts/ (never shipped).
 import { chromium } from 'playwright';
@@ -36,6 +38,14 @@ const cfg = opt(
       stallTheme: theme,
       knownFor: 'Founder, Topmate',
       wallPosts: ['/__posts/p1.jpg', '/__posts/p2.jpg', '/__posts/p4.jpg', '/__posts/p3.jpg'].slice(0, Number(opt('posts', 4))),
+      // --mela sample: every personal slot from tools/personal-sample.mjs (gate arch, stalls, ...)
+      ...(opt('mela', null) === 'sample' ? { mela: (await import('./personal-sample.mjs')).SAMPLE.mela } : {}),
+      // --billboard reels|posts: test media from public/test-billboard/ (gitignored; see tools/README in the header)
+      ...(opt('billboard', null) === 'reels'
+        ? { billboard: { kind: 'reels', items: [1, 2, 3].map((i) => ({ type: 'video', src: `/test-billboard/${i}.mp4`, poster: `/test-billboard/${i}.jpg`, caption: `Test reel ${i}` })) } }
+        : opt('billboard', null) === 'posts'
+          ? { billboard: { kind: 'posts', items: [{ type: 'image', src: '/test-billboard/post1.jpg', caption: 'A 4:5 post' }, { type: 'image', src: '/test-billboard/post2.jpg' }] } }
+          : {}),
     })
   ).toString('base64url')
 );
@@ -79,9 +89,12 @@ for (const shot of shots) {
   const s0 = Date.now();
   for (let f = 0; f <= last; f++) {
     const grab = want.includes(f);
-    const r = await page.evaluate((grab) => {
-      window.__director.step();
-      if (!grab) return null;
+    const r = await page.evaluate(async (grab) => {
+      const next = window.__director.step(); // draws now; resolves when the next frame's videos are seeked
+      if (!grab) {
+        await next;
+        return null;
+      }
       const cv = window.__mela.renderer.domElement;
       const url = cv.toDataURL('image/jpeg', 0.9);
       const small = document.createElement('canvas');
@@ -92,6 +105,7 @@ for (const shot of shots) {
       const d = c.getImageData(0, 0, 27, 48).data;
       let s = 0;
       for (let i = 0; i < d.length; i += 4) s += d[i] + d[i + 1] + d[i + 2];
+      await next;
       return { url, lum: s / (d.length / 4) / 3 };
     }, grab);
     if (r) {

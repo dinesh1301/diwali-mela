@@ -3,6 +3,8 @@ import { catenary, BULB_PALETTE } from './utils.js';
 import { lowDetail } from './lod.js';
 
 const MODES = ['chase', 'twinkle', 'steady', 'alternate'];
+// 'fixed' bulbs (the fairy canopies) never change once lit, so after switching on they cost nothing
+// per update beyond a skip.
 // Bulb colours are recomputed and re-uploaded at this rate, not every frame: thousands of bulbs,
 // and chase/twinkle patterns read the same at 20-30 Hz.
 const CELL = 48; // metres: the bulbs' culling cells
@@ -151,6 +153,10 @@ export class StringLights {
     for (let k = 0; k < this.bulbs.length; k++) {
       const b = this.bulbs[k];
       let on = 1;
+      if (b.mode === 'fixed' && b.done) {
+        lit = true;
+        continue;
+      }
       if (T !== null) {
         const since = T - b.onAt;
         if (since < 0) on = 0;
@@ -173,6 +179,10 @@ export class StringLights {
         }
         case 'alternate':
           s = (alt + b.i) % 2 ? 1 : 0.2;
+          break;
+        case 'fixed':
+          s = 0.32; // a soft glow: a whole canopy at full strength turns the bloom to milk
+          if (on === 1 && (T === null || T - b.onAt >= 1.4)) b.done = true;
           break;
         default:
           s = 0.85 + 0.15 * Math.sin(t * 1.3 + b.phase);

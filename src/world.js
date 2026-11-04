@@ -11,6 +11,7 @@ import { mergeStatic, freezeStatic, mergeAdded } from './merge.js';
 import { seg } from './lod.js';
 import { slot } from './personalSlots.js';
 import { themedGoods } from './stallThemes.js';
+import { buildFestive } from './festive.js';
 
 /*
   Layout (metres, +z towards the entrance):
@@ -96,11 +97,15 @@ export function buildWorld(scene, { reflectionScale = 0.5 } = {}) {
   const wheel = new FerrisWheel(scene, SITES.wheel);
   ctx.colliders.push(...wheel.colliders);
 
+  ctx.poleAt = (x, z, h) => pole(ctx, x, z, h);
+  const stillDiyas = buildFestive(ctx, { site: SITES });
+
   buildPoles(ctx);
   ctx.lights.build();
   ctx.garlands.build();
   ctx.diyas.build();
   ctx.floating.build();
+  stillDiyas.build();
 
   return {
     colliders: ctx.colliders,
@@ -449,20 +454,21 @@ function buildPlaza(ctx) {
 
 function buildLanes(ctx) {
   const { lights } = ctx;
-  const lane = (zs) => {
+  const lane = (zs, open = -1) => {
     const L = zs.map((z) => pole(ctx, -5.6, z, 5.5));
     const R = zs.map((z) => pole(ctx, 5.6, z, 5.5));
     for (let i = 0; i < zs.length; i++) {
-      lights.addStrand(L[i], R[i], { sag: 0.8 });
+      if (i !== open) lights.addStrand(L[i], R[i], { sag: 0.8 }); // (open: nothing across the front of the Mela Screen)
       if (i + 1 < zs.length) {
         lights.addStrand(L[i], L[i + 1], { sag: 0.5 });
         lights.addStrand(R[i], R[i + 1], { sag: 0.5 });
+        if (i === open) continue; // no criss-cross here: the Mela Screen hangs in this bay
         lights.addStrand(L[i], R[i + 1], { sag: 1.1 });
         lights.addStrand(R[i], L[i + 1], { sag: 1.1 });
       }
     }
   };
-  lane([53, 43, 33, 23, 15]);
+  lane([53, 43, 33, 23, 15], 0);
   lane([-14, -24, -34]);
 
   // along the cross path to the wheel and the fireworks field

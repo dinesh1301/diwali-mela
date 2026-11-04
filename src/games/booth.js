@@ -22,7 +22,9 @@ export function buildBooth(ctx, lights, { z, title, sub, c1, c2, sign, rail = tr
   };
 
   const wood = new THREE.MeshStandardMaterial({ color: 0x6b3f22, roughness: 0.8 });
-  const fabric = new THREE.MeshStandardMaterial({ map: stripes(c1, c2), side: THREE.DoubleSide, roughness: 0.9 });
+  const cloth = stripes(c1, c2);
+  // lit-from-inside cloth: a little emissive so the booth glows at night without another real light
+  const fabric = new THREE.MeshStandardMaterial({ map: cloth, emissiveMap: cloth, emissive: new THREE.Color(0.3, 0.22, 0.15), side: THREE.DoubleSide, roughness: 0.9 });
   add(new THREE.Mesh(new THREE.BoxGeometry(W, 0.1, D), wood), 0, 0.05, 0);
   add(new THREE.Mesh(new THREE.PlaneGeometry(W, H), fabric), 0, H / 2, -D / 2);
   for (const s of [-1, 1]) {
@@ -52,6 +54,9 @@ export function buildBooth(ctx, lights, { z, title, sub, c1, c2, sign, rail = tr
     add(new THREE.Mesh(new THREE.BoxGeometry(W, 0.1, 0.12), wood), 0, 1.0, D / 2);
     for (const x of [-W / 2, -W / 4, 0, W / 4, W / 2]) add(new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.0, 0.1), wood), x, 0.5, D / 2);
   }
+
+  // a warm string along the inside top of the back wall
+  lights.addStrand(w(-W / 2 + 0.2, H - 0.15, -D / 2 + 0.15), w(W / 2 - 0.2, H - 0.15, -D / 2 + 0.15), { sag: 0.2, spacing: 0.3, wire: false, palette: WARM_PALETTE, mode: 'steady' });
 
   const ex = W / 2 + 0.3;
   const ez = D / 2 + 0.3;

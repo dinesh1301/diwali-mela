@@ -14,9 +14,10 @@ const BOWL_PROFILE = [
 
 /** Clay diyas with flickering flames. `floating` ones bob on the river. */
 export class Diyas {
-  constructor(scene, { floating = false } = {}) {
+  constructor(scene, { floating = false, still = false } = {}) {
     this.scene = scene;
     this.floating = floating;
+    this.still = still; // set once at build and never animated: long rows that only need to glow
     this.items = [];
     this.dummy = new THREE.Object3D();
   }
@@ -38,6 +39,17 @@ export class Diyas {
     flameGeo.translate(0, 0.075, 0);
     this.flames = new THREE.InstancedMesh(flameGeo, new THREE.MeshBasicMaterial({ color: hdr(0xffa040, 5) }), n);
     this.update(0);
+    if (this.still) {
+      // vary the frozen flames a little so a long row doesn't look stamped
+      const d = this.dummy;
+      this.items.forEach((it, i) => {
+        d.position.set(it.x, it.y, it.z);
+        d.rotation.set(0, 0, (Math.random() - 0.5) * 0.12);
+        d.scale.set(it.s, it.s * (0.85 + Math.random() * 0.35), it.s);
+        d.updateMatrix();
+        this.flames.setMatrixAt(i, d.matrix);
+      });
+    }
     this.bowls.computeBoundingSphere();
     this.flames.computeBoundingSphere();
     this.scene.add(this.bowls, this.flames);
@@ -61,7 +73,7 @@ export class Diyas {
   }
 
   update(t) {
-    if (!this.bowls) return;
+    if (!this.bowls || (this.still && t !== 0)) return;
     const d = this.dummy;
     for (let i = 0; i < this.items.length; i++) {
       const it = this.items[i];

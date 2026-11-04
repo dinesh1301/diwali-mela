@@ -15,29 +15,32 @@ const smooth = (a, b, x) => {
 // A late, already-dim sunset: the sky still glows but the ground is in shadow, so the diyas and
 // string lights read from the first second.
 const DUSK = {
-  top: new THREE.Color(0x2a2050),
-  horizon: new THREE.Color(0xc85a34),
-  glow: new THREE.Color(0xb86a44),
-  fog: new THREE.Color(0x3e2436),
-  fogDensity: 0.0058,
-  hemiSky: new THREE.Color(0x8a6a88),
-  hemiGround: new THREE.Color(0x33201c),
-  hemi: 0.8,
-  sun: new THREE.Color(0xff9a4a),
-  sunI: 0.75,
+  top: new THREE.Color(0x2c2a62),
+  horizon: new THREE.Color(0xd8663a),
+  glow: new THREE.Color(0xc8743e),
+  fog: new THREE.Color(0x4a2a40),
+  fogDensity: 0.005,
+  hemiSky: new THREE.Color(0x9a7ea0),
+  hemiGround: new THREE.Color(0x4a2e22),
+  hemi: 1.15,
+  sun: new THREE.Color(0xffa055),
+  sunI: 0.85,
   sunPos: new THREE.Vector3(-90, 14, 60),
 };
+// A Diwali night, not a dark one: a deep-blue sky (never black) over a warm orange haze from a
+// whole city of lamps, fog that glows instead of swallowing the far stalls, and a sky light strong
+// enough that the lanes read between the real lights.
 const NIGHT = {
-  top: new THREE.Color(0x020108),
-  horizon: new THREE.Color(0x1a0d2c),
-  glow: new THREE.Color(0x7a3326),
-  fog: new THREE.Color(0x1a0d2c),
-  fogDensity: 0.0075,
-  hemiSky: new THREE.Color(0x6a5aa0),
-  hemiGround: new THREE.Color(0x2a1a12),
-  hemi: 0.8,
-  sun: new THREE.Color(0x8fa6ff),
-  sunI: 0.35,
+  top: new THREE.Color(0x0a1438),
+  horizon: new THREE.Color(0x3a2448),
+  glow: new THREE.Color(0xc0582a),
+  fog: new THREE.Color(0x2c1a36),
+  fogDensity: 0.0055,
+  hemiSky: new THREE.Color(0x8e84cc),
+  hemiGround: new THREE.Color(0x5a3a24),
+  hemi: 1.25,
+  sun: new THREE.Color(0x9fb2ff),
+  sunI: 0.5,
   sunPos: new THREE.Vector3(40, 80, 30),
 };
 const LENGTH = 90; // seconds from dusk to full night (most of the darkening happens in the first 30)
