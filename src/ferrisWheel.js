@@ -211,7 +211,7 @@ export class FerrisWheel {
 
     // platform, steps and booth: one mesh per material; the turning wheel stays live
     mergeStatic(this.group, { skip: (o) => o === this.wheel });
-    freezeStatic(this.group, (o) => o === this.wheel || o === this.group);
+    freezeStatic(this.group, (o) => o === this.wheel); // skipping the group itself would skip everything
   }
 
   syncGondolas() {

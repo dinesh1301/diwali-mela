@@ -55,8 +55,10 @@ export class StringLights {
 
   build() {
     this.mesh = new THREE.InstancedMesh(
-      // 4,000+ bulbs drawn twice (scene and river): phones get a 20-triangle icosahedron
-      lowDetail() ? new THREE.IcosahedronGeometry(0.075, 0) : new THREE.SphereGeometry(0.075, 8, 6),
+      // 4,000+ bulbs drawn twice (scene and river): phones get 48 triangles instead of 80. Eight
+      // segments keep the outline an octagon from below and from the side; a 20-triangle icosahedron
+      // showed as hard hexagons on the bulbs right over the walkway.
+      lowDetail() ? new THREE.SphereGeometry(0.075, 8, 4) : new THREE.SphereGeometry(0.075, 8, 6),
       new THREE.MeshBasicMaterial({ color: 0xffffff }),
       this.bulbs.length
     );
