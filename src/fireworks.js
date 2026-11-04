@@ -106,16 +106,17 @@ export class Fireworks {
     this.points.renderOrder = 5;
     scene.add(this.points);
 
-    // Lights are created once and only dimmed, so shaders never recompile mid-show.
-    const mkLight = () => {
-      const l = new THREE.PointLight(0xffffff, 0, 0, 2);
+    // Lights are created once and only dimmed, so shaders never recompile mid-show. Each has a finite
+    // range so the light pool can drop it when the player is out of reach.
+    const mkLight = (distance) => {
+      const l = new THREE.PointLight(0xffffff, 0, distance, 2);
       scene.add(l);
       return l;
     };
-    this.flashLights = [mkLight(), mkLight()];
+    this.flashLights = [mkLight(160), mkLight(160)];
     this.flashIdx = 0;
-    this.groundLights = [mkLight(), mkLight()].map((light) => ({ light, busy: false }));
-    this.sparkLight = mkLight();
+    this.groundLights = [mkLight(25), mkLight(25)].map((light) => ({ light, busy: false }));
+    this.sparkLight = mkLight(10);
 
     this.rockets = [];
     this.emitters = [];
