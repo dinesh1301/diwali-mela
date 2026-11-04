@@ -48,22 +48,28 @@ import { LightPool } from './lightpool.js';
 import { TOUCH, tk } from './touch.js';
 import { startDirector, directorParams } from './director/director.js';
 import { loadCreatorConfig, applyCreator, personaliseIntro, stallIndexFor } from './creatorStage.js';
+import { setMelaSlots, slot, melaReport } from './personalSlots.js';
 
+// zone toasts: the line itself is a personal slot (zone.<id>); a controls hint, when there is one, is added after it
 const ZONES = [
-  { id: 'gate', x: 0, z: 62, r: 9, msg: '🪔 Welcome to the Topmate Diwali Mela!' },
-  { id: 'selfie', x: 15, z: 56, r: 6, msg: '📸 Selfie Point: get your mela poster to share' },
-  { id: 'deepmala', x: -12, z: 65, r: 6, msg: '🪔 The Deepmala wall: bring a diya or kandeel and press Q to add yours', tap: '🪔 The Deepmala wall: bring a diya or kandeel, then tap the button to add yours' },
-  { id: 'ramleela', x: -30, z: 62, r: 14, msg: '📽️ Ramleela Maidan: take a seat for the Ramayan show' },
-  { id: 'ravan', x: -56, z: 64, r: 10, msg: '🔥 Ravan Dahan: the effigy burns on the countdown, or light the fuse yourself' },
-  { id: 'bazaar', x: 0, z: 32, r: 13, msg: '🛍️ The Bazaar: walk up to a stall and press E', tap: '🛍️ The Bazaar: walk up to a stall and tap the glowing button' },
-  { id: 'games', x: 22, z: 27, r: 12, msg: '🎯 Khel Gali: four mela games, win prizes!' },
-  { id: 'carousel', x: -20, z: 30, r: 9, msg: '🎠 The Carousel: hop on!' },
-  { id: 'cars', x: -53, z: 24, r: 24, msg: '🏁 Chakri Cars: a go-kart circuit · press E at a car', tap: '🏁 Chakri Cars: a go-kart circuit · walk to a car and tap “Drive”' },
-  { id: 'airfield', x: 52, z: 22, r: 20, msg: '✈️ Pushpak Viman Airfield: fly the plane or the heli' },
-  { id: 'wheel', x: -34, z: -18, r: 12, msg: '🎡 The Giant Wheel: walk to the steps and press E', tap: '🎡 The Giant Wheel: walk to the steps and tap the button' },
-  { id: 'fireworks', x: 36, z: -30, r: 15, msg: '🚀 Fireworks Zone: press 1 to launch a rocket', tap: '🚀 Fireworks Zone: tap 🚀 Rocket below to launch one' },
-  { id: 'ghat', x: 0, z: -42, r: 12, msg: '🏮 The Ghat: float a diya, release a lantern, or row a boat out from the jetty' },
+  { id: 'gate', x: 0, z: 62, r: 9 },
+  { id: 'selfie', x: 15, z: 56, r: 6 },
+  { id: 'deepmala', x: -12, z: 65, r: 6, hint: ['bring a diya or kandeel and press Q to add yours', 'bring a diya or kandeel, then tap the button to add yours'] },
+  { id: 'ramleela', x: -30, z: 62, r: 14 },
+  { id: 'ravan', x: -56, z: 64, r: 10 },
+  { id: 'bazaar', x: 0, z: 32, r: 13, hint: ['walk up to a stall and press E', 'walk up to a stall and tap the glowing button'] },
+  { id: 'games', x: 22, z: 27, r: 12 },
+  { id: 'carousel', x: -20, z: 30, r: 9 },
+  { id: 'cars', x: -53, z: 24, r: 24, hint: ['a go-kart circuit · press E at a car', 'a go-kart circuit · walk to a car and tap “Drive”'] },
+  { id: 'airfield', x: 52, z: 22, r: 20 },
+  { id: 'wheel', x: -34, z: -18, r: 12, hint: ['walk to the steps and press E', 'walk to the steps and tap the button'] },
+  { id: 'fireworks', x: 36, z: -30, r: 15, hint: ['press 1 to launch a rocket', 'tap 🚀 Rocket below to launch one'] },
+  { id: 'ghat', x: 0, z: -42, r: 12 },
 ];
+const zoneToast = (z) => {
+  const line = slot(`zone.${z.id}`);
+  return z.hint ? `${line}: ${tk(...z.hint)}` : line;
+};
 
 const face = (x, z, tx, tz) => Math.atan2(tx - x, tz - z);
 const PLACES = {
@@ -303,6 +309,9 @@ async function init() {
 
   await loading();
   await fontsReady; // sign textures are drawn on canvas, so fonts must be ready first
+  // a creator's mela renames signs, menus, prizes and toasts everywhere: known before anything is painted
+  const cfg = await creatorCfg;
+  setMelaSlots(cfg?.mela, cfg);
   const sky = createSky(scene, fogColor);
   const world = buildWorld(scene, { reflectionScale: low ? 0.25 : 0.5 });
   world.water.limitReflectionTo(camera); // reflections skip people and props (layer 1)
@@ -522,8 +531,10 @@ async function init() {
   const ravan = new Ravan(ctx);
   const scenes = low ? null : new CrowdScenes(ctx);
   extraLights.build();
-  const cfg = await creatorCfg;
-  const creator = applyCreator(scene, cfg, { stallAnchor: cfg && world.stalls[stallIndexFor(cfg.stallNo, world.stalls.length)], ravanAnchor: { pos: new THREE.Vector3(-46.6, 0, 76.5), facing: 0.22 }, colliders: world.colliders, diyas: world.diyas });
+  const ownStall = cfg && world.stalls[stallIndexFor(cfg.stallNo, world.stalls.length)];
+  const creator = applyCreator(scene, cfg, { stallAnchor: ownStall, ravanAnchor: { pos: new THREE.Vector3(-46.6, 0, 76.5), facing: 0.22 }, colliders: world.colliders, diyas: world.diyas });
+  // the creator's own stall shows their board, so its menu takes the board's name too (not the slot's)
+  if (ownStall?.def) ownStall.def.name = cfg.stallTitle || `${cfg.name} ka Stall`;
   personaliseIntro(cfg);
   await loading();
   const dayNight = new DayNight({ scene, sky, hemi, sun, lightSystems: [world.lights, games.lights, vehicles.lights, poster.lights, ramayan.lights, extraLights].filter(Boolean) });
@@ -692,7 +703,7 @@ async function init() {
     if (!params.has('noyt')) ramayan.start();
     if (!params.has('nonet')) net.connect();
     if (!director) ui.showCoach();
-    window.__mela = { ...ctx, creator, games, rides, crowd, vehicles, ramayan, poster, customizer, nameTag, boat, train, ravan, walls, dayNight, scenes, decor, voice, lightPool, governor, get gov() { return { ...governor.state, gpu: settings.gpu, midGpu: settings.midGpu }; } }; // for automated checks
+    window.__mela = { ...ctx, creator, mela: melaReport(), games, rides, crowd, vehicles, ramayan, poster, customizer, nameTag, boat, train, ravan, walls, dayNight, scenes, decor, voice, lightPool, governor, get gov() { return { ...governor.state, gpu: settings.gpu, midGpu: settings.midGpu }; } }; // for automated checks
   } else {
     customizer.open('intro');
   }
@@ -727,7 +738,7 @@ async function init() {
         waved.add(s);
         s.keeper.setAction('wave');
         setTimeout(() => s.keeper.action === 'wave' && s.keeper.clearAction(), 1600);
-        ui.bubble((o) => s.keeper.headTop.getWorldPosition(o), ['Aaiye, aaiye! 🙏', 'Happy Diwali! ✨', 'Fresh hai, le lo! 😄'][Math.floor(Math.random() * 3)], 1.8);
+        ui.bubble((o) => s.keeper.headTop.getWorldPosition(o), slot(`shout.keeper.${1 + Math.floor(Math.random() * 3)}`), 1.8);
       } else if (d > 9) {
         waved.delete(s);
       }
@@ -832,7 +843,7 @@ async function init() {
       const z = ZONES.find((zz) => (p.x - zz.x) ** 2 + (p.z - zz.z) ** 2 < zz.r * zz.r);
       if ((z?.id ?? null) !== zone) {
         zone = z?.id ?? null;
-        if (z) ui.toast(tk(z.msg, z.tap ?? z.msg), 3200);
+        if (z) ui.toast(zoneToast(z), 3200);
       }
     }
 

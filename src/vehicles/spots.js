@@ -2,6 +2,7 @@ import { tk } from '../touch.js';
 import * as THREE from 'three';
 import { canvasTexture, beam, WARM_PALETTE } from '../utils.js';
 import { signTexture } from '../stalls.js';
+import { slot } from '../personalSlots.js';
 import { SITES } from '../world.js';
 
 const std = (color, roughness = 0.7, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness, ...extra });
@@ -109,7 +110,7 @@ export function buildAirfield(ctx, lights) {
   scene.add(floor);
   world.colliders.push({ type: 'box', minX: hx - 5.5, maxX: hx + 5.5, minZ: hz - 5.2, maxZ: hz + 5.2 });
   world.tall.push({ type: 'box', minX: hx - 5.5, maxX: hx + 5.5, minZ: hz - 5.2, maxZ: hz + 5.2, h: 7 });
-  sign(scene, 'Pushpak Viman Airfield', tk('Walk up to a plane or heli and press E to fly', 'Walk up to a plane or heli and tap the button to fly'), '#13306b', hx - 5.9, 5.2, hz, -Math.PI / 2, 6);
+  sign(scene, slot('ride.airfield.sign'), tk('Walk up to a plane or heli and press E to fly', 'Walk up to a plane or heli and tap the button to fly'), '#13306b', hx - 5.9, 5.2, hz, -Math.PI / 2, 6);
   warm(scene, hx - 3, 4.5, hz, 60, 20);
   warm(scene, a.x, 6, a.z - 20, 90, 26); // over the plane's parking spot
   warm(scene, a.x + 12, 9, a.z + 16, 26, 24); // over the helipad
@@ -250,7 +251,7 @@ export function buildCarGround(ctx, lights) {
   banner.position.set(S.x, 5.2, S.z);
   banner.rotation.y = dir;
   scene.add(banner);
-  sign(scene, 'Chakri Cars', tk('Go-kart circuit · W A S D drive · Space drift · beat your best lap', 'Go-kart circuit · joystick to drive · ✋ to drift · beat your best lap'), '#5c0a10', S.x, 4.3, S.z, dir + Math.PI, 6.4);
+  sign(scene, slot('ride.cars.sign'), tk('Go-kart circuit · W A S D drive · Space drift · beat your best lap', 'Go-kart circuit · joystick to drive · ✋ to drift · beat your best lap'), '#5c0a10', S.x, 4.3, S.z, dir + Math.PI, 6.4);
   lights.addStrand(V(gL.x, 5.2, gL.z), V(gR.x, 5.2, gR.z), { sag: 0.5, mode: 'chase' });
   const flagTex = canvasTexture(128, 96, (f, w, h) => {
     for (let i = 0; i < 8; i++) for (let j = 0; j < 6; j++) {

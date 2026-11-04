@@ -1,0 +1,954 @@
+{
+  "version": 1,
+  "config": "CreatorConfig.mela = { [slotId]: string } (see src/creatorStage.js)",
+  "rules": [
+    "Unknown ids, non-strings and empty strings are ignored; the default stays.",
+    "Text is cleaned (no HTML, control or bidi characters; < > ` \\ and braces removed) and whitespace collapsed.",
+    "{first} and {name} are replaced with the creator’s first / full name; game strings may also use {prize}.",
+    "Longer than maxLen (in characters): cut at a word boundary when within 1.5x maxLen, otherwise the default is kept.",
+    "stallTheme values must be one of: books, tech, fitness, food, finance, fashion, art, music, travel, career, general ('general' keeps the stall’s own goods).",
+    "creatorDefault (when present) is used on a creator’s mela if the slot is not set."
+  ],
+  "themes": [
+    "books",
+    "tech",
+    "fitness",
+    "food",
+    "finance",
+    "fashion",
+    "art",
+    "music",
+    "travel",
+    "career",
+    "general"
+  ],
+  "slots": [
+    {
+      "id": "gate.title",
+      "kind": "sign",
+      "default": "शुभ दीपावली",
+      "maxLen": 20,
+      "where": "entrance gate arch, big top line (front, facing arriving visitors)",
+      "context": "The greeting painted across the main entrance arch. Big decorative lettering."
+    },
+    {
+      "id": "gate.subtitle",
+      "kind": "sign",
+      "default": "TOPMATE DIWALI MELA",
+      "maxLen": 34,
+      "where": "entrance gate arch, the line under the greeting (painted between ✦ stars)",
+      "context": "Whose mela this is.",
+      "creatorDefault": "{name}’s Diwali Mela"
+    },
+    {
+      "id": "gate.back",
+      "kind": "sign",
+      "default": "Happy Diwali from Topmate · See you again",
+      "maxLen": 44,
+      "where": "back of the entrance arch, seen when leaving",
+      "context": "A goodbye line under “फिर मिलेंगे!”."
+    },
+    {
+      "id": "stall.mithai.title",
+      "kind": "stallTitle",
+      "default": "Mithai Mahal",
+      "maxLen": 22,
+      "where": "bazaar stall No. 1 signboard (left side walking in from the gate)",
+      "context": "Name of the stall; a sweet shop: the visitor picks a mithai from a menu and eats it. Also the title of its menu. Ignored on the creator’s own stall (stallNo), which shows their portrait board."
+    },
+    {
+      "id": "stall.mithai.sub",
+      "kind": "sign",
+      "default": "Laddoo · Barfi · Kaju Katli",
+      "maxLen": 32,
+      "where": "bazaar stall No. 1 signboard, small line under the name",
+      "context": "What the stall offers; a sweet shop: the visitor picks a mithai from a menu and eats it."
+    },
+    {
+      "id": "stall.diyas.title",
+      "kind": "stallTitle",
+      "default": "Diya Bazaar",
+      "maxLen": 22,
+      "where": "bazaar stall No. 2 signboard (right side walking in from the gate)",
+      "context": "Name of the stall; sells a clay diya the visitor can place on the Deepmala wall or float on the river. Also the title of its menu. Ignored on the creator’s own stall (stallNo), which shows their portrait board."
+    },
+    {
+      "id": "stall.diyas.sub",
+      "kind": "sign",
+      "default": "Hand-made clay diyas",
+      "maxLen": 32,
+      "where": "bazaar stall No. 2 signboard, small line under the name",
+      "context": "What the stall offers; sells a clay diya the visitor can place on the Deepmala wall or float on the river."
+    },
+    {
+      "id": "stall.diyas.theme",
+      "kind": "stallTheme",
+      "default": "general",
+      "maxLen": 10,
+      "where": "bazaar stall No. 2: the goods on its counter and shelves",
+      "context": "Restocks the counter for a niche (one of books, tech, fitness, food, finance, fashion, art, music, travel, career, general); 'general' keeps its own goods. The stall still sells its usual item when visited (sells a clay diya the visitor can place on the Deepmala wall or float on the river), so pick a theme that sits well beside it.",
+      "options": [
+        "books",
+        "tech",
+        "fitness",
+        "food",
+        "finance",
+        "fashion",
+        "art",
+        "music",
+        "travel",
+        "career",
+        "general"
+      ]
+    },
+    {
+      "id": "stall.jalebi.title",
+      "kind": "stallTitle",
+      "default": "Jalebi Junction",
+      "maxLen": 22,
+      "where": "bazaar stall No. 3 signboard (left side walking in from the gate)",
+      "context": "Name of the stall; hot jalebi: the visitor eats one and gets a sugar rush (runs faster). Also the title of its menu. Ignored on the creator’s own stall (stallNo), which shows their portrait board."
+    },
+    {
+      "id": "stall.jalebi.sub",
+      "kind": "sign",
+      "default": "Garam garam, fresh!",
+      "maxLen": 32,
+      "where": "bazaar stall No. 3 signboard, small line under the name",
+      "context": "What the stall offers; hot jalebi: the visitor eats one and gets a sugar rush (runs faster)."
+    },
+    {
+      "id": "stall.lanterns.title",
+      "kind": "stallTitle",
+      "default": "Kandeel House",
+      "maxLen": 22,
+      "where": "bazaar stall No. 4 signboard (right side walking in from the gate)",
+      "context": "Name of the stall; sells a paper kandeel (lantern) in a colour picked from a menu. Also the title of its menu. Ignored on the creator’s own stall (stallNo), which shows their portrait board."
+    },
+    {
+      "id": "stall.lanterns.sub",
+      "kind": "sign",
+      "default": "Lanterns for every home",
+      "maxLen": 32,
+      "where": "bazaar stall No. 4 signboard, small line under the name",
+      "context": "What the stall offers; sells a paper kandeel (lantern) in a colour picked from a menu."
+    },
+    {
+      "id": "stall.lanterns.theme",
+      "kind": "stallTheme",
+      "default": "general",
+      "maxLen": 10,
+      "where": "bazaar stall No. 4: the goods on its counter and shelves",
+      "context": "Restocks the counter for a niche (one of books, tech, fitness, food, finance, fashion, art, music, travel, career, general); 'general' keeps its own goods. The stall still sells its usual item when visited (sells a paper kandeel (lantern) in a colour picked from a menu), so pick a theme that sits well beside it.",
+      "options": [
+        "books",
+        "tech",
+        "fitness",
+        "food",
+        "finance",
+        "fashion",
+        "art",
+        "music",
+        "travel",
+        "career",
+        "general"
+      ]
+    },
+    {
+      "id": "stall.panipuri.title",
+      "kind": "stallTitle",
+      "default": "Pani Puri Point",
+      "maxLen": 22,
+      "where": "bazaar stall No. 5 signboard (left side walking in from the gate)",
+      "context": "Name of the stall; pani puri and the Golgappa Challenge (eat as many as you can before it gets too spicy). Also the title of its menu. Ignored on the creator’s own stall (stallNo), which shows their portrait board."
+    },
+    {
+      "id": "stall.panipuri.sub",
+      "kind": "sign",
+      "default": "Teekha · Meetha · Jaljeera",
+      "maxLen": 32,
+      "where": "bazaar stall No. 5 signboard, small line under the name",
+      "context": "What the stall offers; pani puri and the Golgappa Challenge (eat as many as you can before it gets too spicy)."
+    },
+    {
+      "id": "stall.bangles.title",
+      "kind": "stallTitle",
+      "default": "Choodi Gali",
+      "maxLen": 22,
+      "where": "bazaar stall No. 6 signboard (right side walking in from the gate)",
+      "context": "Name of the stall; the visitor tries on glass bangles in a colour picked from a menu. Also the title of its menu. Ignored on the creator’s own stall (stallNo), which shows their portrait board."
+    },
+    {
+      "id": "stall.bangles.sub",
+      "kind": "sign",
+      "default": "Bangles & bindis",
+      "maxLen": 32,
+      "where": "bazaar stall No. 6 signboard, small line under the name",
+      "context": "What the stall offers; the visitor tries on glass bangles in a colour picked from a menu."
+    },
+    {
+      "id": "stall.bangles.theme",
+      "kind": "stallTheme",
+      "default": "general",
+      "maxLen": 10,
+      "where": "bazaar stall No. 6: the goods on its counter and shelves",
+      "context": "Restocks the counter for a niche (one of books, tech, fitness, food, finance, fashion, art, music, travel, career, general); 'general' keeps its own goods. The stall still sells its usual item when visited (the visitor tries on glass bangles in a colour picked from a menu), so pick a theme that sits well beside it.",
+      "options": [
+        "books",
+        "tech",
+        "fitness",
+        "food",
+        "finance",
+        "fashion",
+        "art",
+        "music",
+        "travel",
+        "career",
+        "general"
+      ]
+    },
+    {
+      "id": "stall.kulfi.title",
+      "kind": "stallTitle",
+      "default": "Kulfi Corner",
+      "maxLen": 22,
+      "where": "bazaar stall No. 7 signboard (left side walking in from the gate)",
+      "context": "Name of the stall; kulfi ice cream: the visitor picks a flavour from a menu. Also the title of its menu. Ignored on the creator’s own stall (stallNo), which shows their portrait board."
+    },
+    {
+      "id": "stall.kulfi.sub",
+      "kind": "sign",
+      "default": "Malai · Kesar · Pista",
+      "maxLen": 32,
+      "where": "bazaar stall No. 7 signboard, small line under the name",
+      "context": "What the stall offers; kulfi ice cream: the visitor picks a flavour from a menu."
+    },
+    {
+      "id": "stall.toys.title",
+      "kind": "stallTitle",
+      "default": "Gubbare & Khilone",
+      "maxLen": 22,
+      "where": "bazaar stall No. 8 signboard (right side walking in from the gate)",
+      "context": "Name of the stall; sells a balloon on a string in a colour picked from a menu. Also the title of its menu. Ignored on the creator’s own stall (stallNo), which shows their portrait board."
+    },
+    {
+      "id": "stall.toys.sub",
+      "kind": "sign",
+      "default": "Balloons and toys",
+      "maxLen": 32,
+      "where": "bazaar stall No. 8 signboard, small line under the name",
+      "context": "What the stall offers; sells a balloon on a string in a colour picked from a menu."
+    },
+    {
+      "id": "stall.toys.theme",
+      "kind": "stallTheme",
+      "default": "general",
+      "maxLen": 10,
+      "where": "bazaar stall No. 8: the goods on its counter and shelves",
+      "context": "Restocks the counter for a niche (one of books, tech, fitness, food, finance, fashion, art, music, travel, career, general); 'general' keeps its own goods. The stall still sells its usual item when visited (sells a balloon on a string in a colour picked from a menu), so pick a theme that sits well beside it.",
+      "options": [
+        "books",
+        "tech",
+        "fitness",
+        "food",
+        "finance",
+        "fashion",
+        "art",
+        "music",
+        "travel",
+        "career",
+        "general"
+      ]
+    },
+    {
+      "id": "menu.mithai.1",
+      "kind": "menu",
+      "default": "Motichoor laddoo",
+      "maxLen": 24,
+      "where": "Mithai Mahal (bazaar stall No. 1) menu, option 1",
+      "context": "Name of a sweet on the Mithai Mahal menu (a pink / gold / green sweet is served whatever it is called)."
+    },
+    {
+      "id": "menu.mithai.2",
+      "kind": "menu",
+      "default": "Kaju katli",
+      "maxLen": 24,
+      "where": "Mithai Mahal (bazaar stall No. 1) menu, option 2",
+      "context": "Name of a sweet on the Mithai Mahal menu (a pink / gold / green sweet is served whatever it is called)."
+    },
+    {
+      "id": "menu.mithai.3",
+      "kind": "menu",
+      "default": "Gulab jamun",
+      "maxLen": 24,
+      "where": "Mithai Mahal (bazaar stall No. 1) menu, option 3",
+      "context": "Name of a sweet on the Mithai Mahal menu (a pink / gold / green sweet is served whatever it is called)."
+    },
+    {
+      "id": "menu.mithai.4",
+      "kind": "menu",
+      "default": "Pista barfi",
+      "maxLen": 24,
+      "where": "Mithai Mahal (bazaar stall No. 1) menu, option 4",
+      "context": "Name of a sweet on the Mithai Mahal menu (a pink / gold / green sweet is served whatever it is called)."
+    },
+    {
+      "id": "menu.jalebi.1",
+      "kind": "menu",
+      "default": "Eat hot jalebi",
+      "maxLen": 24,
+      "where": "Jalebi Junction (bazaar stall No. 3) menu, option 1",
+      "context": "Name of the button label to eat a jalebi at Jalebi Junction (an emoji is added)."
+    },
+    {
+      "id": "menu.panipuri.1",
+      "kind": "menu",
+      "default": "Teekha challenge",
+      "maxLen": 24,
+      "where": "Pani Puri Point (bazaar stall No. 5) menu, option 1",
+      "context": "Name of an option on the Golgappa menu: 1 = the spicy challenge, 2 = the sweet challenge, 3 = a single golgappa."
+    },
+    {
+      "id": "menu.panipuri.2",
+      "kind": "menu",
+      "default": "Meetha challenge",
+      "maxLen": 24,
+      "where": "Pani Puri Point (bazaar stall No. 5) menu, option 2",
+      "context": "Name of an option on the Golgappa menu: 1 = the spicy challenge, 2 = the sweet challenge, 3 = a single golgappa."
+    },
+    {
+      "id": "menu.panipuri.3",
+      "kind": "menu",
+      "default": "Just one, please",
+      "maxLen": 24,
+      "where": "Pani Puri Point (bazaar stall No. 5) menu, option 3",
+      "context": "Name of an option on the Golgappa menu: 1 = the spicy challenge, 2 = the sweet challenge, 3 = a single golgappa."
+    },
+    {
+      "id": "menu.kulfi.1",
+      "kind": "menu",
+      "default": "Malai",
+      "maxLen": 24,
+      "where": "Kulfi Corner (bazaar stall No. 7) menu, option 1",
+      "context": "Name of a kulfi flavour (1 cream, 2 saffron-orange, 3 pistachio-green, 4 mango-yellow coloured)."
+    },
+    {
+      "id": "menu.kulfi.2",
+      "kind": "menu",
+      "default": "Kesar",
+      "maxLen": 24,
+      "where": "Kulfi Corner (bazaar stall No. 7) menu, option 2",
+      "context": "Name of a kulfi flavour (1 cream, 2 saffron-orange, 3 pistachio-green, 4 mango-yellow coloured)."
+    },
+    {
+      "id": "menu.kulfi.3",
+      "kind": "menu",
+      "default": "Pista",
+      "maxLen": 24,
+      "where": "Kulfi Corner (bazaar stall No. 7) menu, option 3",
+      "context": "Name of a kulfi flavour (1 cream, 2 saffron-orange, 3 pistachio-green, 4 mango-yellow coloured)."
+    },
+    {
+      "id": "menu.kulfi.4",
+      "kind": "menu",
+      "default": "Mango",
+      "maxLen": 24,
+      "where": "Kulfi Corner (bazaar stall No. 7) menu, option 4",
+      "context": "Name of a kulfi flavour (1 cream, 2 saffron-orange, 3 pistachio-green, 4 mango-yellow coloured)."
+    },
+    {
+      "id": "menu.lanterns.1",
+      "kind": "menu",
+      "default": "Rani pink",
+      "maxLen": 24,
+      "where": "Kandeel House (bazaar stall No. 4) menu, option 1",
+      "context": "Name of a kandeel (lantern) colour: 1 pink, 2 marigold orange, 3 purple, 4 peacock blue."
+    },
+    {
+      "id": "menu.lanterns.2",
+      "kind": "menu",
+      "default": "Marigold",
+      "maxLen": 24,
+      "where": "Kandeel House (bazaar stall No. 4) menu, option 2",
+      "context": "Name of a kandeel (lantern) colour: 1 pink, 2 marigold orange, 3 purple, 4 peacock blue."
+    },
+    {
+      "id": "menu.lanterns.3",
+      "kind": "menu",
+      "default": "Jamuni purple",
+      "maxLen": 24,
+      "where": "Kandeel House (bazaar stall No. 4) menu, option 3",
+      "context": "Name of a kandeel (lantern) colour: 1 pink, 2 marigold orange, 3 purple, 4 peacock blue."
+    },
+    {
+      "id": "menu.lanterns.4",
+      "kind": "menu",
+      "default": "Peacock blue",
+      "maxLen": 24,
+      "where": "Kandeel House (bazaar stall No. 4) menu, option 4",
+      "context": "Name of a kandeel (lantern) colour: 1 pink, 2 marigold orange, 3 purple, 4 peacock blue."
+    },
+    {
+      "id": "menu.bangles.1",
+      "kind": "menu",
+      "default": "Lal (red)",
+      "maxLen": 24,
+      "where": "Choodi Gali (bazaar stall No. 6) menu, option 1",
+      "context": "Name of a bangle colour: 1 red, 2 green, 3 gold, 4 purple."
+    },
+    {
+      "id": "menu.bangles.2",
+      "kind": "menu",
+      "default": "Hara (green)",
+      "maxLen": 24,
+      "where": "Choodi Gali (bazaar stall No. 6) menu, option 2",
+      "context": "Name of a bangle colour: 1 red, 2 green, 3 gold, 4 purple."
+    },
+    {
+      "id": "menu.bangles.3",
+      "kind": "menu",
+      "default": "Sona (gold)",
+      "maxLen": 24,
+      "where": "Choodi Gali (bazaar stall No. 6) menu, option 3",
+      "context": "Name of a bangle colour: 1 red, 2 green, 3 gold, 4 purple."
+    },
+    {
+      "id": "menu.bangles.4",
+      "kind": "menu",
+      "default": "Jamuni (purple)",
+      "maxLen": 24,
+      "where": "Choodi Gali (bazaar stall No. 6) menu, option 4",
+      "context": "Name of a bangle colour: 1 red, 2 green, 3 gold, 4 purple."
+    },
+    {
+      "id": "menu.toys.1",
+      "kind": "menu",
+      "default": "Pink",
+      "maxLen": 24,
+      "where": "Gubbare & Khilone (bazaar stall No. 8) menu, option 1",
+      "context": "Name of a balloon colour: 1 pink, 2 yellow, 3 blue, 4 green."
+    },
+    {
+      "id": "menu.toys.2",
+      "kind": "menu",
+      "default": "Yellow",
+      "maxLen": 24,
+      "where": "Gubbare & Khilone (bazaar stall No. 8) menu, option 2",
+      "context": "Name of a balloon colour: 1 pink, 2 yellow, 3 blue, 4 green."
+    },
+    {
+      "id": "menu.toys.3",
+      "kind": "menu",
+      "default": "Blue",
+      "maxLen": 24,
+      "where": "Gubbare & Khilone (bazaar stall No. 8) menu, option 3",
+      "context": "Name of a balloon colour: 1 pink, 2 yellow, 3 blue, 4 green."
+    },
+    {
+      "id": "menu.toys.4",
+      "kind": "menu",
+      "default": "Green",
+      "maxLen": 24,
+      "where": "Gubbare & Khilone (bazaar stall No. 8) menu, option 4",
+      "context": "Name of a balloon colour: 1 pink, 2 yellow, 3 blue, 4 green."
+    },
+    {
+      "id": "game.shoot.title",
+      "kind": "sign",
+      "default": "Gubbara Phod",
+      "maxLen": 20,
+      "where": "Khel Gali (games lane, east of the bazaar), booth 1 nearest the chowk: the booth signboard and the game’s on-screen title",
+      "context": "balloon shooting: pop 6 of 10 balloons. Painted signboard; shrinks to fit, short reads best on a phone."
+    },
+    {
+      "id": "game.shoot.sub",
+      "kind": "sign",
+      "default": "Balloon shooting · win {prize}",
+      "maxLen": 34,
+      "where": "Khel Gali (games lane, east of the bazaar), booth 1 nearest the chowk: small line under the booth name",
+      "context": "What to do / what you win. {prize} is replaced by the prize name."
+    },
+    {
+      "id": "game.shoot.prize",
+      "kind": "prize",
+      "default": "a teddy bear",
+      "maxLen": 26,
+      "where": "Khel Gali (games lane, east of the bazaar), booth 1 nearest the chowk: the win message (“You won …”) and the toast when you carry it out",
+      "context": "The prize, with its article (“a …”), e.g. “a Kaggle hoodie”. You hold a teddy bear model whatever it is called."
+    },
+    {
+      "id": "game.rings.title",
+      "kind": "sign",
+      "default": "Ring Toss",
+      "maxLen": 20,
+      "where": "Khel Gali, booth 2: the booth signboard and the game’s on-screen title",
+      "context": "ring toss: land rings on bottles. Painted signboard; shrinks to fit, short reads best on a phone."
+    },
+    {
+      "id": "game.rings.sub",
+      "kind": "sign",
+      "default": "Ring 2 bottles · win {prize}",
+      "maxLen": 34,
+      "where": "Khel Gali, booth 2: small line under the booth name",
+      "context": "What to do / what you win. {prize} is replaced by the prize name."
+    },
+    {
+      "id": "game.rings.prize",
+      "kind": "prize",
+      "default": "a gift box",
+      "maxLen": 26,
+      "where": "Khel Gali, booth 2: the win message (“You won …”) and the toast when you carry it out",
+      "context": "The prize, with its article (“a …”), e.g. “a Kaggle hoodie”. You hold a gift box model whatever it is called."
+    },
+    {
+      "id": "game.cans.title",
+      "kind": "sign",
+      "default": "Dabba Maar",
+      "maxLen": 20,
+      "where": "Khel Gali, booth 3: the booth signboard and the game’s on-screen title",
+      "context": "throw balls to knock down a pyramid of 6 cans. Painted signboard; shrinks to fit, short reads best on a phone."
+    },
+    {
+      "id": "game.cans.sub",
+      "kind": "sign",
+      "default": "Knock down all 6 cans",
+      "maxLen": 34,
+      "where": "Khel Gali, booth 3: small line under the booth name",
+      "context": "What to do / what you win. {prize} is replaced by the prize name."
+    },
+    {
+      "id": "game.cans.prize",
+      "kind": "prize",
+      "default": "a teddy bear",
+      "maxLen": 26,
+      "where": "Khel Gali, booth 3: the win message (“You won …”) and the toast when you carry it out",
+      "context": "The prize, with its article (“a …”), e.g. “a Kaggle hoodie”. You hold a teddy bear model whatever it is called."
+    },
+    {
+      "id": "game.striker.title",
+      "kind": "sign",
+      "default": "Taakat Pariksha",
+      "maxLen": 20,
+      "where": "Khel Gali, booth 4 nearest the gate (open-top strongman tower): the booth signboard and the game’s on-screen title",
+      "context": "strongman: swing the hammer in the green zone to ring the bell. Painted signboard; shrinks to fit, short reads best on a phone."
+    },
+    {
+      "id": "game.striker.sub",
+      "kind": "sign",
+      "default": "Strongman · ring the bell",
+      "maxLen": 34,
+      "where": "Khel Gali, booth 4 nearest the gate (open-top strongman tower): small line under the booth name",
+      "context": "What to do / what you win. {prize} is replaced by the prize name."
+    },
+    {
+      "id": "game.striker.prize",
+      "kind": "prize",
+      "default": "a gift box",
+      "maxLen": 26,
+      "where": "Khel Gali, booth 4 nearest the gate (open-top strongman tower): the win message (“You won …”) and the toast when you carry it out",
+      "context": "The prize, with its article (“a …”), e.g. “a Kaggle hoodie”. You hold a gift box model whatever it is called."
+    },
+    {
+      "id": "game.golgappa.title",
+      "kind": "sign",
+      "default": "Golgappa Challenge",
+      "maxLen": 22,
+      "where": "Pani Puri Point (bazaar stall No. 5): the on-screen title of the eating challenge",
+      "context": "Eat golgappas one by one before they go soggy, until it is too spicy."
+    },
+    {
+      "id": "game.golgappa.prize",
+      "kind": "prize",
+      "default": "the Golgappa Champion title",
+      "maxLen": 34,
+      "where": "Golgappa Challenge result card, when you eat 10 or more",
+      "context": "What a champion eater wins, with its article."
+    },
+    {
+      "id": "ride.wheel.sign",
+      "kind": "sign",
+      "default": "Giant Wheel",
+      "maxLen": 22,
+      "where": "giant ferris wheel boarding steps signboard",
+      "context": "The big wheel ride. Painted signboard; shrinks to fit, short reads best on a phone."
+    },
+    {
+      "id": "ride.carousel.sign",
+      "kind": "sign",
+      "default": "Carousel",
+      "maxLen": 22,
+      "where": "carousel signboard",
+      "context": "The merry-go-round with horses. Painted signboard; shrinks to fit, short reads best on a phone."
+    },
+    {
+      "id": "ride.train.station1",
+      "kind": "sign",
+      "default": "Bazaar Station",
+      "maxLen": 22,
+      "where": "toy train platform beside the bazaar, signboard",
+      "context": "Name of a stop on the toy train loop."
+    },
+    {
+      "id": "ride.train.station2",
+      "kind": "sign",
+      "default": "Khel Gali Station",
+      "maxLen": 22,
+      "where": "toy train platform behind the game booths, signboard",
+      "context": "Name of the other toy train stop."
+    },
+    {
+      "id": "ride.boat.sign",
+      "kind": "sign",
+      "default": "Naav ki Sair",
+      "maxLen": 22,
+      "where": "boat jetty at the ghat, signboard",
+      "context": "Row a wooden boat on the river."
+    },
+    {
+      "id": "ride.boat.name",
+      "kind": "sign",
+      "default": "Ganga Naav",
+      "maxLen": 14,
+      "where": "name plate on the rowing boat’s bow",
+      "context": "The boat’s name, painted small."
+    },
+    {
+      "id": "ride.airfield.sign",
+      "kind": "sign",
+      "default": "Pushpak Viman Airfield",
+      "maxLen": 26,
+      "where": "airfield hangar signboard (east of the games lane)",
+      "context": "Fly a plane or a helicopter over the mela."
+    },
+    {
+      "id": "ride.viman.plate",
+      "kind": "sign",
+      "default": "Pushpak Viman",
+      "maxLen": 16,
+      "where": "name plate on both sides of the plane",
+      "context": "The plane’s name."
+    },
+    {
+      "id": "ride.cars.sign",
+      "kind": "sign",
+      "default": "Chakri Cars",
+      "maxLen": 22,
+      "where": "go-kart circuit, the big sign over the start line",
+      "context": "A go-kart race track."
+    },
+    {
+      "id": "ride.cars.plate",
+      "kind": "sign",
+      "default": "Chakri Racer",
+      "maxLen": 14,
+      "where": "name plate on the back of every go-kart",
+      "context": "The go-karts’ name."
+    },
+    {
+      "id": "sign.fireworks",
+      "kind": "sign",
+      "default": "Fireworks Zone",
+      "maxLen": 22,
+      "where": "fireworks field signboard",
+      "context": "Where rockets launch."
+    },
+    {
+      "id": "sign.fireworks.sub",
+      "kind": "sign",
+      "default": "Rockets launch here · stand back!",
+      "maxLen": 36,
+      "where": "fireworks field signboard, small line",
+      "context": "A safety line for the rocket field."
+    },
+    {
+      "id": "sign.ramleela",
+      "kind": "sign",
+      "default": "Ramleela Maidan",
+      "maxLen": 22,
+      "where": "Ramayan show screen signboard (west of the gate)",
+      "context": "The open-air Ramayan screening."
+    },
+    {
+      "id": "sign.ravan",
+      "kind": "sign",
+      "default": "Ravan Dahan",
+      "maxLen": 22,
+      "where": "Ravan effigy signboard",
+      "context": "The effigy that burns on a countdown."
+    },
+    {
+      "id": "sign.selfie",
+      "kind": "sign",
+      "default": "Selfie Point",
+      "maxLen": 22,
+      "where": "Selfie Point signboard (east of the gate)",
+      "context": "Take a mela poster photo to share."
+    },
+    {
+      "id": "selfie.frame1",
+      "kind": "sign",
+      "default": "Topmate",
+      "maxLen": 16,
+      "where": "Selfie Point backdrop, big first line (behind you in every selfie)",
+      "context": "Painted large; a name or a word.",
+      "creatorDefault": "{first}’s"
+    },
+    {
+      "id": "selfie.frame2",
+      "kind": "sign",
+      "default": "Diwali Mela",
+      "maxLen": 16,
+      "where": "Selfie Point backdrop, big second line",
+      "context": "Painted large under the first line."
+    },
+    {
+      "id": "selfie.tagline",
+      "kind": "sign",
+      "default": "#TopmateDiwaliMela",
+      "maxLen": 28,
+      "where": "Selfie Point backdrop, small line under the title (the year is added)",
+      "context": "A hashtag or a short line."
+    },
+    {
+      "id": "sign.deepmala",
+      "kind": "sign",
+      "default": "Deepmala",
+      "maxLen": 22,
+      "where": "header of the Deepmala wall (west of the gate)",
+      "context": "A wall of niches where visitors place diyas and kandeels."
+    },
+    {
+      "id": "sign.ghat",
+      "kind": "sign",
+      "default": "Ganga Ghat",
+      "maxLen": 22,
+      "where": "signboard at the top of the river ghat steps",
+      "context": "The riverside steps."
+    },
+    {
+      "id": "sign.ghat.sub",
+      "kind": "sign",
+      "default": "Float a diya · release a wish lantern",
+      "maxLen": 36,
+      "where": "ghat signboard, small line",
+      "context": "What to do at the river."
+    },
+    {
+      "id": "zone.gate",
+      "kind": "toast",
+      "default": "🪔 Welcome to the Topmate Diwali Mela!",
+      "maxLen": 72,
+      "where": "toast when you walk into walking in under the entrance gate",
+      "context": "One line; start with an emoji. Keep any instruction out of it (the controls hint is added).",
+      "creatorDefault": "🪔 Welcome to {first}’s Diwali Mela!"
+    },
+    {
+      "id": "zone.selfie",
+      "kind": "toast",
+      "default": "📸 Selfie Point: get your mela poster to share",
+      "maxLen": 72,
+      "where": "toast when you walk into the Selfie Point east of the gate",
+      "context": "One line; start with an emoji. Keep any instruction out of it (the controls hint is added)."
+    },
+    {
+      "id": "zone.deepmala",
+      "kind": "toast",
+      "default": "🪔 The Deepmala wall",
+      "maxLen": 72,
+      "where": "toast when you walk into the Deepmala wall west of the gate (followed by “: bring a diya or kandeel and press Q to add yours”)",
+      "context": "One line; start with an emoji. Keep any instruction out of it (the controls hint is added)."
+    },
+    {
+      "id": "zone.ramleela",
+      "kind": "toast",
+      "default": "📽️ Ramleela Maidan: take a seat for the Ramayan show",
+      "maxLen": 72,
+      "where": "toast when you walk into the open-air Ramayan screen west of the gate",
+      "context": "One line; start with an emoji. Keep any instruction out of it (the controls hint is added)."
+    },
+    {
+      "id": "zone.ravan",
+      "kind": "toast",
+      "default": "🔥 Ravan Dahan: the effigy burns on the countdown, or light the fuse yourself",
+      "maxLen": 72,
+      "where": "toast when you walk into the Ravan effigy (the creator’s banner stands in its crowd)",
+      "context": "One line; start with an emoji. Keep any instruction out of it (the controls hint is added)."
+    },
+    {
+      "id": "zone.bazaar",
+      "kind": "toast",
+      "default": "🛍️ The Bazaar",
+      "maxLen": 72,
+      "where": "toast when you walk into walking into the bazaar of 8 stalls (followed by “: walk up to a stall and press E”)",
+      "context": "One line; start with an emoji. Keep any instruction out of it (the controls hint is added)."
+    },
+    {
+      "id": "zone.games",
+      "kind": "toast",
+      "default": "🎯 Khel Gali: four mela games, win prizes!",
+      "maxLen": 72,
+      "where": "toast when you walk into the games lane with 4 game booths",
+      "context": "One line; start with an emoji. Keep any instruction out of it (the controls hint is added)."
+    },
+    {
+      "id": "zone.carousel",
+      "kind": "toast",
+      "default": "🎠 The Carousel: hop on!",
+      "maxLen": 72,
+      "where": "toast when you walk into the carousel west of the bazaar",
+      "context": "One line; start with an emoji. Keep any instruction out of it (the controls hint is added)."
+    },
+    {
+      "id": "zone.cars",
+      "kind": "toast",
+      "default": "🏁 Chakri Cars",
+      "maxLen": 72,
+      "where": "toast when you walk into the go-kart circuit (followed by “: a go-kart circuit · press E at a car”)",
+      "context": "One line; start with an emoji. Keep any instruction out of it (the controls hint is added)."
+    },
+    {
+      "id": "zone.airfield",
+      "kind": "toast",
+      "default": "✈️ Pushpak Viman Airfield: fly the plane or the heli",
+      "maxLen": 72,
+      "where": "toast when you walk into the airfield where visitors fly a plane or helicopter",
+      "context": "One line; start with an emoji. Keep any instruction out of it (the controls hint is added)."
+    },
+    {
+      "id": "zone.wheel",
+      "kind": "toast",
+      "default": "🎡 The Giant Wheel",
+      "maxLen": 72,
+      "where": "toast when you walk into the giant ferris wheel (followed by “: walk to the steps and press E”)",
+      "context": "One line; start with an emoji. Keep any instruction out of it (the controls hint is added)."
+    },
+    {
+      "id": "zone.fireworks",
+      "kind": "toast",
+      "default": "🚀 Fireworks Zone",
+      "maxLen": 72,
+      "where": "toast when you walk into the fireworks field (followed by “: press 1 to launch a rocket”)",
+      "context": "One line; start with an emoji. Keep any instruction out of it (the controls hint is added)."
+    },
+    {
+      "id": "zone.ghat",
+      "kind": "toast",
+      "default": "🏮 The Ghat: float a diya, release a lantern, or row a boat out from the jetty",
+      "maxLen": 72,
+      "where": "toast when you walk into the river ghat steps at the far end of the mela",
+      "context": "One line; start with an emoji. Keep any instruction out of it (the controls hint is added)."
+    },
+    {
+      "id": "toast.wheel.on",
+      "kind": "toast",
+      "default": "🎡 Enjoy the view!",
+      "maxLen": 40,
+      "where": "toast on boarding the giant wheel (“Press E to get off” is added)",
+      "context": "A cheerful line as the wheel lifts you."
+    },
+    {
+      "id": "toast.wheel.off",
+      "kind": "toast",
+      "default": "Hope you enjoyed the view! 🎡",
+      "maxLen": 40,
+      "where": "toast on getting off the giant wheel",
+      "context": "A goodbye line."
+    },
+    {
+      "id": "toast.carousel.on",
+      "kind": "toast",
+      "default": "🎠 Wheee!",
+      "maxLen": 40,
+      "where": "toast on boarding the carousel (“Press E to get off” is added)",
+      "context": "A cheerful line."
+    },
+    {
+      "id": "toast.carousel.off",
+      "kind": "toast",
+      "default": "That was fun! 🎠",
+      "maxLen": 40,
+      "where": "toast on getting off the carousel",
+      "context": "A goodbye line."
+    },
+    {
+      "id": "shout.keeper.1",
+      "kind": "shout",
+      "default": "Aaiye, aaiye! 🙏",
+      "maxLen": 40,
+      "where": "speech bubble over a stall-keeper when you walk up to any stall",
+      "context": "A stall-keeper calling you over."
+    },
+    {
+      "id": "shout.keeper.2",
+      "kind": "shout",
+      "default": "Happy Diwali! ✨",
+      "maxLen": 40,
+      "where": "stall-keeper speech bubble (another variant)",
+      "context": "A stall-keeper greeting."
+    },
+    {
+      "id": "shout.keeper.3",
+      "kind": "shout",
+      "default": "Fresh hai, le lo! 😄",
+      "maxLen": 40,
+      "where": "stall-keeper speech bubble (another variant)",
+      "context": "A stall-keeper selling."
+    },
+    {
+      "id": "shout.crowd.1",
+      "kind": "shout",
+      "default": "Have you tried the jalebi? 😋",
+      "maxLen": 44,
+      "where": "speech bubble of a visitor you greet in the crowd",
+      "context": "Something a fellow visitor says to you."
+    },
+    {
+      "id": "shout.crowd.2",
+      "kind": "shout",
+      "default": "The ring toss is tricky! ⭕",
+      "maxLen": 44,
+      "where": "crowd visitor speech bubble (another variant)",
+      "context": "Something a fellow visitor says."
+    },
+    {
+      "id": "shout.crowd.3",
+      "kind": "shout",
+      "default": "Ride the giant wheel, the view is amazing! 🎡",
+      "maxLen": 44,
+      "where": "crowd visitor speech bubble (another variant)",
+      "context": "Something a fellow visitor says."
+    },
+    {
+      "id": "shout.golgappa",
+      "kind": "shout",
+      "default": "Ekdum teekha banaunga! 😈",
+      "maxLen": 40,
+      "where": "Pani Puri keeper as the spicy Golgappa Challenge starts",
+      "context": "A playful threat."
+    },
+    {
+      "id": "shout.diyas",
+      "kind": "shout",
+      "default": "Shubh Deepavali! 🪔",
+      "maxLen": 40,
+      "where": "Diya Bazaar keeper as he hands you a diya",
+      "context": "A blessing."
+    },
+    {
+      "id": "shout.lanterns",
+      "kind": "shout",
+      "default": "Ghar roshan ho jayega! ✨",
+      "maxLen": 40,
+      "where": "Kandeel House keeper as he hands you a lantern",
+      "context": "A compliment / blessing."
+    },
+    {
+      "id": "shout.bangles",
+      "kind": "shout",
+      "default": "Bahut sundar lag rahe hain! ✨",
+      "maxLen": 40,
+      "where": "Choodi Gali keeper after you try on bangles",
+      "context": "A compliment."
+    }
+  ]
+}

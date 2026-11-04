@@ -11,7 +11,7 @@ import { STALL, STALL_TOP as TOP } from './stalls.js';
   general (general keeps the stall's own goods).
 */
 
-export const STALL_THEMES = ['books', 'tech', 'fitness', 'food', 'finance', 'fashion', 'art', 'music', 'travel', 'career', 'general'];
+export { THEMES as STALL_THEMES } from './personalSlots.js';
 
 const { W, D } = STALL;
 const CZ = D / 2 - 0.45; // counter centre (z)

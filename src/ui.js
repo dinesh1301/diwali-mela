@@ -408,7 +408,7 @@ export function createUI(h) {
       box.innerHTML = '';
       options.forEach((o, i) => {
         const b = document.createElement('button');
-        b.innerHTML = `<span class="o-icon">${o.icon}</span><span class="o-label">${o.label}</span>${o.sub ? `<span class="o-sub">${o.sub}</span>` : ''}<kbd>${i + 1}</kbd>`;
+        b.innerHTML = `<span class="o-icon">${esc(o.icon)}</span><span class="o-label">${esc(o.label)}</span>${o.sub ? `<span class="o-sub">${esc(o.sub)}</span>` : ''}<kbd>${i + 1}</kbd>`; // labels can be a creator's text
         b.addEventListener('click', () => closeMenu(i));
         box.appendChild(b);
       });

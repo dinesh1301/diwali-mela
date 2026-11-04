@@ -5,6 +5,7 @@ import { Garlands } from './garlands.js';
 import { diyaMesh } from './items.js';
 import { beam, canvasTexture, hdr, WARM_PALETTE } from './utils.js';
 import { signTexture } from './stalls.js';
+import { slot } from './personalSlots.js';
 import { SITES } from './world.js';
 import { profile } from './profile.js';
 import { STAMPS } from './passport.js';
@@ -276,13 +277,17 @@ export class Poster {
       c.fillStyle = '#ffcf5c';
       c.shadowColor = 'rgba(255,150,40,0.9)';
       c.shadowBlur = 24;
-      c.font = '112px "Yatra One", serif';
-      c.fillText('Topmate', w / 2, h / 2 - 110);
-      c.fillText('Diwali Mela', w / 2, h / 2 + 10);
+      // the frame text is personal (selfie.frame1 / frame2 / tagline): shrink a long line to fit
+      const fit = (text, size, font, y, maxW = w - 220) => {
+        do c.font = font(size);
+        while (c.measureText(text).width > maxW && (size -= 4) > 24);
+        c.fillText(text, w / 2, y);
+      };
+      fit(slot('selfie.frame1'), 112, (n) => `${n}px "Yatra One", serif`, h / 2 - 110);
+      fit(slot('selfie.frame2'), 112, (n) => `${n}px "Yatra One", serif`, h / 2 + 10);
       c.shadowBlur = 0;
       c.fillStyle = '#fff6e5';
-      c.font = '600 40px Poppins, sans-serif';
-      c.fillText(`#TopmateDiwaliMela · ${YEAR}`, w / 2, h / 2 + 120);
+      fit(`${slot('selfie.tagline')} · ${YEAR}`, 40, (n) => `600 ${n}px Poppins, sans-serif`, h / 2 + 120);
       c.font = '64px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
       c.fillText('🪔  🎆  🪔', w / 2, h / 2 + 210);
     });
@@ -351,7 +356,7 @@ export class Poster {
 
     const sign = new THREE.Mesh(
       new THREE.PlaneGeometry(3.4, 0.95),
-      new THREE.MeshBasicMaterial({ map: signTexture('Selfie Point', tk('Press E · get your mela poster', 'Tap the button · get your mela poster'), '#6a0d2b'), color: new THREE.Color(1.2, 1.2, 1.2), side: THREE.DoubleSide })
+      new THREE.MeshBasicMaterial({ map: signTexture(slot('sign.selfie'), tk('Press E · get your mela poster', 'Tap the button · get your mela poster'), '#6a0d2b'), color: new THREE.Color(1.2, 1.2, 1.2), side: THREE.DoubleSide })
     );
     sign.position.set(S.x - 3.2, 2.6, S.z - 3.6);
     sign.rotation.y = -Math.PI / 2;

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { shape, merged } from '../character.js';
 import { hdr, canvasTexture } from '../utils.js';
+import { slot, slotSet } from '../personalSlots.js';
 
 /*
   Low-poly vehicles in the Sketchbook spirit. Local +z is forward, matching the player's heading
@@ -27,7 +28,9 @@ function decal(text, sub, bg) {
     c.textAlign = 'center';
     c.textBaseline = 'middle';
     c.fillStyle = '#fff1c1';
-    c.font = '56px "Yatra One", serif';
+    let size = 56; // a personal name may be longer than the stock one: shrink to fit the plate
+    do c.font = `${size}px "Yatra One", serif`;
+    while (c.measureText(text).width > w - 40 && (size -= 2) > 22);
     c.fillText(text, w / 2, sub ? 48 : h / 2);
     if (sub) {
       c.font = '600 24px Poppins, sans-serif';
@@ -138,7 +141,7 @@ export function carModel(color = 0xe63946) {
   seat.position.set(0.32, 0.4, -0.4);
   g.add(seat);
 
-  const plate = decalPlane(decal('Chakri Racer', null, '#5c0a10'), 0.9, 0.22);
+  const plate = decalPlane(decal(slot('ride.cars.plate'), null, '#5c0a10'), 0.9, 0.22);
   plate.position.set(0, 0.6, -1.87);
   plate.rotation.y = Math.PI;
   g.add(plate);
@@ -263,7 +266,7 @@ export function planeModel(color = 0xe0b030, wing = 0xb3122e) {
   seat.position.set(0, 0.92, 0.15);
   g.add(seat);
   for (const s of [-1, 1]) {
-    const plate = decalPlane(decal('Pushpak Viman', 'पुष्पक विमान', '#6a0d2b'), 1.5, 0.37);
+    const plate = decalPlane(decal(slot('ride.viman.plate'), slotSet('ride.viman.plate') ? null : 'पुष्पक विमान', '#6a0d2b'), 1.5, 0.37);
     plate.position.set(s * 0.49, 1.1, -0.9);
     plate.rotation.y = (s * Math.PI) / 2;
     g.add(plate);

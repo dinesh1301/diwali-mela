@@ -319,10 +319,11 @@ function buildShell(g, def) {
 }
 
 /**
- * Builds one stall in local space with its front (counter) facing +z.
+ * Builds one stall in local space with its front (counter) facing +z. goodsFn (optional) stocks the
+ * counter instead of def.goods (a themed stall).
  * Returns local positions for diyas and bulb strands so the world can add them to shared systems.
  */
-export function createStall(def) {
+export function createStall(def, goodsFn = null) {
   const { D, H } = STALL;
   const g = new THREE.Group();
   buildShell(g, def);
@@ -340,7 +341,8 @@ export function createStall(def) {
   g.add(keeper.root);
 
   const diyaSpots = [];
-  addGoods(g, def.goods, diyaSpots);
+  if (goodsFn) goodsFn(g); // a personal theme (stallThemes.js) in place of the stall's own goods
+  else addGoods(g, def.goods, diyaSpots);
   // ~70-200 little meshes become one per material look (keeper and sign stay their own)
   mergeStatic(g, { skip: (o) => o === keeper.root || o === sign });
 

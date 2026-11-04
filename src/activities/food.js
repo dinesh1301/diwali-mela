@@ -2,21 +2,32 @@ import { tk } from '../touch.js';
 import * as THREE from 'three';
 import { foodMesh, FOOD_COLORS } from '../items.js';
 import { pick, rand } from '../utils.js';
+import { slot, slotSet } from '../personalSlots.js';
 
 const _v = new THREE.Vector3();
 
-const MITHAI = [
-  { kind: 'laddoo', icon: '🟠', label: 'Motichoor laddoo', sub: 'Round, golden, melts in the mouth' },
-  { kind: 'kaju', icon: '💎', label: 'Kaju katli', sub: 'Cashew fudge with silver vark' },
-  { kind: 'jamun', icon: '🟤', label: 'Gulab jamun', sub: 'Soaked in warm rose syrup' },
-  { kind: 'barfi', icon: '🟩', label: 'Pista barfi', sub: 'Milky, nutty squares' },
-];
-const KULFI = [
-  { color: 0xfff1c1, icon: '🤍', label: 'Malai', sub: 'Classic creamy' },
-  { color: 0xffc04d, icon: '🧡', label: 'Kesar', sub: 'Saffron and cardamom' },
-  { color: 0xb8e0a0, icon: '💚', label: 'Pista', sub: 'Pistachio' },
-  { color: 0xffb347, icon: '🥭', label: 'Mango', sub: 'Alphonso season, always' },
-];
+// labels are personal slots (menu.<stall>.<n>); a renamed item drops the stock description under it
+const named = (goods, items) => items.map((it, i) => (slotSet(`menu.${goods}.${i + 1}`) ? { ...it, label: slot(`menu.${goods}.${i + 1}`), sub: '' } : it));
+const MITHAI = () =>
+  named('mithai', [
+    { kind: 'laddoo', icon: '🟠', label: 'Motichoor laddoo', sub: 'Round, golden, melts in the mouth' },
+    { kind: 'kaju', icon: '💎', label: 'Kaju katli', sub: 'Cashew fudge with silver vark' },
+    { kind: 'jamun', icon: '🟤', label: 'Gulab jamun', sub: 'Soaked in warm rose syrup' },
+    { kind: 'barfi', icon: '🟩', label: 'Pista barfi', sub: 'Milky, nutty squares' },
+  ]);
+const KULFI = () =>
+  named('kulfi', [
+    { color: 0xfff1c1, icon: '🤍', label: 'Malai', sub: 'Classic creamy' },
+    { color: 0xffc04d, icon: '🧡', label: 'Kesar', sub: 'Saffron and cardamom' },
+    { color: 0xb8e0a0, icon: '💚', label: 'Pista', sub: 'Pistachio' },
+    { color: 0xffb347, icon: '🥭', label: 'Mango', sub: 'Alphonso season, always' },
+  ]);
+const GOLGAPPA = () =>
+  named('panipuri', [
+    { icon: '🌶️', label: 'Teekha challenge', sub: 'Spicy! How many can you handle?' },
+    { icon: '🍯', label: 'Meetha challenge', sub: 'Sweet and tangy, go for a record' },
+    { icon: '🥟', label: 'Just one, please', sub: 'A single golgappa' },
+  ]);
 const REACTIONS = {
   mithai: ['So sweet! 😋', 'Wah! Ekdum fresh!', 'One more? 🤤', 'Mummy ke haath jaisa!'],
   jalebi: ['Garam garam! 🔥', 'Crispy and juicy! 😋', 'Sticky fingers! 🍯'],
@@ -25,7 +36,7 @@ const REACTIONS = {
 };
 const LABELS = {
   mithai: 'Buy mithai 🍬',
-  jalebi: 'Eat hot jalebi 🥨',
+  jalebi: () => `${slot('menu.jalebi.1')} 🥨`,
   panipuri: 'Golgappa challenge 🥟',
   kulfi: 'Buy a kulfi 🍦',
 };
@@ -42,7 +53,7 @@ export class FoodStalls {
         markAt: st.center,
         markerHeight: 2.2,
         radius: 2.6,
-        label: LABELS[g],
+        label: typeof LABELS[g] === 'function' ? LABELS[g]() : LABELS[g],
         enabled: () => ctx.player.mode === 'walk',
         action: () => this.visit(st),
       });
@@ -56,8 +67,9 @@ export class FoodStalls {
     try {
       switch (st.def.goods) {
         case 'mithai': {
-          const i = await ui.menu('Mithai Mahal', 'Kya loge? What would you like?', MITHAI);
-          if (i !== null) await this.serveAndEat(st, foodMesh(MITHAI[i].kind), MITHAI[i].kind, 3, 'mithai', pick(REACTIONS.mithai));
+          const menu = MITHAI();
+          const i = await ui.menu(st.def.name, 'Kya loge? What would you like?', menu);
+          if (i !== null) await this.serveAndEat(st, foodMesh(menu[i].kind), menu[i].kind, 3, 'mithai', pick(REACTIONS.mithai));
           break;
         }
         case 'jalebi':
@@ -65,22 +77,20 @@ export class FoodStalls {
           player.buff('sugar', 20, { icon: '⚡', label: 'Sugar rush · you run faster' });
           break;
         case 'kulfi': {
-          const i = await ui.menu('Kulfi Corner', 'Pick a flavour', KULFI);
+          const menu = KULFI();
+          const i = await ui.menu(st.def.name, 'Pick a flavour', menu);
           if (i !== null) {
-            await this.serveAndEat(st, foodMesh('kulfi', KULFI[i].color), 'kulfi', 4, 'kulfi', pick(REACTIONS.kulfi), KULFI[i].color);
+            await this.serveAndEat(st, foodMesh('kulfi', menu[i].color), 'kulfi', 4, 'kulfi', pick(REACTIONS.kulfi), menu[i].color);
             player.char.setTint(0);
             player.buff('cool', 15, { icon: '❄️', label: 'Cooled down' });
           }
           break;
         }
         case 'panipuri': {
-          const i = await ui.menu('Pani Puri Point', 'Ready for the Golgappa Challenge?', [
-            { icon: '🌶️', label: 'Teekha challenge', sub: 'Spicy! How many can you handle?' },
-            { icon: '🍯', label: 'Meetha challenge', sub: 'Sweet and tangy, go for a record' },
-            { icon: '🥟', label: 'Just one, please', sub: 'A single golgappa' },
-          ]);
+          const menu = GOLGAPPA();
+          const i = await ui.menu(st.def.name, `Ready for the ${slot('game.golgappa.title')}?`, menu);
           if (i === 2) await this.serveAndEat(st, foodMesh('puri'), 'puri', 1, null, pick(REACTIONS.panipuri));
-          else if (i !== null) await this.golgappa(st, i === 0 ? 'teekha' : 'meetha');
+          else if (i !== null) await this.golgappa(st, i === 0 ? 'teekha' : 'meetha', menu[i].label);
           break;
         }
       }
@@ -135,7 +145,7 @@ export class FoodStalls {
 
   // ---------- golgappa challenge ----------
 
-  async golgappa(st, flavour) {
+  async golgappa(st, flavour, choice) {
     const { scene, ui, player, tasks, audio, debris, passport, input } = this.ctx;
     const keeper = st.keeper;
     const keeperHead = (o) => keeper.headTop.getWorldPosition(o);
@@ -151,7 +161,8 @@ export class FoodStalls {
     let misses = 0;
     const teekha = flavour === 'teekha';
     ui.gameHud.show({
-      title: teekha ? '🌶️ Teekha Golgappa Challenge' : '🍯 Meetha Golgappa Challenge',
+      // stock: "Teekha Golgappa Challenge"; a creator's mela: their challenge name and the option picked
+      title: slotSet('game.golgappa.title') || slotSet(`menu.panipuri.${teekha ? 1 : 2}`) ? `${teekha ? '🌶️' : '🍯'} ${slot('game.golgappa.title')} · ${choice}` : teekha ? '🌶️ Teekha Golgappa Challenge' : '🍯 Meetha Golgappa Challenge',
       help: tk('Press E or tap to gulp each puri before it goes soggy. Press Q to say "Bas bhaiya!"', 'Tap “Gulp!” (or anywhere) before each puri goes soggy. Tap “Bas bhaiya!” to stop.'),
       exit: false,
     });
@@ -160,7 +171,7 @@ export class FoodStalls {
       ui.gameHud.bar(Math.min(1, spice / 100), { label: 'SPICE', hot: true });
     };
     stats();
-    ui.bubble(keeperHead, teekha ? 'Ekdum teekha banaunga! 😈' : 'Ek ke baad ek! 😄', 2);
+    ui.bubble(keeperHead, teekha ? slot('shout.golgappa') : 'Ek ke baad ek! 😄', 2);
     await tasks.wait(0.8);
 
     let reason = 'bas';
@@ -250,7 +261,7 @@ export class FoodStalls {
     await ui.result({
       icon: '🥟',
       title: `${count} golgappa${count === 1 ? '' : 's'}!`,
-      text: `${lines[reason]}  ${newBest ? 'New personal best! 🏆' : `Your best: ${best}`}`,
+      text: `${lines[reason]}  ${count >= 10 && slotSet('game.golgappa.prize') ? `You win ${slot('game.golgappa.prize')}! 👑  ` : ''}${newBest ? 'New personal best! 🏆' : `Your best: ${best}`}`,
       buttons: [{ label: 'Done', value: 'ok', primary: true }],
     });
   }

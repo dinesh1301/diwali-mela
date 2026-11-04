@@ -117,7 +117,7 @@ export class RingToss {
         this.finish({
           icon: win ? '🎁' : '⭕',
           title: `${this.ringed} ringed!`,
-          text: win ? 'Wah! You won a gift box 🎁' : `Ring ${TO_WIN} bottles to win. Have another go?`,
+          text: win ? `Wah! You won ${this.prizeName ?? 'a gift box'} 🎁` : `Ring ${TO_WIN} bottles to win. Have another go?`,
           win,
           prize: 'gift',
           stamp: 'rings',
