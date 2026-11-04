@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { catenary } from './utils.js';
+import { lowDetail } from './lod.js';
 
 const ORANGE = new THREE.Color(0xff7b00);
 const YELLOW = new THREE.Color(0xffc300);
@@ -29,7 +30,7 @@ export class Garlands {
   build() {
     if (!this.items.length) return;
     const mesh = new THREE.InstancedMesh(
-      new THREE.IcosahedronGeometry(0.07, 1),
+      new THREE.IcosahedronGeometry(0.07, lowDetail() ? 0 : 1),
       new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, emissive: 0x3a1600 }),
       this.items.length
     );

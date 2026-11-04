@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { catenary, BULB_PALETTE } from './utils.js';
+import { lowDetail } from './lod.js';
 
 const MODES = ['chase', 'twinkle', 'steady', 'alternate'];
 
@@ -54,7 +55,8 @@ export class StringLights {
 
   build() {
     this.mesh = new THREE.InstancedMesh(
-      new THREE.SphereGeometry(0.075, 8, 6),
+      // 4,000+ bulbs drawn twice (scene and river): phones get a 20-triangle icosahedron
+      lowDetail() ? new THREE.IcosahedronGeometry(0.075, 0) : new THREE.SphereGeometry(0.075, 8, 6),
       new THREE.MeshBasicMaterial({ color: 0xffffff }),
       this.bulbs.length
     );

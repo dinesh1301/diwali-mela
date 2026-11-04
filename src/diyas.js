@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { hdr, rand } from './utils.js';
+import { seg } from './lod.js';
 
 const BOWL_PROFILE = [
   [0, 0],
@@ -28,11 +29,11 @@ export class Diyas {
     const n = this.items.length;
     if (!n) return;
     this.bowls = new THREE.InstancedMesh(
-      new THREE.LatheGeometry(BOWL_PROFILE, 14),
+      new THREE.LatheGeometry(BOWL_PROFILE, seg(14, 8)),
       new THREE.MeshStandardMaterial({ color: 0xb5562b, roughness: 0.85, emissive: 0x3a1204 }),
       n
     );
-    const flameGeo = new THREE.SphereGeometry(0.035, 8, 6);
+    const flameGeo = new THREE.SphereGeometry(0.035, seg(8, 6), seg(6, 4));
     flameGeo.scale(1, 2.2, 1);
     flameGeo.translate(0, 0.075, 0);
     this.flames = new THREE.InstancedMesh(flameGeo, new THREE.MeshBasicMaterial({ color: hdr(0xffa040, 5) }), n);

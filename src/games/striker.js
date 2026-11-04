@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { hammerMesh } from '../items.js';
 import { canvasTexture } from '../utils.js';
+import { lowDetail } from '../lod.js';
 
 const G = 9.8;
 const SWINGS = 3;
@@ -68,7 +69,7 @@ export class Striker {
     // bulbs up both sides light to the height the puck reaches
     const pts = [];
     for (const x of [-0.5, 0.5]) for (let i = 0; i < 22; i++) pts.push(new THREE.Vector3(x, BASE_Y + (i / 21) * (BELL_Y - BASE_Y), -1.78));
-    this.bulbs = new THREE.InstancedMesh(new THREE.SphereGeometry(0.06, 8, 6), new THREE.MeshBasicMaterial(), pts.length);
+    this.bulbs = new THREE.InstancedMesh(lowDetail() ? new THREE.IcosahedronGeometry(0.06, 0) : new THREE.SphereGeometry(0.06, 8, 6), new THREE.MeshBasicMaterial(), pts.length);
     pts.forEach((p, i) => {
       this.bulbs.setMatrixAt(i, new THREE.Matrix4().makeTranslation(p.x, p.y, p.z));
       this.bulbs.setColorAt(i, new THREE.Color(1, 1, 1));
