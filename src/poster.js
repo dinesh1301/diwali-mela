@@ -34,6 +34,24 @@ const loadImage = (src) =>
     img.src = src;
   });
 
+const SHOT_MAX = 1920; // longest side of a captured frame: posters are at most 1920 px wide
+
+/**
+ * Copies the frame just rendered into a 2D canvas, scaled down to SHOT_MAX. It must run in the
+ * same task as the render (the WebGL buffer is cleared once the browser composites), and unlike
+ * toDataURL it doesn't JPEG-encode a 4 MP frame into a string on the main thread.
+ */
+function grabFrame(src) {
+  const k = Math.min(1, SHOT_MAX / Math.max(src.width, src.height));
+  const c = document.createElement('canvas');
+  c.width = Math.round(src.width * k);
+  c.height = Math.round(src.height * k);
+  const g = c.getContext('2d');
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(src, 0, 0, c.width, c.height);
+  return c;
+}
+
 /** Draws img to cover the box; focusX/focusY (0..1) pick which part of the image stays visible. */
 function cover(g, img, x, y, w, h, focusX = 0.5, focusY = 0.5) {
   const s = Math.max(w / img.width, h / img.height);
@@ -86,7 +104,7 @@ export async function composePoster({ shot, photo, name, handle, headline, done,
   c.height = H;
   const g = c.getContext('2d');
 
-  const img = await loadImage(shot);
+  const img = typeof shot === 'string' ? await loadImage(shot) : shot; // a URL or a grabbed canvas
   cover(g, img, 0, 0, W, H, land ? 0.62 : 0.5, 0.5);
 
   if (land) {
@@ -421,7 +439,7 @@ export class Poster {
     const marker = interactions.marker.visible;
     interactions.marker.visible = false;
     composer.render();
-    const url = renderer.domElement.toDataURL('image/jpeg', 0.92);
+    const shot = grabFrame(renderer.domElement);
     renderer.toneMappingExposure = exposure;
     if (bloom) bloom.strength = strength;
     interactions.marker.visible = marker;
@@ -429,7 +447,7 @@ export class Poster {
     camera.position.copy(pos);
     camera.quaternion.copy(quat);
     camera.updateProjectionMatrix();
-    return url;
+    return shot;
   }
 
   // ---------- the poster modal ----------
@@ -509,9 +527,9 @@ export class Poster {
     const marker = interactions.marker.visible;
     interactions.marker.visible = false;
     composer.render();
-    const url = renderer.domElement.toDataURL('image/jpeg', 0.92);
+    const shot = grabFrame(renderer.domElement);
     interactions.marker.visible = marker;
-    return url;
+    return shot;
   }
 
   async open() {
@@ -555,7 +573,13 @@ export class Poster {
         shareLink: this.shareLink(),
       });
       this.canvas = canvas;
-      this.img.src = canvas.toDataURL('image/jpeg', 0.9);
+      // encode off the main thread where the browser can, and show it through an object URL
+      this.posterBlob = await new Promise((r) => canvas.toBlob(r, 'image/jpeg', 0.92));
+      if (this.posterBlob) {
+        if (this.previewUrl) URL.revokeObjectURL(this.previewUrl);
+        this.previewUrl = URL.createObjectURL(this.posterBlob);
+        this.img.src = this.previewUrl;
+      }
       this.el.classList.remove('busy');
     }));
     return my;
@@ -563,7 +587,7 @@ export class Poster {
 
   async blob() {
     await this.rendering;
-    return new Promise((r) => this.canvas.toBlob(r, 'image/jpeg', 0.93));
+    return this.posterBlob ?? new Promise((r) => this.canvas.toBlob(r, 'image/jpeg', 0.92));
   }
 
   async download() {
