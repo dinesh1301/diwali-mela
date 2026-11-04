@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { canvasTexture, hdr, rand, pick } from './utils.js';
 import { Character, randomLook } from './character.js';
+import { mergeStatic } from './merge.js';
+import { seg } from './lod.js';
 
 export const STALL = { W: 5.2, D: 3.6, H: 2.9 };
 const TOP = 1.22; // counter surface height
@@ -14,11 +16,14 @@ const MAT = {
   clay: std(0xa8532a, 0.9),
   bulb: new THREE.MeshBasicMaterial({ color: hdr(0xffd08a, 4) }),
 };
-const GEO = {
-  plate: new THREE.CylinderGeometry(0.3, 0.26, 0.03, 24),
-  pole: new THREE.CylinderGeometry(0.06, 0.06, STALL.H, 8),
-  bulb: new THREE.SphereGeometry(0.09, 10, 8),
-};
+// built on first use: the segment counts depend on the tier, known only after detection
+let GEO = null;
+const geo = () =>
+  (GEO ??= {
+    plate: new THREE.CylinderGeometry(0.3, 0.26, 0.03, seg(24, 14)),
+    pole: new THREE.CylinderGeometry(0.06, 0.06, STALL.H, 8),
+    bulb: new THREE.SphereGeometry(0.09, seg(10, 6), seg(8, 5)),
+  });
 
 // ---------- textures ----------
 
@@ -108,6 +113,7 @@ export function signTexture(title, sub, bg, fg = '#ffe7a3', width = 512, height 
 
 function addGoods(g, type, diyaSpots) {
   const { W, D, H } = STALL;
+  const GEO = geo();
   const cz = D / 2 - 0.45;
   const add = (geo, mat, x, y, z, rx = 0, ry = 0, rz = 0) => {
     const m = new THREE.Mesh(geo, mat);
@@ -120,7 +126,7 @@ function addGoods(g, type, diyaSpots) {
 
   switch (type) {
     case 'mithai': {
-      const laddoo = new THREE.SphereGeometry(0.065, 10, 8);
+      const laddoo = new THREE.SphereGeometry(0.065, seg(10, 6), seg(8, 5));
       const mats = [0xf2a03d, 0xf7c548, 0xe8e0c8].map((c) => std(c, 0.8));
       [[-1.6, 0], [-0.55, 1], [1.6, 2]].forEach(([px, mi]) => {
         add(GEO.plate, MAT.plate, px, TOP + 0.015, cz);
@@ -148,7 +154,7 @@ function addGoods(g, type, diyaSpots) {
       const kadhai = new THREE.SphereGeometry(0.42, 20, 10, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
       add(kadhai, std(0x2a2a2a, 0.35, { metalness: 0.8, side: THREE.DoubleSide }), -1.3, TOP + 0.42, cz - 0.05);
       add(new THREE.CircleGeometry(0.4, 24), std(0x8a5a10, 0.2, { emissive: 0x3a1a00 }), -1.3, TOP + 0.36, cz - 0.05, -Math.PI / 2);
-      const jalebi = new THREE.TorusGeometry(0.07, 0.02, 6, 18);
+      const jalebi = new THREE.TorusGeometry(0.07, 0.02, seg(6, 4), seg(18, 10));
       const syrup = std(0xff8f1f, 0.3, { emissive: 0x4a1a00 });
       for (let i = 0; i < 5; i++) add(jalebi, syrup, -1.3 + rand(-0.2, 0.2), TOP + 0.37, cz - 0.05 + rand(-0.2, 0.2), Math.PI / 2);
       for (const px of [0.3, 1.4]) {
@@ -163,7 +169,7 @@ function addGoods(g, type, diyaSpots) {
     }
     case 'panipuri': {
       add(new THREE.CylinderGeometry(0.42, 0.32, 0.25, 20, 1, true), std(0x9c6b30, 0.9, { side: THREE.DoubleSide }), -1.2, TOP + 0.125, cz);
-      const puri = new THREE.SphereGeometry(0.055, 10, 8);
+      const puri = new THREE.SphereGeometry(0.055, seg(10, 6), seg(8, 5));
       puri.scale(1, 0.75, 1);
       const golden = std(0xd9a441, 0.6);
       for (let i = 0; i < 45; i++) {
@@ -226,7 +232,7 @@ function addGoods(g, type, diyaSpots) {
       break;
     }
     case 'bangles': {
-      const bangle = new THREE.TorusGeometry(0.075, 0.012, 6, 20);
+      const bangle = new THREE.TorusGeometry(0.075, 0.012, seg(6, 4), seg(20, 12));
       const rod = new THREE.CylinderGeometry(0.015, 0.015, 0.6, 6);
       const base = new THREE.CylinderGeometry(0.12, 0.14, 0.04, 14);
       const palette = [0xff006e, 0xffbe0b, 0x3a86ff, 0x8338ec, 0x06d6a0, 0xfb5607, 0xe5e5e5];
@@ -244,9 +250,10 @@ function addGoods(g, type, diyaSpots) {
       break;
     }
     case 'toys': {
-      const balloon = new THREE.SphereGeometry(0.22, 14, 10);
+      const balloon = new THREE.SphereGeometry(0.22, seg(14, 10), seg(10, 7));
       balloon.scale(1, 1.18, 1);
       const palette = [0xff006e, 0xffbe0b, 0x3a86ff, 0x8338ec, 0x06d6a0, 0xfb5607, 0xff5d8f];
+      const strings = [];
       for (const sx of [-1, 1]) {
         const ax = sx * (W / 2 + 0.45);
         const az = D / 2 + 0.45;
@@ -256,12 +263,10 @@ function addGoods(g, type, diyaSpots) {
           const by = H - 0.2 + rand(0, 1.3);
           const bz = az + rand(-0.3, 0.3);
           add(balloon, std(c, 0.3, { emissive: new THREE.Color(c).multiplyScalar(0.25) }), bx, by, bz);
-          const a = new THREE.Vector3(bx, by - 0.25, bz);
-          const b = new THREE.Vector3(ax, 1.3, az);
-          const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([a, b]), new THREE.LineBasicMaterial({ color: 0xdddddd }));
-          g.add(line);
+          strings.push(new THREE.Vector3(bx, by - 0.25, bz), new THREE.Vector3(ax, 1.3, az));
         }
       }
+      g.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(strings), new THREE.LineBasicMaterial({ color: 0xdddddd })));
       const drum = new THREE.CylinderGeometry(0.12, 0.12, 0.16, 16);
       const top = new THREE.ConeGeometry(0.09, 0.16, 12);
       for (let i = 0; i < 5; i++) {
@@ -281,6 +286,7 @@ function addGoods(g, type, diyaSpots) {
  */
 export function createStall(def) {
   const { W, D, H } = STALL;
+  const GEO = geo();
   const g = new THREE.Group();
   const fabric = std(0xffffff, 0.9, { map: stripes(def.c1, def.c2), side: THREE.DoubleSide });
   const add = (mesh, x, y, z) => {
@@ -327,6 +333,8 @@ export function createStall(def) {
 
   const diyaSpots = [];
   addGoods(g, def.goods, diyaSpots);
+  // ~70-200 little meshes become one per material look (keeper and sign stay their own)
+  mergeStatic(g, { skip: (o) => o === keeper.root || o === sign });
 
   const ex = W / 2 + 0.25;
   const ez = D / 2 + 0.25;
