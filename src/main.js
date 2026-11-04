@@ -730,7 +730,7 @@ async function init() {
   let lastDraw = 0;
   let lastTime = 0;
   let throttled = false;
-  let shadowFrame = 0;
+  let sinceShadow = 0;
 
   const loop = (time) => {
     const t0 = performance.now();
@@ -836,8 +836,16 @@ async function init() {
     if (draw) {
       lastDraw = time;
       // shadows: every frame while the sun is still sliding into night, then every 2nd frame
-      // (rides and people move slowly enough that a 30 Hz shadow is not noticeable)
-      if (renderer.shadowMap.enabled && (dayNight.T < 95 || ++shadowFrame % 2 === 0)) renderer.shadowMap.needsUpdate = true;
+      // (rides and people move slowly enough that a 30 Hz shadow is not noticeable). When the river
+      // reflection is also on a 2-frame cadence, the shadow takes the frames it skips, so the two
+      // heavy passes never land in the same frame.
+      if (renderer.shadowMap.enabled) {
+        sinceShadow++;
+        if (dayNight.T < 95 || sinceShadow >= 2 || !world.water.reflectDue(camera)) {
+          renderer.shadowMap.needsUpdate = true;
+          sinceShadow = 0;
+        }
+      }
       lightPool.update();
       composer.render();
       ramayan.render(camera);
