@@ -385,6 +385,7 @@ async function init() {
       );
     // phones: the coach card explains the controls first, the welcome follows once it's tapped away
     if (!ui.showCoach(welcome)) welcome();
+    frameMelaScreen();
     if (profile.golden && profile.ref) setTimeout(() => ui.toast(`✨ Invited by @${profile.ref}: a golden kandeel is waiting for you at Kandeel House`, 5000, { important: true }), 5000);
   }
 
@@ -471,6 +472,7 @@ async function init() {
       if (player.mode === 'ride') rides.getOff();
       if (player.mode === 'busy' || player.mode === 'anim') return;
       player.teleport(...PLACES[id]);
+      frameMelaScreen();
     },
     onMute() {
       muted = !muted;
@@ -542,6 +544,41 @@ async function init() {
   billboard.camera = camera;
   billboard.renderer = renderer;
   billboard.onOverlay = (open) => (input.blocked = open); // the full-screen reel: no walking behind it
+  /**
+   * At the gate, facing in, the Mela Screen is the first thing to see. On a phone in portrait the
+   * top HUD (buttons + places strip) covers the upper part of the view, so the default camera pitch
+   * leaves the screen behind it (iPhone SE: all of it). Lower the pitch (the camera drops and looks
+   * up the walkway) just enough that the picture clears the HUD, never below -0.08 (lower, the gate
+   * arch's banner comes down over the screen). Where it already clears (desktop), nothing changes.
+   */
+  const _top = new THREE.Vector3();
+  const _tgt = new THREE.Vector3();
+  function frameMelaScreen() {
+    const s = billboard.size;
+    const dz = player.pos.z - billboard.pos.z;
+    if (!s || player.mode !== 'walk' || dz < 8 || dz > 35 || Math.abs(player.pos.x - billboard.pos.x) > 6) return;
+    if (Math.cos(player.heading - Math.PI) < 0.8) return; // not facing into the mela
+    const hudEl = document.getElementById('hud-top');
+    const hr = hudEl && getComputedStyle(hudEl).display !== 'none' ? hudEl.getBoundingClientRect() : null;
+    const cr = renderer.domElement.getBoundingClientRect();
+    if (!hr || hr.height <= 0 || !cr.height) return;
+    const want = hr.bottom - cr.top + cr.height * 0.03;
+    const c = player.cam;
+    const pos = camera.position.clone();
+    const quat = camera.quaternion.clone();
+    _tgt.set(player.pos.x, player.pos.y + 1.55 * (player.char.look.scale ?? 1), player.pos.z);
+    _top.set(billboard.pos.x, s.y1, billboard.pos.z); // the picture's top edge (its header may stay under the HUD)
+    for (let p = c.pitch; p >= -0.08; p -= 0.02) {
+      camera.position.set(Math.sin(c.yaw) * Math.cos(p), Math.sin(p), Math.cos(c.yaw) * Math.cos(p)).multiplyScalar(c.dist).add(_tgt);
+      camera.lookAt(_tgt);
+      camera.updateMatrixWorld();
+      c.pitch = p;
+      if (((1 - _top.clone().project(camera).y) / 2) * cr.height >= want) break;
+    }
+    camera.position.copy(pos);
+    camera.quaternion.copy(quat);
+    camera.updateMatrixWorld();
+  }
   await loading();
   const dayNight = new DayNight({ scene, sky, hemi, sun, lightSystems: [world.lights, games.lights, vehicles.lights, poster.lights, ramayan.lights, extraLights, billboard.lights].filter(Boolean) });
   const customizer = new Customizer({
@@ -736,6 +773,7 @@ async function init() {
   for (const a of (params.get('do') || '').split(',').filter(Boolean)) handlers.onAction(a);
   for (let i = 0; i < (Number(params.get('warp')) || 0) * 60; i++) fireworks.update(1 / 60);
   if (params.get('pos')) player.teleport(...params.get('pos').split(',').map(Number));
+  if (started) frameMelaScreen(); // the gate spawn on a phone: the Mela Screen clear of the top HUD
   for (const stepDef of (params.get('script') || '').split(',').filter(Boolean)) {
     const [what, at] = stepDef.split('@');
     setTimeout(() => {

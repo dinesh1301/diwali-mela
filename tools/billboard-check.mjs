@@ -96,6 +96,18 @@ await page.evaluate(() => window.__mela.player.teleport(0, -38, Math.PI));
 await page.waitForTimeout(800);
 const far = await state();
 check(!far.active && far.videos.length === 0 && far.holder === 0, 'asleep and released at the ghat', JSON.stringify(far));
+// every place chip: the screen is awake only within NEAR (60 m) of the camera, asleep (decoders
+// released) beyond FAR (70 m); the distance is from the screen's world position to the camera
+for (const [name, x, z, h] of [['selfie', 12.6, 56.4, Math.PI / 2], ['train', 12.5, 36, Math.PI / 2], ['cars', -37.5, 21, -Math.PI / 2], ['airfield', 44, 18, Math.PI / 2], ['plaza', 0, 12, Math.PI], ['wheel', -34, -12, Math.PI], ['ghat', 0, -38, Math.PI]]) {
+  await page.evaluate(([x, z, h]) => window.__mela.player.teleport(x, z, h), [x, z, h]);
+  await page.waitForTimeout(900);
+  const r = await page.evaluate(() => {
+    const { billboard: b, camera } = window.__mela;
+    return { d: Math.round(Math.hypot(camera.position.x - b.pos.x, camera.position.z - b.pos.z)), at: [b.pos.x, b.pos.z], active: b.active, videos: b.videos.size, holder: document.querySelectorAll('video').length };
+  });
+  const ok = r.d < 60 ? r.active : r.d > 70 ? !r.active && r.videos === 0 && r.holder === 0 : true;
+  check(ok, `${name}: ${r.d} m from the screen -> ${r.active ? 'awake' : 'asleep'}`, JSON.stringify(r));
+}
 // back: wakes again
 await page.evaluate(() => window.__mela.player.teleport(0, 60.5, Math.PI));
 await page.evaluate(() => (window.__mela.player.cam.pitch = -0.3));

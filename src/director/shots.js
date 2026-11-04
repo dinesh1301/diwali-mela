@@ -75,7 +75,7 @@ export const SHOTS = {
   },
 
   // ---------- 3 · the creator's own stall (personal) ----------
-  // Opens square-on to their Wall of Fame (posters readable for ~2.2 s), then drifts back and
+  // Opens square-on to their Wall of Fame (posters readable for ~2 s), then drifts back and
   // pans down the aisle to finish on the stall board with the themed goods on the counter.
   stall: {
     duration: 6,
@@ -93,8 +93,10 @@ export const SHOTS = {
       const wa = wall.clone().sub(base).dot(along);
       const wo = wall.clone().sub(base).dot(out);
       const wy = wall.y + 0.3;
-      state.camPts = [P(wa + 0.2, wo + 6.3, 2.3), P(wa - 0.6, wo + 6.0, 2.4), P(2.4, 9.6, 2.5), P(0.6, 12.55, 2.6)];
-      state.lookPts = [P(wa + 0.15, wo, wy), P(wa - 0.15, wo, wy), P(2.0, 1.9, 2.55), P(0, 2.15, 2.45)];
+      // the third point is already far enough back (and aimed near enough the board's centre) that
+      // the whole 4.8 m title board is in a 9:16 frame from there on: the pan never crops the title
+      state.camPts = [P(wa + 0.2, wo + 6.3, 2.3), P(wa - 0.6, wo + 6.0, 2.4), P(1.4, 11.4, 2.55), P(0.6, 12.55, 2.6)];
+      state.lookPts = [P(wa + 0.15, wo, wy), P(wa - 0.15, wo, wy), P(0.4, 1.95, 2.55), P(0, 2.15, 2.45)];
       state.stand = s.stand.clone();
       state.out = out;
       state.keeper = s.keeper;
@@ -115,16 +117,23 @@ export const SHOTS = {
       }
     },
     camera({ sec, cam, H, state }) {
-      // one Catmull-Rom move: the first segment (the wall) at an even drift, then a Hermite ease
-      // whose opening speed matches that drift, so the pan never hitches
-      const T1 = 2.2;
+      // one Catmull-Rom move: the first segment (the wall) at an even drift, then a quick Hermite
+      // pan (its opening speed matches that drift, so it never hitches) that lands on the whole
+      // title board by ~2.9 s, then a slow ease-out push onto the stall for the rest of the shot
+      const T1 = 2.0;
+      const T2 = 0.9;
+      const T3 = 6 - T1 - T2;
+      const herm = (p0, p1, m0, m1, x) => {
+        const x2 = x * x;
+        const x3 = x2 * x;
+        return (2 * x3 - 3 * x2 + 1) * p0 + (x3 - 2 * x2 + x) * m0 + (-2 * x3 + 3 * x2) * p1 + (x3 - x2) * m1;
+      };
+      const v1 = 1 / (3 * T1); // u per second while drifting past the wall
+      const v3 = (1 / 3 / T3) * 1.6; // u per second as the last segment starts (eases out to 0)
       let u;
-      if (sec <= T1) u = sec / T1 / 3;
-      else {
-        const x = Math.min(1, (sec - T1) / (6 - T1));
-        const m0 = (1 / (3 * T1)) * (6 - T1) * 1.5; // matching slope, in the eased segment's units
-        u = 1 / 3 + (2 / 3) * (3 * x * x - 2 * x * x * x + m0 * (x * x * x - 2 * x * x + x));
-      }
+      if (sec <= T1) u = sec * v1;
+      else if (sec <= T1 + T2) u = herm(1 / 3, 2 / 3, v1 * T2, v3 * T2, (sec - T1) / T2);
+      else u = herm(2 / 3, 1, v3 * T3, 0, Math.min(1, (sec - T1 - T2) / T3));
       H.path(state.camPts, u, cam.pos);
       H.path(state.lookPts, u, cam.look);
       cam.fov = 52;
@@ -165,21 +174,21 @@ export const SHOTS = {
       }
     },
     camera({ sec, cam, m, H, state }) {
-      if (sec < 5) {
-        const k = H.smooth(sec / 5);
-        const g = state.balloon;
-        const w = (x, y, z) => g.booth.group.localToWorld(new THREE.Vector3(x, y, z));
-        cam.pos.copy(w(H.lerp(-1.1, -0.8, k), H.lerp(2.35, 2.15, k), H.lerp(9.2, 8.2, k)));
-        cam.look.copy(w(-0.1, 1.65, -2.2));
-        cam.fov = 50;
+      // Each booth from out in the lane, square-on and far enough back (>= 7 m from the sign) that
+      // the whole 4.4 m personalised sign over the booth stays in a 9:16 frame for the full 5 s:
+      // it opens tilted up on the sign (readable from frame 0), then eases down onto the play.
+      const half = sec < 5;
+      const k = H.smooth(half ? sec / 5 : (sec - 5) / 5);
+      const g = half ? state.balloon : state.rings;
+      const w = (x, y, z) => g.booth.group.localToWorld(new THREE.Vector3(x, y, z));
+      if (half) {
+        cam.pos.copy(w(H.lerp(0.1, -0.2, k), H.lerp(2.75, 2.5, k), H.lerp(11.2, 10.2, k)));
+        cam.look.copy(w(H.lerp(0, -0.1, k), H.lerp(3.1, 2.25, k), -1.5));
       } else {
-        const k = H.smooth((sec - 5) / 5);
-        const g = state.rings;
-        const w = (x, y, z) => g.booth.group.localToWorld(new THREE.Vector3(x, y, z));
-        cam.pos.copy(w(H.lerp(-1.0, -0.8, k), H.lerp(2.5, 2.3, k), H.lerp(7.4, 6.8, k)));
-        cam.look.copy(w(0, 0.95, -1.0));
-        cam.fov = 48;
+        cam.pos.copy(w(H.lerp(-0.15, 0.15, k), H.lerp(2.75, 2.5, k), H.lerp(11.0, 10.0, k)));
+        cam.look.copy(w(0, H.lerp(3.0, 2.0, k), -1.0));
       }
+      cam.fov = 58;
       void m;
     },
   },
