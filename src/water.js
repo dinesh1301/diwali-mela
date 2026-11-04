@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Reflector } from 'three/addons/objects/Reflector.js';
+import { settings } from './settings.js';
 
 /*
   The river: a planar reflection (Reflector) whose projected image is pushed around by an
@@ -136,7 +137,8 @@ const fragmentShader = /* glsl */ `
     #include <fog_fragment>
   }`;
 
-export function createWater(scene, { width = 600, depth = 112, y = -1.35, z = -105, resolution = 0.5 } = {}) {
+// The wave normals smear the reflection anyway, so phones skip its 4x MSAA.
+export function createWater(scene, { width = 600, depth = 112, y = -1.35, z = -105, resolution = 0.5, multisample = settings.tier === 'low' ? 0 : 4 } = {}) {
   const uniforms = {
     color: { value: null },
     tDiffuse: { value: null },
@@ -152,6 +154,7 @@ export function createWater(scene, { width = 600, depth = 112, y = -1.35, z = -1
     textureWidth: Math.floor(innerWidth * resolution),
     textureHeight: Math.floor(innerHeight * resolution),
     color: 0x10283a,
+    multisample,
     shader: { name: 'MelaWater', uniforms, vertexShader, fragmentShader },
   });
   mesh.material.fog = true;

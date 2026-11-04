@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Character, LOOK_OPTIONS, randomPlayerLook } from './character.js';
 import { profile, normalizeHandle } from './profile.js';
 import { pick } from './utils.js';
+import { settings } from './settings.js';
 
 const hex = (n) => `#${n.toString(16).padStart(6, '0')}`;
 const $ = (s) => document.querySelector(s);
@@ -45,8 +46,9 @@ export class Customizer {
 
   setupPreview() {
     this.canvas = $('#custPreview');
-    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, alpha: true, antialias: true });
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    // a second WebGL context next to the mela: a small canvas, so 1.5x is plenty; phones skip MSAA
+    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, alpha: true, antialias: settings.tier !== 'low' });
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.1;
     this.scene = new THREE.Scene();
