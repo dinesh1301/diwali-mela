@@ -102,6 +102,111 @@ const HELP = {
 
 const nextFrame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 
+/*
+  Adaptive resolution. Phones start a little above 1x (a 2.6x screen at 1x looks jagged) and the
+  governor raises the pixel ratio while frames have headroom and drops it when they don't. It looks
+  at 1.5 s windows of frame times against a 60 fps budget (or 30 fps when the display itself is
+  capped there, as in a phone's power-saving mode), needs three good windows in a row to step up,
+  and after a level fails it stays below it for a while (30 s, doubling each time it fails again),
+  so it settles instead of thrashing. A step down that doesn't make frames faster (the CPU, not the
+  pixels, is the bottleneck) is undone and further drops pause for a minute.
+*/
+class ResolutionGovernor {
+  constructor({ levels, start, apply, enabled = true }) {
+    this.levels = levels;
+    this.i = Math.max(0, levels.indexOf(start));
+    this.apply = apply;
+    this.enabled = enabled && levels.length > 1;
+    this.blockUntil = 0; // levels >= blockLevel are off-limits until then
+    this.blockLevel = Infinity;
+    this.backoff = 30000;
+    this.noDropUntil = 0;
+    this.lastUp = { at: -1e9, level: 0 };
+    this.probe = null; // a step down we are checking actually helped
+    this.changes = 0;
+    this.last = { mean: 0, slow: 0, work: 0, budget: 16.7 };
+    this.reset(2500);
+  }
+
+  get pixelRatio() {
+    return this.levels[this.i];
+  }
+
+  /** Forget the current window (after a resize, a level change, a hidden tab, a throttled stretch). */
+  reset(settleMs = 2000) {
+    this.ignoreUntil = performance.now() + settleMs;
+    this.n = this.sum = this.slowN = this.capN = this.work = this.winStart = 0;
+    this.good = this.bad = 0;
+  }
+
+  sample(dtMs, workMs) {
+    if (!this.enabled) return;
+    const now = performance.now();
+    if (now < this.ignoreUntil || dtMs <= 0 || dtMs > 250) return;
+    if (!this.winStart) this.winStart = now;
+    this.n++;
+    this.sum += dtMs;
+    this.work += workMs;
+    if (dtMs > 1000 / 60 * 1.45) this.slowN++;
+    if (dtMs > 31.5 && dtMs < 35.5) this.capN++;
+    if (now - this.winStart < 1500 || this.n < 20) return;
+    const mean = this.sum / this.n;
+    const work = this.work / this.n;
+    // frames locked to 33 ms with little work each: the display runs at 30 Hz, that is the budget
+    const capped = this.capN / this.n > 0.9 && work < 12;
+    const budget = capped ? 1000 / 30 : 1000 / 60;
+    const slow = capped ? 0 : this.slowN / this.n;
+    this.last = { mean: +mean.toFixed(1), slow: +slow.toFixed(2), work: +work.toFixed(1), budget: +budget.toFixed(1) };
+    this.n = this.sum = this.slowN = this.capN = this.work = 0;
+    this.winStart = now;
+
+    if (this.probe) {
+      const p = this.probe;
+      this.probe = null;
+      if (mean > p.mean * 0.9) {
+        // dropping the resolution bought nothing: go back and leave it alone for a minute
+        this.noDropUntil = now + 60000;
+        this.blockLevel = Infinity;
+        this.step(p.from - this.i);
+        return;
+      }
+    }
+    const tooSlow = mean > budget * 1.22 || slow > 0.15;
+    const roomy = mean < budget * 1.06 && slow < 0.03;
+    this.bad = tooSlow ? this.bad + 1 : 0;
+    this.good = roomy ? this.good + 1 : 0;
+    const lvl = this.pixelRatio;
+    const cpuBound = work > mean * 0.8;
+    if (this.bad >= 2 && this.i > 0 && now > this.noDropUntil && !(cpuBound && this.levels[this.i - 1] < 1)) {
+      // a level that fails soon after we climbed to it is blocked for longer each time
+      if (now - this.lastUp.at < 20000 && this.lastUp.level === lvl) this.backoff = Math.min(this.backoff * 2, 300000);
+      this.blockLevel = lvl;
+      this.blockUntil = now + this.backoff;
+      const from = this.i;
+      this.step(-1);
+      this.probe = { from, mean };
+    } else if (this.good >= 3 && this.i < this.levels.length - 1) {
+      const next = this.levels[this.i + 1];
+      if (next >= this.blockLevel && now < this.blockUntil) return;
+      this.lastUp = { at: now, level: next };
+      this.step(1);
+    }
+  }
+
+  step(d) {
+    if (!d) return;
+    this.i += d;
+    this.changes++;
+    this.apply(this.pixelRatio);
+    this.reset();
+  }
+
+  get state() {
+    const now = performance.now();
+    return { pixelRatio: this.pixelRatio, levels: this.levels, enabled: this.enabled, changes: this.changes, blockedFrom: now < this.blockUntil ? this.blockLevel : null, holdDrops: now < this.noDropUntil, ...this.last };
+  }
+}
+
 async function loadFonts() {
   try {
     await Promise.race([
@@ -141,12 +246,20 @@ async function init() {
   await loadFonts(); // sign textures are drawn on canvas, so fonts must be ready first
 
   // The canvas is transparent so the Ramleela screen (a CSS3D YouTube embed behind it) can show through.
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+  // No antialias: everything goes through the composer's (non-multisampled) render target, so canvas
+  // MSAA only cost memory and bandwidth. Sharpness comes from the governor's pixel ratio instead.
+  const renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true, powerPreference: 'high-performance' });
   settings.detect(renderer);
   if (params.get('tier')) settings.quality = params.get('tier');
   const tier = settings.tier;
   const low = tier === 'low';
-  renderer.setPixelRatio(low ? 1 : Math.min(window.devicePixelRatio, 1.75));
+  // pixel-ratio steps the governor moves between; &dpr=1.5 pins one (and switches the governor off)
+  const dpr = window.devicePixelRatio || 1;
+  const maxPr = Math.min(dpr, low ? 2 : 1.75);
+  const levels = [...new Set([...(low ? [0.8, 1, 1.25, 1.5, 1.75, 2] : [1, 1.25, 1.5, 1.75]).filter((v) => v < maxPr), maxPr])];
+  const startPr = low ? Math.min(maxPr, dpr >= 2 ? 1.25 : 1) : settings.midGpu ? Math.min(maxPr, 1.25) : maxPr;
+  const pinnedPr = Number(params.get('dpr')) || 0;
+  renderer.setPixelRatio(pinnedPr || startPr);
   renderer.setSize(innerWidth, innerHeight);
   renderer.setClearColor(0x000000, 0);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -201,7 +314,7 @@ async function init() {
 
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(low ? innerWidth / 2 : innerWidth, low ? innerHeight / 2 : innerHeight), 0.85, 0.55, 0.82);
+  const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.85, 0.55, 0.82); // sized in resize()
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
 
@@ -440,11 +553,11 @@ async function init() {
   // buffs show as chips
   player.onBuff = (id, b) => ui.setChip(`buff-${id}`, b ? `${b.icon} ${b.label} · ${Math.ceil(b.left)}s` : '');
 
-  // Phones (and any GPU with few shader uniforms) get a small pool of real lights that follows the
-  // player; otherwise the lit shader fails to compile there and every lit object disappears.
+  // Every tier lights the scene through a small pool of real lights that follows the player: phones
+  // can't compile a shader for ~60 lights at all, and on desktops it was the biggest per-pixel cost.
   const maxFrag = renderer.getContext().getParameter(renderer.getContext().MAX_FRAGMENT_UNIFORM_VECTORS);
-  const poolSize = low ? { points: 8, spots: 2 } : maxFrag < 700 ? { points: 14, spots: 3 } : null;
-  const lightPool = poolSize ? new LightPool(scene, () => player.pos, poolSize) : null;
+  const poolSize = low ? { points: 8, spots: 2 } : maxFrag < 700 ? { points: 14, spots: 3 } : { points: 16, spots: 4 };
+  const lightPool = new LightPool(scene, () => player.pos, poolSize);
 
   // shadows: everything built so far casts and receives (bulbs and glow meshes excluded)
   if (!low) {
@@ -452,16 +565,48 @@ async function init() {
     world.water.mesh.castShadow = world.water.mesh.receiveShadow = false;
   }
 
+  let viewW = 0;
+  let viewH = 0;
   function resize() {
-    camera.aspect = innerWidth / innerHeight;
+    const w = innerWidth;
+    const h = innerHeight;
+    const pr = renderer.getPixelRatio();
+    viewW = w;
+    viewH = h;
+    camera.aspect = w / h;
     camera.updateProjectionMatrix();
-    renderer.setSize(innerWidth, innerHeight);
-    composer.setSize(innerWidth, innerHeight);
-    fireworks.setViewportHeight(innerHeight * renderer.getPixelRatio());
-    smoke.setViewportHeight(innerHeight * renderer.getPixelRatio(), camera.fov);
+    renderer.setSize(w, h);
+    composer.setPixelRatio(pr);
+    composer.setSize(w, h);
+    // bloom is a blur: phones run it at half of 1x whatever the pixel ratio (composer.setSize just reset it)
+    if (low) bloom.setSize(Math.round(w / 2), Math.round(h / 2));
+    fireworks.setViewportHeight(h * pr);
+    smoke.setViewportHeight(h * pr, camera.fov);
     ramayan.resize();
   }
-  addEventListener('resize', resize);
+  const governor = new ResolutionGovernor({
+    levels,
+    start: renderer.getPixelRatio(),
+    enabled: !pinnedPr && params.get('gov') !== '0',
+    apply(pr) {
+      renderer.setPixelRatio(pr);
+      resize();
+    },
+  });
+  // phones: rotating, the URL bar sliding and the on-screen keyboard all resize; some browsers report
+  // the new size a moment late, so check again shortly after
+  let resizeTimer = 0;
+  const onResize = () => {
+    if (innerWidth !== viewW || innerHeight !== viewH) {
+      resize();
+      governor.reset();
+    }
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => (innerWidth !== viewW || innerHeight !== viewH) && (resize(), governor.reset()), 300);
+  };
+  addEventListener('resize', onResize);
+  addEventListener('orientationchange', onResize);
+  window.visualViewport?.addEventListener('resize', onResize);
   resize();
 
   // where you left off last time
@@ -487,6 +632,16 @@ async function init() {
   // show, &warp=10 pre-simulates fireworks, &noyt skips the YouTube embed, &night skips dusk,
   // &nonet stays offline, &tier=low forces the phone tier, &script=E@1.5,Digit1@2.5 replays input
   await loading('Opening the gates…');
+  // compile every shader (in parallel where the browser can) and draw one frame while the loader is
+  // still up, so the first seconds of play don't stall on ~40-70 synchronous shader compiles
+  lightPool.update();
+  try {
+    await renderer.compileAsync(scene, camera);
+  } catch {
+    // older browsers: the warm-up render below still compiles what's in view
+  }
+  composer.render();
+  await nextFrame();
   document.getElementById('loader').classList.add('done');
   setTimeout(() => document.getElementById('loader').classList.add('hidden'), 500);
   if (params.has('play')) {
@@ -499,7 +654,7 @@ async function init() {
     ravan.start();
     if (!params.has('noyt')) ramayan.start();
     if (!params.has('nonet')) net.connect();
-    window.__mela = { ...ctx, games, rides, crowd, vehicles, ramayan, poster, customizer, nameTag, boat, train, columbus, ravan, tambola, kuan, walls, dayNight, scenes, decor, voice, lightPool }; // for automated checks
+    window.__mela = { ...ctx, games, rides, crowd, vehicles, ramayan, poster, customizer, nameTag, boat, train, columbus, ravan, tambola, kuan, walls, dayNight, scenes, decor, voice, lightPool, governor, get gov() { return { ...governor.state, gpu: settings.gpu, midGpu: settings.midGpu }; } }; // for automated checks
   } else {
     customizer.open('intro');
   }
@@ -550,7 +705,20 @@ async function init() {
   let helpKey = '';
   let vehKind = null;
 
-  renderer.setAnimationLoop((time) => {
+  // behind the intro card and other full-screen panels the scene is only a blurred backdrop, so it is
+  // drawn at a few frames a second (or every 3rd frame) while the simulation keeps running
+  const introEl = document.getElementById('intro');
+  const tambolaEl = document.getElementById('tambola');
+  let frame = 0;
+  let lastDraw = 0;
+  let lastTime = 0;
+  let throttled = false;
+
+  const loop = (time) => {
+    const t0 = performance.now();
+    const rafDt = lastTime ? time - lastTime : 0;
+    lastTime = time;
+    frame++;
     timer.update(time);
     const dt = Math.min(timer.getDelta(), 0.05);
     const t = timer.getElapsed();
@@ -576,7 +744,6 @@ async function init() {
     decor.update(dt, t);
     updateFlames(t);
     dayNight.update(dt);
-    lightPool?.update();
 
     if (games.active) games.applyCamera(camera, dt);
     else if (vehicles.active) vehicles.applyCamera(camera, dt);
@@ -641,9 +808,33 @@ async function init() {
     voice.update(dt, camera);
     ui.updateBubbles(camera);
 
-    composer.render();
-    ramayan.render(camera);
+    const intro = !introEl.classList.contains('hidden');
+    const covered = intro || (ui.modalOpen && tambolaEl?.classList.contains('hidden') !== false);
+    const draw = !covered || (intro ? time - lastDraw > 140 : frame % 3 === 0);
+    if (covered !== throttled) {
+      throttled = covered;
+      governor.reset(); // frame times behind a panel say nothing about the full scene
+    }
+    if (draw) {
+      lastDraw = time;
+      lightPool.update();
+      composer.render();
+      ramayan.render(camera);
+    }
     input.endFrame();
+    if (!covered) governor.sample(rafDt, performance.now() - t0);
+  };
+  renderer.setAnimationLoop(loop);
+
+  // a hidden tab draws nothing at all (some browsers keep firing rAF for a while)
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      renderer.setAnimationLoop(null);
+    } else {
+      lastTime = 0;
+      governor.reset();
+      renderer.setAnimationLoop(loop);
+    }
   });
 }
 
