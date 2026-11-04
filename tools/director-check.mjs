@@ -4,9 +4,12 @@
 //   node tools/director-check.mjs                       # all shots, 3 frames each (vite preview of dist/)
 //   node tools/director-check.mjs --dev --full          # vite dev server; step whole shots, save first/mid/last
 //   node tools/director-check.mjs --shots gate,stall --at 0,45,149 --cfg <b64url>
+//   node tools/director-check.mjs --shots stall --full --theme books   # default cfg with another stall theme
+//
+// Test posters for the Wall of Fame are served from bench/shots-posts/ at /__posts/ (never shipped).
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 
 const argv = process.argv.slice(2);
 const flag = (n) => argv.includes(`--${n}`);
@@ -19,7 +22,23 @@ const full = flag('full');
 const at = opt('at', null)?.split(',').map(Number);
 const size = opt('size', '1080x1920');
 const [W, H] = size.split('x').map(Number);
-const cfg = opt('cfg', Buffer.from(JSON.stringify({ slug: 'test', name: 'Dinesh Singh', first: 'Dinesh', photoUrl: '/test-photo.png', stallNo: 21 })).toString('base64url'));
+const theme = opt('theme', 'tech');
+const cfg = opt(
+  'cfg',
+  Buffer.from(
+    JSON.stringify({
+      slug: 'test',
+      name: 'Dinesh Singh',
+      first: 'Dinesh',
+      photoUrl: '/test-photo.png',
+      stallNo: Number(opt('stall', 21)),
+      stallTitle: opt('title', 'Dinesh ki Startup Dukaan'),
+      stallTheme: theme,
+      knownFor: 'Founder, Topmate',
+      wallPosts: ['/__posts/p1.jpg', '/__posts/p2.jpg', '/__posts/p4.jpg', '/__posts/p3.jpg'].slice(0, Number(opt('posts', 4))),
+    })
+  ).toString('base64url')
+);
 mkdirSync(out, { recursive: true });
 
 const server = spawn('npx', flag('dev') ? ['vite', '--port', String(port), '--strictPort'] : ['vite', 'preview', '--port', String(port), '--strictPort'], { stdio: ['ignore', 'pipe', 'inherit'] });
@@ -34,6 +53,10 @@ for (const shot of shots) {
   const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
+  await page.route('**/__posts/*', (route) => {
+    const f = `bench/shots-posts/${route.request().url().split('/').pop()}`;
+    return existsSync(f) ? route.fulfill({ body: readFileSync(f), contentType: 'image/jpeg' }) : route.fulfill({ status: 404, body: '' });
+  });
   const t0 = Date.now();
   await page.goto(`http://localhost:${port}/?director=${shot}&cfg=${cfg}&size=${size}`);
   await page.waitForFunction(() => window.__director, null, { timeout: 180000 });

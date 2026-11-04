@@ -1,5 +1,9 @@
 import * as THREE from 'three';
-import { beam } from './utils.js';
+import { beam, hdr } from './utils.js';
+import { restockStall } from './stalls.js';
+import { STALL_THEMES, themedGoods } from './stallThemes.js';
+import { Garlands } from './garlands.js';
+import { mergeStatic } from './merge.js';
 
 /*
   Creator personalisation: a creator's own mela. Their name and photo are painted on "their"
@@ -10,7 +14,13 @@ import { beam } from './utils.js';
   window.__MELA_CREATOR__ = '<slug>', or <meta name="mela-creator" content="<slug>"> (the
   launch service's /<slug> page), fetched from `${VITE_CREATOR_API}/api/creators/<slug>.json`.
 
-  CreatorConfig = { slug, name, first, photoUrl, stallNo }
+  CreatorConfig = {
+    slug, name, first, photoUrl, stallNo,
+    stallTitle?: string,   // the stall sign, e.g. "Aishwarya ki AI Dukaan" (default: "{name} ka Stall")
+    stallTheme?: 'books' | 'tech' | 'fitness' | 'food' | 'finance' | 'fashion' | 'art' | 'music' | 'travel' | 'career' | 'general',
+    wallPosts?: string[],  // up to 4 image URLs (4:5) for the Wall of Fame next to the stall
+    knownFor?: string,     // a short phrase, e.g. "Data science"; painted small on the stall sign
+  }
 */
 
 const SLUG_RE = /^[a-z0-9._-]{1,40}$/;
@@ -38,7 +48,14 @@ function normalise(raw) {
   const first = String(raw.first ?? '').trim().slice(0, 24) || name.split(/\s+/)[0];
   const stallNo = Math.max(1, Math.floor(Number(raw.stallNo) || 1));
   const photoUrl = typeof raw.photoUrl === 'string' ? raw.photoUrl : '';
-  return { slug, name, first, photoUrl, stallNo };
+  const text = (v, n) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '');
+  const stallTitle = text(raw.stallTitle, 48);
+  const stallTheme = STALL_THEMES.includes(raw.stallTheme) ? raw.stallTheme : 'general';
+  const knownFor = text(raw.knownFor, 40);
+  const wallPosts = (Array.isArray(raw.wallPosts) ? raw.wallPosts : [])
+    .filter((u) => typeof u === 'string' && /^(https?:\/\/|\/(?!\/)|data:image\/)/i.test(u))
+    .slice(0, 4);
+  return { slug, name, first, photoUrl, stallNo, stallTitle, stallTheme, knownFor, wallPosts };
 }
 
 function slugFromPage(params) {
@@ -267,6 +284,37 @@ function paintText(c, text, x, y, { fill = '#ffe7a3', stroke = '#2a0c04', shadow
   c.fillText(text, x, y);
 }
 
+/**
+ * The creator's own stall name ("Aishwarya ki AI Dukaan"): one big line when it fits, else two
+ * lines broken at the word nearest the middle, the second in saffron like a sign-painter's "ka Stall".
+ */
+function paintStallTitle(c, cfg, h, tcx, maxW) {
+  const title = cfg.stallTitle;
+  const one = fitFont(c, title, YATRA, '', Math.round(h * 0.2), maxW, 20);
+  const words = title.split(' ');
+  if (one >= Math.round(h * 0.15) || words.length < 2) {
+    paintText(c, title, tcx, h * 0.56, { fill: '#ffe7a3', lw: 9, off: 5 });
+    return;
+  }
+  // break so the first line is the longer (the name), e.g. "Aishwarya ki" / "AI Dukaan"
+  let best = 1;
+  let bestD = Infinity;
+  for (let i = 1; i < words.length; i++) {
+    const a = words.slice(0, i).join(' ').length;
+    const b = words.slice(i).join(' ').length;
+    const d = Math.abs(a - b) + (a < b ? 0.5 : 0);
+    if (d < bestD) [best, bestD] = [i, d];
+  }
+  const l1 = words.slice(0, best).join(' ');
+  const l2 = words.slice(best).join(' ');
+  const s1 = fitFont(c, l1, YATRA, '', Math.round(h * 0.2), maxW, 20);
+  const s2 = fitFont(c, l2, YATRA, '', Math.round(h * 0.2), maxW, 20);
+  const size = Math.min(s1, s2);
+  c.font = `${size}px ${YATRA}`;
+  paintText(c, l1, tcx, h * 0.43, { fill: '#ffe7a3', lw: 9, off: 5 });
+  paintText(c, l2, tcx, h * 0.43 + size * 1.02, { fill: '#ffb000', lw: 9, off: 5 });
+}
+
 /** The stall board: carved wood frame, maroon painted panel, marigolds, portrait, name. */
 function paintStallBoard(c, w, h, cfg, img) {
   const rnd = prng(hash(cfg.slug) ^ 0x51a11);
@@ -334,14 +382,18 @@ function paintStallBoard(c, w, h, cfg, img) {
   const maxW = tx1 - tx0;
   c.textAlign = 'center';
   c.textBaseline = 'alphabetic';
-  fitFont(c, cfg.name, YATRA, '', Math.round(h * 0.25), maxW, 30);
-  paintText(c, cfg.name, tcx, h * 0.48, { fill: '#ffe7a3', lw: 9, off: 5 });
-  const sub = 'ka Stall';
-  fitFont(c, sub, YATRA, '', Math.round(h * 0.15), maxW, 20);
-  paintText(c, sub, tcx, h * 0.665, { fill: '#ffb000', lw: 7, off: 4 });
-  fitFont(c, `Stall No. ${cfg.stallNo}  ·  Topmate Diwali Mela`, POP, '600 ', Math.round(h * 0.068), maxW, 14);
+  if (cfg.stallTitle) paintStallTitle(c, cfg, h, tcx, maxW);
+  else {
+    fitFont(c, cfg.name, YATRA, '', Math.round(h * 0.25), maxW, 30);
+    paintText(c, cfg.name, tcx, h * 0.48, { fill: '#ffe7a3', lw: 9, off: 5 });
+    const sub = 'ka Stall';
+    fitFont(c, sub, YATRA, '', Math.round(h * 0.15), maxW, 20);
+    paintText(c, sub, tcx, h * 0.665, { fill: '#ffb000', lw: 7, off: 4 });
+  }
+  const small = cfg.knownFor ? `${cfg.knownFor}  ·  Stall No. ${cfg.stallNo}` : `Stall No. ${cfg.stallNo}  ·  Topmate Diwali Mela`;
+  fitFont(c, small, POP, '600 ', Math.round(h * 0.068), maxW, 14);
   c.fillStyle = 'rgba(255,231,163,0.85)';
-  c.fillText(`Stall No. ${cfg.stallNo}  ·  Topmate Diwali Mela`, tcx, h * 0.8);
+  c.fillText(small, tcx, h * 0.8);
 
   marigoldLine(c, framePoints(m - 6, m - 6, w - m + 6, h - m + 6, 26), 11, rnd);
   grain(c, w, h, rnd);
@@ -418,6 +470,360 @@ function paintBanner(c, w, h, cfg, img) {
   grain(c, w, h, rnd, 0.05, 7000);
 }
 
+// ---------- the Wall of Fame ----------
+
+/*
+  A carved wooden hoarding beside the creator's stall: an arched board with their reels/posts in
+  wood-and-gold frames (2 x 2, 4:5), a hand-painted header "{First} ke Hits", marigold strings
+  and fairy lights. All the painting is one canvas on one plane; frames, posts and the board are
+  merged; marigolds and bulbs are one instanced mesh each.
+*/
+const WALL = {
+  PW: 1.0, // poster (4:5)
+  PH: 1.25,
+  GAP: 0.16,
+  MX: 0.17, // side margin
+  Y0: 0.8, // board bottom
+  PX: 400, // canvas px per metre
+};
+WALL.BW = 2 * WALL.PW + WALL.GAP + 2 * WALL.MX; // 2.5
+WALL.ROW1 = WALL.Y0 + 0.17; // bottom row's lower edge
+WALL.ROW2 = WALL.ROW1 + WALL.PH + WALL.GAP;
+WALL.HEAD0 = WALL.ROW2 + WALL.PH + 0.07; // header band
+WALL.HEAD1 = WALL.HEAD0 + 0.62;
+WALL.TOP = WALL.HEAD1 + 0.3; // crest of the arch
+WALL.BH = WALL.TOP - WALL.Y0;
+
+/** Poster rects in wall-local metres: [x0, y0] lower-left, top row first (reading order). */
+function posterRects() {
+  const { PW, PH, GAP, ROW1, ROW2 } = WALL;
+  const xs = [-GAP / 2 - PW, GAP / 2];
+  return [ROW2, ROW1].flatMap((y) => xs.map((x) => [x, y]));
+}
+
+/** The board outline in canvas px: a rectangle with a cusped (Mughal-style) arch on top. */
+function boardPath(c, w, h, inset = 0) {
+  const { PX, HEAD1, TOP, Y0 } = WALL;
+  const shoulder = h - (HEAD1 - Y0) * PX; // canvas y where the arch starts
+  const crest = (TOP - Y0) * PX;
+  const i = inset;
+  c.beginPath();
+  c.moveTo(i, h - i);
+  c.lineTo(i, shoulder + i * 0.5);
+  c.bezierCurveTo(w * 0.18, shoulder + i * 0.5, w * 0.3, h - crest * 0.985 + i, w / 2, h - crest + i);
+  c.bezierCurveTo(w * 0.7, h - crest * 0.985 + i, w * 0.82, shoulder + i * 0.5, w - i, shoulder + i * 0.5);
+  c.lineTo(w - i, h - i);
+  c.closePath();
+}
+
+/** Draws an image cover-cropped into a rect, with the warm wash that sits it into the painting. */
+function drawCover(c, img, x, y, w, h) {
+  const r = w / h;
+  const ir = img.naturalWidth / img.naturalHeight;
+  let sw = img.naturalWidth;
+  let sh = img.naturalHeight;
+  if (ir > r) sw = sh * r;
+  else sh = sw / r;
+  const sx = (img.naturalWidth - sw) / 2;
+  const sy = (img.naturalHeight - sh) / 2;
+  c.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+  c.save();
+  c.globalCompositeOperation = 'soft-light';
+  c.fillStyle = 'rgba(255,175,90,0.22)';
+  c.fillRect(x, y, w, h);
+  c.restore();
+}
+
+const PLACEHOLDER = [
+  ['#5c0a14', '#c1121f'],
+  ['#13306b', '#3a86ff'],
+  ['#0d4f2b', '#1f9d55'],
+  ['#3c1361', '#7b2cbf'],
+];
+
+/** A painted placeholder for a poster that is missing or failed to load: a diya on a rangoli. */
+function paintPlaceholder(c, x, y, w, h, i, rnd) {
+  const [a, b] = PLACEHOLDER[i % PLACEHOLDER.length];
+  const g = c.createRadialGradient(x + w / 2, y + h * 0.55, w * 0.05, x + w / 2, y + h / 2, w * 0.8);
+  g.addColorStop(0, b);
+  g.addColorStop(1, a);
+  c.fillStyle = g;
+  c.fillRect(x, y, w, h);
+  const cx = x + w / 2;
+  const cy = y + h * 0.56;
+  // rangoli petals in rings
+  const rings = [[w * 0.36, 16, '#ffd166'], [w * 0.27, 12, '#ff8fab'], [w * 0.18, 8, '#ffffff']];
+  for (const [r, n, col] of rings) {
+    c.fillStyle = col;
+    c.globalAlpha = 0.75;
+    for (let k = 0; k < n; k++) {
+      const t = (k / n) * Math.PI * 2;
+      c.beginPath();
+      c.ellipse(cx + Math.cos(t) * r, cy + Math.sin(t) * r * 0.9, w * 0.035, w * 0.016, t, 0, Math.PI * 2);
+      c.fill();
+    }
+  }
+  c.globalAlpha = 1;
+  // the diya
+  c.fillStyle = '#b5562b';
+  c.beginPath();
+  c.ellipse(cx, cy + w * 0.03, w * 0.13, w * 0.06, 0, 0, Math.PI);
+  c.fill();
+  c.fillStyle = '#7a3412';
+  c.fillRect(cx - w * 0.13, cy + w * 0.02, w * 0.26, w * 0.02);
+  const f = c.createRadialGradient(cx, cy - w * 0.06, 2, cx, cy - w * 0.04, w * 0.16);
+  f.addColorStop(0, 'rgba(255,250,210,1)');
+  f.addColorStop(0.25, 'rgba(255,190,60,0.9)');
+  f.addColorStop(1, 'rgba(255,120,0,0)');
+  c.fillStyle = f;
+  c.beginPath();
+  c.arc(cx, cy - w * 0.05, w * 0.16, 0, Math.PI * 2);
+  c.fill();
+  c.fillStyle = '#fff3c4';
+  c.beginPath();
+  c.ellipse(cx, cy - w * 0.045, w * 0.022, w * 0.05, 0, 0, Math.PI * 2);
+  c.fill();
+  grain(c, w, h, rnd, 0.04, 600);
+}
+
+function paintWall(c, w, h, cfg, imgs) {
+  const { PX, Y0, PW, PH, HEAD0, HEAD1 } = WALL;
+  const rnd = prng(hash(cfg.slug) ^ 0xfa4e);
+  c.clearRect(0, 0, w, h);
+  const Y = (m) => h - (m - Y0) * PX; // wall metres -> canvas y
+  const X = (m) => w / 2 + m * PX;
+
+  // carved wood border, then the painted panel
+  boardPath(c, w, h);
+  const wood = c.createLinearGradient(0, 0, w, 0);
+  wood.addColorStop(0, '#4a2810');
+  wood.addColorStop(0.5, '#7a4a22');
+  wood.addColorStop(1, '#4a2810');
+  c.fillStyle = wood;
+  c.fill();
+  boardPath(c, w, h, 26);
+  const panel = c.createLinearGradient(0, 0, 0, h);
+  panel.addColorStop(0, '#8e1422');
+  panel.addColorStop(0.5, '#6a0e1a');
+  panel.addColorStop(1, '#4a0912');
+  c.fillStyle = panel;
+  c.fill();
+  // a damask of tiny gold buti over the panel
+  c.save();
+  boardPath(c, w, h, 26);
+  c.clip();
+  c.fillStyle = 'rgba(255,209,102,0.13)';
+  for (let yy = 30; yy < h; yy += 46)
+    for (let xx = (yy / 46) % 2 ? 23 : 0; xx < w; xx += 46) {
+      c.beginPath();
+      c.ellipse(xx, yy, 5, 9, 0.6, 0, Math.PI * 2);
+      c.fill();
+    }
+  c.restore();
+  c.strokeStyle = '#ffd166';
+  c.lineWidth = 5;
+  boardPath(c, w, h, 40);
+  c.stroke();
+  c.strokeStyle = '#2d8a4e';
+  c.lineWidth = 3;
+  boardPath(c, w, h, 50);
+  c.stroke();
+
+  // header: "{First} ke Hits" in sign-painter's lettering
+  const hasPosts = imgs.some(Boolean);
+  const title = hasPosts ? `${cfg.first} ke Hits` : 'Shubh Deepavali';
+  const hy = (Y(HEAD0) + Y(HEAD1)) / 2;
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+  fitFont(c, title, YATRA, '', 150, w - 200, 40);
+  paintText(c, title, w / 2, hy + 6, { fill: '#ffe7a3', lw: 12, off: 6 });
+  // little diyas flanking the header, and a star at the crest
+  for (const s of [-1, 1]) {
+    const x = w / 2 + s * (w / 2 - 92);
+    c.fillStyle = '#ffb000';
+    c.beginPath();
+    c.ellipse(x, hy + 22, 26, 11, 0, 0, Math.PI);
+    c.fill();
+    c.fillStyle = '#fff3c4';
+    c.beginPath();
+    c.ellipse(x, hy + 4, 7, 17, 0, 0, Math.PI * 2);
+    c.fill();
+  }
+  c.font = `64px ${YATRA}`;
+  paintText(c, '✦', w / 2, Y(WALL.TOP) + 70, { fill: '#ffd166', lw: 6, off: 3 });
+
+  // posters
+  posterRects().forEach(([x0, y0], i) => {
+    const x = X(x0);
+    const y = Y(y0 + PH);
+    const pw = PW * PX;
+    const ph = PH * PX;
+    // a soft shadow of the frame on the board
+    c.fillStyle = 'rgba(20,4,0,0.55)';
+    c.fillRect(x - 18, y - 10, pw + 44, ph + 44);
+    const img = imgs[i];
+    if (img) drawCover(c, img, x, y, pw, ph);
+    else paintPlaceholder(c, x, y, pw, ph, i, rnd);
+    // inner shadow under the frame lip, and a faint glass sheen
+    const sh = c.createLinearGradient(x, y, x, y + 40);
+    sh.addColorStop(0, 'rgba(0,0,0,0.45)');
+    sh.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = sh;
+    c.fillRect(x, y, pw, 40);
+    const gl = c.createLinearGradient(x, y, x + pw, y + ph);
+    gl.addColorStop(0, 'rgba(255,255,255,0)');
+    gl.addColorStop(0.42, 'rgba(255,255,255,0)');
+    gl.addColorStop(0.5, 'rgba(255,255,255,0.07)');
+    gl.addColorStop(0.58, 'rgba(255,255,255,0)');
+    c.fillStyle = gl;
+    c.fillRect(x, y, pw, ph);
+  });
+  grain(c, w, h, rnd, 0.035, 6000);
+}
+
+/**
+ * Builds the Wall of Fame in the gap beside the stall (towards the entrance).
+ * Returns { group, center (world, the middle of the posters), paint(imgs), update(t) }.
+ */
+function buildWall(scene, stallAnchor, cfg, colliders) {
+  const { BW, BH, Y0, TOP, PW, PH } = WALL;
+  const sg = stallAnchor.group;
+  sg.updateMatrixWorld(true);
+  const out = new THREE.Vector3(0, 0, 1).transformDirection(sg.matrixWorld).setY(0).normalize();
+  const grp = new THREE.Group();
+  grp.name = 'creatorWall';
+  // in the gap towards the gate, set back a little from the counters; kept just clear of the
+  // stall's roof so the aisle's light pole (1 m past the gap's middle) never stands in front of it
+  grp.position.copy(sg.position).addScaledVector(out, 0.7);
+  grp.position.z += 4.4;
+  grp.position.y = 0;
+  grp.rotation.y = Math.atan2(out.x, out.z);
+  scene.add(grp);
+
+  const V = (x, y, z) => new THREE.Vector3(x, y, z);
+  const woodMat = new THREE.MeshStandardMaterial({ color: 0x6b3d1c, roughness: 0.75 });
+  const darkMat = new THREE.MeshStandardMaterial({ color: 0x3e220e, roughness: 0.8 });
+  const goldMat = new THREE.MeshStandardMaterial({ color: 0xe0b04a, roughness: 0.3, metalness: 0.8 });
+  const statics = new THREE.Group();
+  grp.add(statics);
+  const box = (w, h, d, mat, x, y, z) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    m.position.set(x, y, z);
+    statics.add(m);
+    return m;
+  };
+
+  // the arched backing board, extruded from the same outline the canvas paints
+  const sh = new THREE.Shape();
+  const hw = BW / 2;
+  const shoulder = WALL.HEAD1;
+  sh.moveTo(-hw, Y0);
+  sh.lineTo(hw, Y0);
+  sh.lineTo(hw, shoulder);
+  const c2 = TOP - 0.015 * (TOP - Y0);
+  sh.bezierCurveTo(BW * 0.32, shoulder, BW * 0.2, c2, 0, TOP);
+  sh.bezierCurveTo(-BW * 0.2, c2, -BW * 0.32, shoulder, -hw, shoulder);
+  sh.closePath();
+  const back = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: 0.08, bevelEnabled: false, curveSegments: 10 }), darkMat);
+  back.position.z = -0.1;
+  statics.add(back);
+
+  // two carved posts with brass finials, and plinths
+  for (const s of [-1, 1]) {
+    const x = s * (hw + 0.09);
+    box(0.16, TOP + 0.15, 0.16, woodMat, x, (TOP + 0.15) / 2, -0.04);
+    box(0.26, 0.3, 0.26, darkMat, x, 0.15, -0.04);
+    for (const y of [1.0, 2.4, 3.8]) box(0.2, 0.06, 0.2, goldMat, x, y, -0.04);
+    const fin = new THREE.Mesh(new THREE.SphereGeometry(0.09, 12, 10), goldMat);
+    fin.position.set(x, TOP + 0.22, -0.04);
+    statics.add(fin);
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.18, 10), goldMat);
+    tip.position.set(x, TOP + 0.38, -0.04);
+    statics.add(tip);
+  }
+  // a little ledge with diyas at the foot of the board
+  box(BW + 0.1, 0.05, 0.22, woodMat, 0, Y0 - 0.02, 0.04);
+
+  // carved frames: a wood moulding with a gold fillet inside, standing proud of the board
+  const FW = 0.07;
+  for (const [x0, y0] of posterRects()) {
+    const cx = x0 + PW / 2;
+    const cy = y0 + PH / 2;
+    box(PW + 2 * FW, FW, 0.06, woodMat, cx, y0 + PH + FW / 2, 0.03);
+    box(PW + 2 * FW, FW, 0.06, woodMat, cx, y0 - FW / 2, 0.03);
+    box(FW, PH, 0.06, woodMat, x0 - FW / 2, cy, 0.03);
+    box(FW, PH, 0.06, woodMat, x0 + PW + FW / 2, cy, 0.03);
+    box(PW + 0.02, 0.018, 0.02, goldMat, cx, y0 + PH - 0.004, 0.012);
+    box(PW + 0.02, 0.018, 0.02, goldMat, cx, y0 + 0.004, 0.012);
+    box(0.018, PH, 0.02, goldMat, x0 + 0.004, cy, 0.012);
+    box(0.018, PH, 0.02, goldMat, x0 + PW - 0.004, cy, 0.012);
+  }
+  mergeStatic(statics);
+
+  // the painting
+  const tex = makeCanvasTex(Math.round(BW * WALL.PX), Math.round(BH * WALL.PX));
+  const plane = new THREE.Mesh(new THREE.PlaneGeometry(BW, BH), new THREE.MeshBasicMaterial({ map: tex.tex, transparent: true, alphaTest: 0.05 }));
+  plane.position.set(0, Y0 + BH / 2, -0.015);
+  plane.name = 'creatorWallPainting';
+  grp.add(plane);
+
+  // marigolds: a swag over the header and drops down both posts
+  const gar = new Garlands(grp);
+  gar.addSwag(V(-hw - 0.09, TOP + 0.05, 0.08), V(hw + 0.09, TOP + 0.05, 0.08), 0.42, 0.075);
+  for (const s of [-1, 1]) gar.addDrop(V(s * (hw + 0.09), TOP - 0.05, 0.1), TOP - 1.0, 0.075);
+  for (const s of [-1, 1]) gar.addSwag(V(s * (hw + 0.09), WALL.HEAD0 + 0.02, 0.09), V(0, WALL.HEAD0 - 0.01, 0.09), 0.05, 0.075);
+  gar.build();
+
+  // fairy lights along the arch and down the posts
+  const bulbs = [];
+  const arch = new THREE.CubicBezierCurve3(V(hw, shoulder, 0.02), V(BW * 0.32, shoulder, 0.02), V(BW * 0.2, TOP, 0.02), V(0, TOP, 0.02));
+  for (let i = 0; i <= 10; i++) {
+    const p = arch.getPoint(i / 10);
+    bulbs.push(p.clone().add(V(0, 0.06, 0.02)), p.clone().setX(-p.x).add(V(0, 0.06, 0.02)));
+  }
+  for (const s of [-1, 1]) for (let y = 0.5; y < shoulder - 0.1; y += 0.28) bulbs.push(V(s * (hw + 0.17), y, 0.06));
+  const bulbMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(0.035, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffffff }), bulbs.length);
+  const d = new THREE.Object3D();
+  bulbs.forEach((p, i) => {
+    d.position.copy(p);
+    d.updateMatrix();
+    bulbMesh.setMatrixAt(i, d.matrix);
+  });
+  const WARM = [0xffd08a, 0xffb347, 0xfff1c4, 0xff8fab];
+  const base = bulbs.map((_, i) => hdr(WARM[i % WARM.length], 2.2));
+  const col = new THREE.Color();
+  const twinkle = (t) => {
+    base.forEach((c, i) => {
+      const k = 0.55 + 0.45 * Math.max(0, Math.sin(t * 2.2 + i * 1.7));
+      bulbMesh.setColorAt(i, col.copy(c).multiplyScalar(k));
+    });
+    bulbMesh.instanceColor.needsUpdate = true;
+  };
+  twinkle(0);
+  bulbMesh.computeBoundingSphere();
+  grp.add(bulbMesh);
+
+  grp.traverse((o) => o.layers.set(1));
+  grp.updateMatrixWorld(true);
+
+  if (colliders) {
+    const w = grp.position;
+    const ex = Math.abs(out.x) > 0.5 ? 0.3 : hw + 0.2;
+    const ez = Math.abs(out.x) > 0.5 ? hw + 0.2 : 0.3;
+    colliders.push({ type: 'box', minX: w.x - ex, maxX: w.x + ex, minZ: w.z - ez, maxZ: w.z + ez });
+  }
+
+  return {
+    group: grp,
+    center: grp.localToWorld(V(0, (WALL.ROW1 + WALL.HEAD0) / 2, 0)),
+    paint: (imgs) => {
+      paintWall(tex.ctx, tex.canvas.width, tex.canvas.height, cfg, imgs);
+      tex.tex.needsUpdate = true;
+    },
+    update: (t) => twinkle(t),
+  };
+}
+
 function makeCanvasTex(w, h) {
   const canvas = document.createElement('canvas');
   canvas.width = w;
@@ -432,11 +838,19 @@ function makeCanvasTex(w, h) {
  * Dresses the mela for one creator.
  *  stallAnchor: an entry of world.stalls ({ group, ... }); the board goes over its counter.
  *  ravanAnchor: { pos: Vector3, facing: radians } for the crowd banner (faces along +z rotated by facing).
- * Returns { stallBoard, banner, ready (photo painted), update(dt, t) }.
+ *  colliders / diyas: the world's, so the Wall of Fame blocks walking and a re-stocked diya stall's diyas go.
+ * Returns { stallBoard, banner, wall, ready (photo and posts painted), update(dt, t) }.
  */
-export function applyCreator(scene, cfg, { stallAnchor, ravanAnchor } = {}) {
-  const out = { cfg, stallBoard: null, banner: null, ready: Promise.resolve(), update() {} };
+export function applyCreator(scene, cfg, { stallAnchor, ravanAnchor, colliders, diyas } = {}) {
+  const out = { cfg, stallBoard: null, banner: null, wall: null, ready: Promise.resolve(), update() {} };
   if (!cfg) return out;
+
+  // ---- the stall stocked for their niche ----
+  const goods = stallAnchor?.group && themedGoods(cfg.stallTheme, hash(cfg.slug));
+  if (goods) {
+    restockStall(stallAnchor, goods);
+    diyas?.hideAt(stallAnchor.diyaSpots);
+  }
 
   // ---- stall board ----
   const board = makeCanvasTex(1280, 480);
@@ -444,7 +858,7 @@ export function applyCreator(scene, cfg, { stallAnchor, ravanAnchor } = {}) {
   if (stallAnchor?.group) {
     const g = stallAnchor.group;
     // the stall's own name sign (kept out of the static merge) gives way to the creator's board
-    const sign = g.children.find((o) => o.isMesh && o.geometry?.parameters?.width === 3.6 && o.geometry?.parameters?.height === 1.0);
+    const sign = stallAnchor.sign ?? g.children.find((o) => o.isMesh && o.geometry?.parameters?.width === 3.6 && o.geometry?.parameters?.height === 1.0);
     if (sign) sign.visible = false;
     stallBoard = new THREE.Mesh(new THREE.PlaneGeometry(4.8, 1.8), new THREE.MeshBasicMaterial({ map: board.tex, color: new THREE.Color(1.02, 1.02, 1.02), transparent: true, alphaTest: 0.02, side: THREE.DoubleSide }));
     stallBoard.position.set(0, 3.55, 2.15); // stall local: above the counter, in front of the valance
@@ -498,6 +912,18 @@ export function applyCreator(scene, cfg, { stallAnchor, ravanAnchor } = {}) {
     out.bannerGroup = grp;
   }
 
+  // ---- Wall of Fame beside the stall ----
+  let wall = null;
+  let wallReady = Promise.resolve();
+  if (stallAnchor?.group) {
+    wall = buildWall(scene, stallAnchor, cfg, colliders);
+    wall.paint([]);
+    wallReady = Promise.all(cfg.wallPosts.map(loadPhoto)).then((imgs) => {
+      out.postsLoaded = imgs.filter(Boolean).length;
+      wall.paint(imgs);
+    });
+  }
+
   const paint = (img) => {
     paintStallBoard(board.ctx, board.canvas.width, board.canvas.height, cfg, img);
     board.tex.needsUpdate = true;
@@ -505,12 +931,16 @@ export function applyCreator(scene, cfg, { stallAnchor, ravanAnchor } = {}) {
     ban.tex.needsUpdate = true;
   };
   paint(null); // initial-letter avatar straight away; the photo replaces it when it arrives
-  out.ready = loadPhoto(cfg.photoUrl).then((img) => {
-    out.photoLoaded = !!img;
-    if (img) paint(img);
-  });
+  out.ready = Promise.all([
+    loadPhoto(cfg.photoUrl).then((img) => {
+      out.photoLoaded = !!img;
+      if (img) paint(img);
+    }),
+    wallReady,
+  ]);
 
   out.update = (dt, t) => {
+    wall?.update(t);
     if (!banGeo) return;
     // the cloth breathes in the evening breeze, pinned along the top edge
     const pos = banGeo.attributes.position;
@@ -526,6 +956,7 @@ export function applyCreator(scene, cfg, { stallAnchor, ravanAnchor } = {}) {
 
   out.stallBoard = stallBoard;
   out.banner = banner;
+  out.wall = wall;
   return out;
 }
 

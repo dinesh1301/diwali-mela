@@ -69,44 +69,59 @@ export const SHOTS = {
   },
 
   // ---------- 3 · the creator's own stall (personal) ----------
+  // Opens square-on to their Wall of Fame (posters readable for ~2.2 s), then drifts back and
+  // pans down the aisle to finish on the stall board with the themed goods on the counter.
   stall: {
     duration: 6,
     warm: 1,
-    setup({ m, state }) {
+    setup({ m, state, H }) {
       const s = creatorStall(m);
       const g = s.group;
       g.updateMatrixWorld(true);
-      state.board = g.localToWorld(new THREE.Vector3(0, 3.55, 2.15));
-      state.out = g.localToWorld(new THREE.Vector3(0, 0, 1)).sub(g.localToWorld(new THREE.Vector3())).setY(0).normalize(); // towards the aisle
-      state.along = new THREE.Vector3(0, 0, 1); // towards the entrance
+      const out = g.localToWorld(new THREE.Vector3(0, 0, 1)).sub(g.localToWorld(new THREE.Vector3())).setY(0).normalize(); // towards the aisle
+      const along = new THREE.Vector3(0, 0, 1); // towards the entrance
+      const base = g.position.clone().setY(0);
+      // (along, out, y) relative to the stall's centre on the ground
+      const P = (a, o, y) => base.clone().addScaledVector(along, a).addScaledVector(out, o).setY(y);
+      const wall = m.creator?.wall?.center ?? P(4.4, 0.7, 2.35);
+      const wa = wall.clone().sub(base).dot(along);
+      const wo = wall.clone().sub(base).dot(out);
+      const wy = wall.y + 0.3;
+      state.camPts = [P(wa + 0.2, wo + 6.3, 2.3), P(wa - 0.6, wo + 6.0, 2.4), P(2.4, 9.6, 2.5), P(0.6, 12.55, 2.6)];
+      state.lookPts = [P(wa + 0.15, wo, wy), P(wa - 0.15, wo, wy), P(2.0, 1.9, 2.55), P(0, 2.15, 2.45)];
       state.stand = s.stand.clone();
+      state.out = out;
       state.keeper = s.keeper;
-      // the visitor strolls up to the counter
-      state.from = s.stand.clone().addScaledVector(state.out, 3.2).addScaledVector(state.along, 5.5);
+      // the visitor walks in from behind the camera on the stall side of the wall, never across the posters
+      state.from = s.stand.clone().addScaledVector(out, 6.2).addScaledVector(along, 2.4);
       m.player.teleport(state.from.x, state.from.z);
+      void H;
     },
     update({ sec, m, state }) {
-      const k = Math.min(1, (sec + 1) / 5.2);
+      const k = Math.min(1, (sec + 1) / 5.6);
       const to = state.stand.clone().addScaledVector(state.out, 0.6);
       if (k < 1) walk(m, [state.from.x, state.from.z], [to.x, to.z], k, 1.3);
       else {
         m.player.animSpeed = 0;
         m.player.targetHeading = Math.atan2(-state.out.x, -state.out.z);
       }
-      if (Math.abs(sec - 3.2) < 1e-3) {
+      if (Math.abs(sec - 3.6) < 1e-3) {
         state.keeper.setAction('namaste');
       }
     },
-    camera({ u, cam, H, state }) {
-      const k = H.easeInOut(u);
-      const b = state.board;
-      // a slow arc from down the aisle to square-on, ending with the whole board in frame
-      const dist = H.lerp(13.5, 10.4, k);
-      const side = H.lerp(5.2, 0.6, k);
-      cam.pos.copy(b).addScaledVector(state.out, dist).addScaledVector(state.along, side);
-      cam.pos.y = H.lerp(1.9, 2.6, k);
-      cam.look.copy(b).addScaledVector(state.along, H.lerp(1.0, 0, k));
-      cam.look.y = b.y - H.lerp(0.9, 1.1, k);
+    camera({ sec, cam, H, state }) {
+      // one Catmull-Rom move: the first segment (the wall) at an even drift, then a Hermite ease
+      // whose opening speed matches that drift, so the pan never hitches
+      const T1 = 2.2;
+      let u;
+      if (sec <= T1) u = sec / T1 / 3;
+      else {
+        const x = Math.min(1, (sec - T1) / (6 - T1));
+        const m0 = (1 / (3 * T1)) * (6 - T1) * 1.5; // matching slope, in the eased segment's units
+        u = 1 / 3 + (2 / 3) * (3 * x * x - 2 * x * x * x + m0 * (x * x * x - 2 * x * x + x));
+      }
+      H.path(state.camPts, u, cam.pos);
+      H.path(state.lookPts, u, cam.look);
       cam.fov = 52;
     },
   },
