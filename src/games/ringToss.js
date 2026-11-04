@@ -1,3 +1,4 @@
+import { tk } from '../touch.js';
 import * as THREE from 'three';
 import { ringMesh } from '../items.js';
 import { hdr, clamp, rand } from '../utils.js';
@@ -20,6 +21,8 @@ export class RingToss {
     this.title = '⭕ Ring Toss';
     this.help = `Point at a bottle and click or tap to toss. ${RINGS} rings, ring ${TO_WIN} bottles to win!`;
     this.helpLines = [['Click', 'Toss a ring'], ['Esc', 'Leave']];
+    this.tapHelp = `Tap a bottle to toss a ring at it. ${RINGS} rings, ring ${TO_WIN} bottles to win!`;
+    this.tapLines = [['👆', 'Tap a bottle to toss'], ['✕', 'Leave']];
     const g = booth.group;
 
     const table = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.9, 2.4), new THREE.MeshStandardMaterial({ color: 0x6b3f22, roughness: 0.8 }));

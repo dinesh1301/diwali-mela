@@ -1,3 +1,4 @@
+import { tk } from '../touch.js';
 import * as THREE from 'three';
 import { ballMesh } from '../items.js';
 import { shape, merged } from '../character.js';
@@ -27,6 +28,8 @@ export class Cans {
     this.title = '🥫 Dabba Maar';
     this.help = `Aim at the cans and click or tap to throw. ${BALLS} balls to knock all 6 off the shelf!`;
     this.helpLines = [['Click', 'Throw'], ['Esc', 'Leave']];
+    this.tapHelp = `Tap a can to throw at it. ${BALLS} balls to knock all 6 off the shelf!`;
+    this.tapLines = [['👆', 'Tap a can to throw'], ['✕', 'Leave']];
     const g = booth.group;
 
     const wood = new THREE.MeshStandardMaterial({ color: 0x6b3f22, roughness: 0.8 });

@@ -1,3 +1,4 @@
+import { tk } from './touch.js';
 import * as THREE from 'three';
 import { createStall, signTexture, STALL } from './stalls.js';
 import { NameTag } from './nametag.js';
@@ -75,7 +76,7 @@ export class Creators {
       const photo = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.1), new THREE.MeshBasicMaterial({ map: initialTexture(handle[0]), color: new THREE.Color(1.1, 1.1, 1.1) }));
       photo.position.set(0, 1.95, -D / 2 + 0.14);
       g.add(frame, photo);
-      const book = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.42), new THREE.MeshBasicMaterial({ map: signTexture('Book a session', 'press E', '#5c0a10', '#ffe7a3', 512, 136), color: new THREE.Color(1.2, 1.2, 1.2) }));
+      const book = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.42), new THREE.MeshBasicMaterial({ map: signTexture('Book a session', tk('press E', 'tap the button'), '#5c0a10', '#ffe7a3', 512, 136), color: new THREE.Color(1.2, 1.2, 1.2) }));
       book.position.set(0, 1.5, D / 2 - 0.1);
       book.rotation.x = -0.35;
       g.add(book);
@@ -98,7 +99,7 @@ export class Creators {
     // an arch sign over the row
     const sign = new THREE.Mesh(
       new THREE.PlaneGeometry(6.4, 1.8),
-      new THREE.MeshBasicMaterial({ map: signTexture('Creator Corner', 'Meet Topmate creators · press E at a stall', '#3c1361', '#ffe7a3', 1024, 288), color: new THREE.Color(1.2, 1.2, 1.2), side: THREE.DoubleSide })
+      new THREE.MeshBasicMaterial({ map: signTexture('Creator Corner', tk('Meet Topmate creators · press E at a stall', 'Meet Topmate creators · tap the button at a stall'), '#3c1361', '#ffe7a3', 1024, 288), color: new THREE.Color(1.2, 1.2, 1.2), side: THREE.DoubleSide })
     );
     sign.position.set(X0 + GAP, 5.2, Z + 0.5);
     scene.add(sign);

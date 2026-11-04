@@ -24,6 +24,8 @@ export class Input {
     this.blocked = false; // a modal is open
     this.lookPointer = null;
     this.joyPointer = null;
+    this.joyEnabled = true; // the on-screen stick is shown (walking or driving, no modal)
+    this.joyHome = null; // centre of the stick's resting place, measured lazily (and again after a resize)
     this.capture = null; // (code) => void, while rebinding a key
 
     addEventListener('keydown', (e) => {
@@ -59,6 +61,7 @@ export class Input {
 
     this.joyEl = document.getElementById('joystick');
     this.knob = this.joyEl.querySelector('.knob');
+    addEventListener('resize', () => (this.joyHome = null));
     dom.addEventListener('pointerdown', (e) => this.onDown(e));
     addEventListener('pointermove', (e) => this.onMove(e));
     addEventListener('pointerup', (e) => this.onUp(e));
@@ -152,15 +155,45 @@ export class Input {
 
   // ---------- pointer ----------
 
+  /** Shows or hides the touch stick; a hidden stick lets go of whatever thumb was on it. */
+  setJoystick(on) {
+    if (on === this.joyEnabled) return;
+    this.joyEnabled = on;
+    this.joyEl.classList.toggle('hidden', !on);
+    document.body.classList.toggle('joy-off', !on); // the jump button goes with it
+    if (!on && this.joyPointer !== null) this.onUp({ pointerId: this.joyPointer });
+  }
+
+  /** The stick's resting centre and radius on screen. */
+  joyRest() {
+    if (!this.joyHome) {
+      const r = this.joyEl.getBoundingClientRect();
+      if (!r.width) return null;
+      this.joyHome = { x: r.left + r.width / 2, y: r.top + r.height / 2, r: r.width / 2 };
+    }
+    return this.joyHome;
+  }
+
   onDown(e) {
     if (this.blocked) return;
-    if (e.pointerType === 'touch' && this.lookEnabled && this.joyPointer === null && e.clientX < innerWidth * 0.45 && e.clientY > innerHeight * 0.4) {
-      this.joyPointer = e.pointerId;
-      this.joyOrigin = { x: e.clientX, y: e.clientY };
-      this.joyEl.style.left = `${e.clientX}px`;
-      this.joyEl.style.top = `${e.clientY}px`;
-      this.joyEl.classList.add('on');
-      return;
+    // touch: a thumb anywhere in the lower-left quarter grabs the stick. On the stick itself it
+    // pushes it straight away; elsewhere in the zone the stick jumps under the thumb (floating).
+    if (e.pointerType === 'touch' && this.joyEnabled && this.joyPointer === null) {
+      const home = this.joyRest();
+      const near = home && Math.hypot(e.clientX - home.x, e.clientY - home.y) < home.r * 1.4;
+      if (home && (near || (e.clientX < innerWidth * 0.45 && e.clientY > innerHeight * 0.4))) {
+        this.joyPointer = e.pointerId;
+        this.joyMax = home.r * 0.72;
+        if (near) {
+          this.joyOrigin = { x: home.x, y: home.y };
+        } else {
+          this.joyOrigin = { x: e.clientX, y: e.clientY };
+          this.joyEl.style.transform = `translate(${e.clientX - home.x}px, ${e.clientY - home.y}px)`;
+        }
+        this.joyEl.classList.add('on');
+        this.onMove(e);
+        return;
+      }
     }
     if (this.lookPointer === null) {
       this.lookPointer = e.pointerId;
@@ -179,14 +212,15 @@ export class Input {
       this.pointer.y = e.clientY;
     }
     if (e.pointerId === this.joyPointer) {
+      const max = this.joyMax;
       let dx = e.clientX - this.joyOrigin.x;
       let dy = e.clientY - this.joyOrigin.y;
       const len = Math.hypot(dx, dy);
-      if (len > 50) {
-        dx *= 50 / len;
-        dy *= 50 / len;
+      if (len > max) {
+        dx *= max / len;
+        dy *= max / len;
       }
-      this.move.set(dx / 50, dy / 50);
+      this.move.set(dx / max, dy / max);
       this.knob.style.transform = `translate(${dx}px, ${dy}px)`;
     } else if (e.pointerId === this.lookPointer) {
       const dx = e.clientX - this.last.x;
@@ -206,6 +240,7 @@ export class Input {
       this.joyPointer = null;
       this.move.set(0, 0);
       this.knob.style.transform = '';
+      this.joyEl.style.transform = '';
       this.joyEl.classList.remove('on');
     }
     if (e.pointerId === this.lookPointer) {

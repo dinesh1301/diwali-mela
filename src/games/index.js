@@ -1,3 +1,4 @@
+import { tk } from '../touch.js';
 import * as THREE from 'three';
 import { StringLights } from '../stringLights.js';
 import { mergeStatic, freezeStatic } from '../merge.js';
@@ -60,8 +61,8 @@ export class Games {
     this.active = game;
     this.prize = null;
     this.camLook.copy(camera.position).add(camera.getWorldDirection(new THREE.Vector3()).multiplyScalar(5));
-    ui.gameHud.show({ title: game.title, help: game.help });
-    ui.setHelp(game.helpLines);
+    ui.gameHud.show({ title: game.title, help: tk(game.help, game.tapHelp ?? game.help) });
+    ui.setHelp({ key: game.helpLines, tap: game.tapLines ?? [] });
     game.start();
   }
 
@@ -107,7 +108,7 @@ export class Games {
     if (this.prize) {
       if (this.stash) this.stash.obj.removeFromParent();
       shops.givePrize(this.prize);
-      ui.toast(this.prize === 'gift' ? '🎁 You are carrying your prize! Press Q to put it down.' : '🧸 Your teddy is in your hands! Press Q to put it down.');
+      ui.toast(this.prize === 'gift' ? tk('🎁 You are carrying your prize! Press Q to put it down.', '🎁 You are carrying your prize! Tap “Put the prize down” to set it down.') : tk('🧸 Your teddy is in your hands! Press Q to put it down.', '🧸 Your teddy is in your hands! Tap “Put the prize down” to set it down.'));
     } else if (this.stash) {
       this.stash.obj.visible = true;
       player.held = this.stash;

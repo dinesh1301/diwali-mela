@@ -1,3 +1,4 @@
+import { tk } from '../touch.js';
 import * as THREE from 'three';
 import { Character, randomLook } from '../character.js';
 import { beam, canvasTexture, setLayer, pick, rand, WARM_PALETTE } from '../utils.js';
@@ -153,7 +154,7 @@ export class Tambola {
 
     const sign = new THREE.Mesh(
       new THREE.PlaneGeometry(3.4, 0.95),
-      new THREE.MeshBasicMaterial({ map: signTexture('Tambola Tent', 'Housie · press E to join a round', '#4a0d4a', '#ffe7a3', 1024, 288), color: new THREE.Color(1.2, 1.2, 1.2), side: THREE.DoubleSide })
+      new THREE.MeshBasicMaterial({ map: signTexture('Tambola Tent', tk('Housie · press E to join a round', 'Housie · tap the button to join a round'), '#4a0d4a', '#ffe7a3', 1024, 288), color: new THREE.Color(1.2, 1.2, 1.2), side: THREE.DoubleSide })
     );
     sign.position.set(0, 4.2, 5.9);
     g.add(sign);

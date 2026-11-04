@@ -1,3 +1,4 @@
+import { tk } from './touch.js';
 import * as THREE from 'three';
 import { Character, randomLook, shape, merged } from './character.js';
 import { beam, canvasTexture, hdr, setLayer, rand, WARM_PALETTE } from './utils.js';
@@ -154,7 +155,7 @@ export class Kuan {
 
     const sign = new THREE.Mesh(
       new THREE.PlaneGeometry(3.8, 1.05),
-      new THREE.MeshBasicMaterial({ map: signTexture('Maut ka Kuan', 'Well of death · press E at the stairs to watch', '#4a0d0d', '#ffe7a3', 1024, 288), color: new THREE.Color(1.2, 1.2, 1.2), side: THREE.DoubleSide })
+      new THREE.MeshBasicMaterial({ map: signTexture('Maut ka Kuan', tk('Well of death · press E at the stairs to watch', 'Well of death · tap the button at the stairs to watch'), '#4a0d0d', '#ffe7a3', 1024, 288), color: new THREE.Color(1.2, 1.2, 1.2), side: THREE.DoubleSide })
     );
     sign.position.set(R + 3.4, 2.8, 4.6);
     sign.rotation.y = -Math.PI / 2;
@@ -224,7 +225,7 @@ export class Kuan {
     player.cam.pitch = 0.85; // look down into the well
     player.cam.targetDist = 5;
     passport.stamp('kuan');
-    ui.toast('🏍️ Hold on to the railing! Press E to climb down.', 4000, { important: true });
+    ui.toast(tk('🏍️ Hold on to the railing! Press E to climb down.', '🏍️ Hold on to the railing! Tap “Climb down” to leave.'), 4000, { important: true });
   }
 
   leaveGallery() {
@@ -248,7 +249,7 @@ export class Kuan {
   }
 
   get help() {
-    return [['E', 'Climb down'], ['Drag', 'Look around']];
+    return { key: [['E', 'Climb down'], ['Drag', 'Look around']], tap: [['👆', 'Climb down'], ['👉', 'Drag to look around']] };
   }
 
   update(dt, t) {

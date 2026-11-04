@@ -1,3 +1,4 @@
+import { tk } from '../touch.js';
 import * as THREE from 'three';
 import { foodMesh, FOOD_COLORS } from '../items.js';
 import { pick, rand } from '../utils.js';
@@ -151,7 +152,7 @@ export class FoodStalls {
     const teekha = flavour === 'teekha';
     ui.gameHud.show({
       title: teekha ? '🌶️ Teekha Golgappa Challenge' : '🍯 Meetha Golgappa Challenge',
-      help: 'Press E or tap to gulp each puri before it goes soggy. Press Q to say "Bas bhaiya!"',
+      help: tk('Press E or tap to gulp each puri before it goes soggy. Press Q to say "Bas bhaiya!"', 'Tap “Gulp!” (or anywhere) before each puri goes soggy. Tap “Bas bhaiya!” to stop.'),
       exit: false,
     });
     const stats = () => {

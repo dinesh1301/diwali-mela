@@ -1,3 +1,4 @@
+import { tk } from '../touch.js';
 import * as THREE from 'three';
 import { diyaMesh, kandeelMesh, balloonMesh, teddyMesh, giftMesh, forgetFlames } from '../items.js';
 import { rand } from '../utils.js';
@@ -76,7 +77,7 @@ export class Shops {
         case 'diyas':
           await this.serve(st, diyaMesh(), 'diya', 'hold');
           ui.bubble(keeperHead, 'Shubh Deepavali! 🪔', 2);
-          ui.toast('🪔 Press Q to place your diya, or float it on the river at the ghat');
+          ui.toast(tk('🪔 Press Q to place your diya, or float it on the river at the ghat', '🪔 Tap “Place the diya” to set it down, or float it on the river at the ghat'));
           break;
         case 'lanterns': {
           const opts = profile.golden ? [...KANDEELS, GOLD_KANDEEL] : KANDEELS;

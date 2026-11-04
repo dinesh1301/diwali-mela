@@ -49,25 +49,26 @@ import { CONFIG } from './config.js';
 import { shadowify } from './utils.js';
 import { Voice } from './voice.js';
 import { LightPool } from './lightpool.js';
+import { TOUCH, tk } from './touch.js';
 
 const ZONES = [
   { id: 'gate', x: 0, z: 62, r: 9, msg: '🪔 Welcome to the Topmate Diwali Mela!' },
   { id: 'creators', x: 16, z: 65, r: 8, msg: '🤝 Creator Corner: meet Topmate creators and book a session' },
   { id: 'selfie', x: 15, z: 56, r: 6, msg: '📸 Selfie Point: get your mela poster to share' },
   { id: 'tambola', x: 33, z: 58, r: 8, msg: '🎟️ Tambola Tent: join a round of housie' },
-  { id: 'deepmala', x: -12, z: 65, r: 6, msg: '🪔 The Deepmala wall: bring a diya or kandeel and press Q to add yours' },
+  { id: 'deepmala', x: -12, z: 65, r: 6, msg: '🪔 The Deepmala wall: bring a diya or kandeel and press Q to add yours', tap: '🪔 The Deepmala wall: bring a diya or kandeel, then tap the button to add yours' },
   { id: 'ramleela', x: -30, z: 62, r: 14, msg: '📽️ Ramleela Maidan: take a seat for the Ramayan show' },
   { id: 'ravan', x: -56, z: 64, r: 10, msg: '🔥 Ravan Dahan: the effigy burns on the countdown, or light the fuse yourself' },
-  { id: 'bazaar', x: 0, z: 32, r: 13, msg: '🛍️ The Bazaar: walk up to a stall and press E' },
+  { id: 'bazaar', x: 0, z: 32, r: 13, msg: '🛍️ The Bazaar: walk up to a stall and press E', tap: '🛍️ The Bazaar: walk up to a stall and tap the glowing button' },
   { id: 'games', x: 22, z: 27, r: 12, msg: '🎯 Khel Gali: four mela games, win prizes!' },
   { id: 'carousel', x: -20, z: 30, r: 9, msg: '🎠 The Carousel: hop on!' },
   { id: 'columbus', x: -26, z: 50, r: 7, msg: '🚢 The Columbus swing: board at the steps' },
-  { id: 'cars', x: -53, z: 24, r: 24, msg: '🏁 Chakri Cars: a go-kart circuit · press E at a car' },
+  { id: 'cars', x: -53, z: 24, r: 24, msg: '🏁 Chakri Cars: a go-kart circuit · press E at a car', tap: '🏁 Chakri Cars: a go-kart circuit · walk to a car and tap “Drive”' },
   { id: 'airfield', x: 52, z: 22, r: 20, msg: '✈️ Pushpak Viman Airfield: fly the plane or the heli' },
   { id: 'plaza', x: 0, z: 0, r: 10, msg: '🌸 Rangoli Chowk: join the garba!' },
   { id: 'kuan', x: -24, z: 6, r: 10, msg: '🏍️ Maut ka Kuan: climb the stairs to watch the riders' },
-  { id: 'wheel', x: -34, z: -18, r: 12, msg: '🎡 The Giant Wheel: walk to the steps and press E' },
-  { id: 'fireworks', x: 36, z: -30, r: 15, msg: '🚀 Fireworks Zone: press 1 to launch a rocket' },
+  { id: 'wheel', x: -34, z: -18, r: 12, msg: '🎡 The Giant Wheel: walk to the steps and press E', tap: '🎡 The Giant Wheel: walk to the steps and tap the button' },
+  { id: 'fireworks', x: 36, z: -30, r: 15, msg: '🚀 Fireworks Zone: press 1 to launch a rocket', tap: '🚀 Fireworks Zone: tap 🚀 Rocket below to launch one' },
   { id: 'ghat', x: 0, z: -42, r: 12, msg: '🏮 The Ghat: float a diya, release a lantern, or take a boat ride from the jetty' },
 ];
 
@@ -93,11 +94,12 @@ const PLACES = {
   ghat: [0, -38, Math.PI],
 };
 
+// help lines per mode; `tap` is the phone version (walking is explained by the coach card instead)
 const HELP = {
-  walk: [['W A S D', 'Move'], ['run', 'Run'], ['jump', 'Jump'], ['interact', 'Interact'], ['Drag', 'Camera'], ['Scroll', 'Zoom'], ['photo', 'Photo'], ['look', 'Change look'], ['talk', 'Voice chat'], ['passport', 'Passport']],
-  ride: [['interact', 'Get off'], ['Drag', 'Look around'], ['Scroll', 'Zoom']],
-  busy: [['Drag', 'Camera']],
-  anim: [],
+  walk: { key: [['W A S D', 'Move'], ['run', 'Run'], ['jump', 'Jump'], ['interact', 'Interact'], ['Drag', 'Camera'], ['Scroll', 'Zoom'], ['photo', 'Photo'], ['look', 'Change look'], ['talk', 'Voice chat'], ['passport', 'Passport']], tap: [] },
+  ride: { key: [['interact', 'Get off'], ['Drag', 'Look around'], ['Scroll', 'Zoom']], tap: [['👆', 'Tap “Get off” to get off'], ['👉', 'Drag to look around']] },
+  busy: { key: [['Drag', 'Camera']], tap: [] },
+  anim: { key: [], tap: [] },
 };
 
 const nextFrame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
@@ -372,7 +374,12 @@ async function init() {
     ramayan.start();
     net.connect();
     if (profile.handle) profile.fetchTopmate();
-    ui.toast(`🪔 Welcome, ${profile.name}! Walk up to anything glowing and press ${settings.keys.interact.replace('Key', '')}`, 4500, { important: true });
+    ui.toast(
+      tk(`🪔 Welcome, ${profile.name}! Walk up to anything glowing and press ${settings.keys.interact.replace('Key', '')}`, `🪔 Welcome, ${profile.name}! Use the joystick to walk up to anything glowing, then tap the button`),
+      4500,
+      { important: true }
+    );
+    ui.showCoach();
     if (profile.golden && profile.ref) setTimeout(() => ui.toast(`✨ Invited by @${profile.ref}: a golden kandeel is waiting for you at Kandeel House`, 5000, { important: true }), 5000);
   }
 
@@ -676,6 +683,7 @@ async function init() {
     ravan.start();
     if (!params.has('noyt')) ramayan.start();
     if (!params.has('nonet')) net.connect();
+    ui.showCoach();
     window.__mela = { ...ctx, games, rides, crowd, vehicles, ramayan, poster, customizer, nameTag, boat, train, columbus, ravan, tambola, kuan, walls, dayNight, scenes, decor, voice, lightPool, governor, get gov() { return { ...governor.state, gpu: settings.gpu, midGpu: settings.midGpu }; } }; // for automated checks
   } else {
     customizer.open('intro');
@@ -790,6 +798,8 @@ async function init() {
       vehKind = kind;
       ui.setVehicleButtons(kind);
     }
+    // touch: the stick is there while you can walk or drive, and gets out of the way otherwise
+    if (TOUCH) input.setJoystick(started && !ui.modalOpen && (mode === 'walk' || (mode === 'ride' && owner === vehicles)));
     const canInteract = started && mode === 'walk' && !ui.modalOpen;
     const best = interactions.update(t, player, canInteract);
     if (mode === 'ride') {
@@ -812,7 +822,7 @@ async function init() {
       const z = ZONES.find((zz) => (p.x - zz.x) ** 2 + (p.z - zz.z) ** 2 < zz.r * zz.r);
       if ((z?.id ?? null) !== zone) {
         zone = z?.id ?? null;
-        if (z) ui.toast(z.msg, 3200);
+        if (z) ui.toast(tk(z.msg, z.tap ?? z.msg), 3200);
       }
     }
 
@@ -825,7 +835,7 @@ async function init() {
     if (started) ambience.update(dt, t, camera.position);
     net.update(dt, performance.now());
     if (started && !ui.modalOpen) {
-      if (settings.voice === 'ptt') voice.setTalking(input.isAction('talk'));
+      if (settings.voice === 'ptt') voice.setTalking(input.isAction('talk') || ui.micHeld);
       else if (input.pressedAction('talk')) voice.toggle();
     }
     voice.update(dt, camera);

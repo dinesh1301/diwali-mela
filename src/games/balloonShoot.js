@@ -1,3 +1,4 @@
+import { tk } from '../touch.js';
 import * as THREE from 'three';
 import { canvasTexture, pick, clamp } from '../utils.js';
 import { toyGunMesh } from '../items.js';
@@ -20,6 +21,8 @@ export class BalloonShoot {
     this.title = '🎯 Gubbara Phod';
     this.help = `Click or tap balloons to shoot. ${SHOTS} shots. Pop ${TO_WIN} to win a teddy!`;
     this.helpLines = [['Click', 'Shoot'], ['Space', 'Shoot at the crosshair'], ['Esc', 'Leave']];
+    this.tapHelp = `Tap balloons to shoot. ${SHOTS} shots. Pop ${TO_WIN} to win a teddy!`;
+    this.tapLines = [['👆', 'Tap a balloon to shoot'], ['✕', 'Leave']];
     const g = booth.group;
 
     const cloth = canvasTexture(512, 256, (c, w, h) => {
