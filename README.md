@@ -33,6 +33,8 @@ Two small pieces run alongside the static site:
 
   Point a deployed site at it with `VITE_WS_URL=wss://your-host/ws` at build time. Without a
   reachable server the mela still works: scores and wishes stay in the visitor's browser.
+  A static build (`VITE_STATIC=1`, used by the GitHub Pages workflow) opens no socket and makes no
+  Topmate lookups unless `VITE_WS_URL` / `VITE_API_BASE` (a host serving `api/`) are set.
 
 ## Voice chat
 
@@ -47,7 +49,7 @@ signalling; there is no TURN relay, so two visitors behind very strict NATs may 
 
 - `creators`: Topmate usernames shown at Creator Corner (fetched live).
 - `publicBuild`: `true` forces the royalty-free band instead of the song. The bundled song in
-  `public/audio/diwali-song.mp3` is a commercial track: fine for a private demo, replace it or set
+  `public/audio/diwali-song.m4a` (AAC, 72 kbps) is a commercial track: fine for a private demo, replace it or set
   `publicBuild` before hosting publicly.
 - `ravanEveryMinutes` / `ravanFirstAfterMinutes`: the Ravan Dahan schedule.
 

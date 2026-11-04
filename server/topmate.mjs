@@ -92,6 +92,8 @@ export async function handle(req, res, mountPath = '') {
   const path = url.pathname.replace(mountPath, '');
   const u = url.searchParams.get('u');
   res.setHeader('Cache-Control', 'public, max-age=300');
+  // public profile data, no credentials: a static site on another origin (VITE_API_BASE) may read it
+  res.setHeader('Access-Control-Allow-Origin', '*');
   try {
     if (/\/?image$/.test(path)) {
       const img = await fetchImage(u);

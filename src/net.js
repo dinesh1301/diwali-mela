@@ -41,6 +41,7 @@ export class Net {
     this.lastSend = 0;
     this.retry = 1000;
     this.failures = 0; // consecutive attempts that never opened
+    this.everOpened = false; // a server that answered once is only restarting: keep retrying it
     this.enabled = !!url;
     this.voice = null; // set by Voice
     this.tmpQ = new THREE.Quaternion();
@@ -89,6 +90,7 @@ export class Net {
       this.connected = true;
       this.retry = 1000;
       this.failures = 0;
+      this.everOpened = true;
       this.send({ t: 'hello', name: profile.name, handle: profile.handle, look: this.ctx.player.char.look });
       this.emit('status', true);
     };
@@ -109,7 +111,8 @@ export class Net {
       for (const id of [...this.remote.keys()]) this.removeRemote(id);
       this.online = 1;
       this.emit('status', false);
-      if (!opened && ++this.failures >= SAME_ORIGIN_TRIES && !ENV.VITE_WS_URL) return; // no server here: stay local
+      // no server here at all (it never answered): stay local instead of retrying forever
+      if (!opened && ++this.failures >= SAME_ORIGIN_TRIES && !this.everOpened && !ENV.VITE_WS_URL) return;
       setTimeout(() => this.connect(), this.retry);
       this.retry = Math.min(15000, this.retry * 1.7);
     };
