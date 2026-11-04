@@ -495,6 +495,15 @@ export class Character {
     this.build();
   }
 
+  /** Frees the GPU side (geometry, bone texture, own materials) of a character that is gone for good. */
+  dispose() {
+    this.root.removeFromParent();
+    this.mesh.geometry.dispose();
+    this.mesh.skeleton.dispose();
+    if (this.material !== charMaterial) this.material.dispose();
+    if (this.headMaterial !== charMaterial) this.headMaterial.dispose();
+  }
+
   /** Flushes the face red (for the pani puri challenge). */
   setTint(k) {
     if (this.headMaterial === charMaterial) return;

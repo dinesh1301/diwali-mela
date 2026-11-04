@@ -280,7 +280,8 @@ export class Net {
     const r = this.remote.get(id);
     if (!r) return;
     this.voice?.dropPeer(id);
-    r.char.root.removeFromParent();
+    r.tag.dispose();
+    r.char.dispose();
     this.remote.delete(id);
   }
 
@@ -289,7 +290,7 @@ export class Net {
     let best = null;
     let bd = Infinity;
     for (const r of this.remote.values()) {
-      if (!r.ready) continue;
+      if (!r.ready || !r.shown) continue; // never wave at someone the culling hides
       const d = Math.hypot(r.cur.x - p.x, r.cur.z - p.z);
       if (d < bd) {
         bd = d;
