@@ -123,6 +123,7 @@ class ResolutionGovernor {
     this.noDropUntil = 0;
     this.lastUp = { at: -1e9, level: 0 };
     this.probe = null; // a step down we are checking actually helped
+    this.cap30 = false; // learned: the display (not the GPU) holds frames at 33 ms
     this.changes = 0;
     this.last = { mean: 0, slow: 0, work: 0, budget: 16.7 };
     this.reset(2500);
@@ -152,8 +153,11 @@ class ResolutionGovernor {
     if (now - this.winStart < 1500 || this.n < 20) return;
     const mean = this.sum / this.n;
     const work = this.work / this.n;
-    // frames locked to 33 ms with little work each: the display runs at 30 Hz, that is the budget
-    const capped = this.capN / this.n > 0.9 && work < 12;
+    // Frames locked to 33 ms look the same whether the display runs at 30 Hz (power saving) or a
+    // GPU-bound frame just misses every other 60 Hz vsync, so a lock alone proves nothing. Only once
+    // a step down failed to unlock it is 30 fps taken as the budget.
+    const locked = this.capN / this.n > 0.9 && work < 12;
+    const capped = this.cap30 && locked;
     const budget = capped ? 1000 / 30 : 1000 / 60;
     const slow = capped ? 0 : this.slowN / this.n;
     this.last = { mean: +mean.toFixed(1), slow: +slow.toFixed(2), work: +work.toFixed(1), budget: +budget.toFixed(1) };
@@ -165,6 +169,7 @@ class ResolutionGovernor {
       this.probe = null;
       if (mean > p.mean * 0.9) {
         // dropping the resolution bought nothing: go back and leave it alone for a minute
+        if (locked && p.locked) this.cap30 = true;
         this.noDropUntil = now + 60000;
         this.blockLevel = Infinity;
         this.step(p.from - this.i);
@@ -177,14 +182,16 @@ class ResolutionGovernor {
     this.good = roomy ? this.good + 1 : 0;
     const lvl = this.pixelRatio;
     const cpuBound = work > mean * 0.8;
-    if (this.bad >= 2 && this.i > 0 && now > this.noDropUntil && !(cpuBound && this.levels[this.i - 1] < 1)) {
+    // a level we only just climbed to gets one bad window, not two, so a failed probe barely shows
+    const fresh = this.lastUp.level === lvl && now - this.lastUp.at < 8000;
+    if ((this.bad >= 2 || (fresh && this.bad >= 1)) && this.i > 0 && now > this.noDropUntil && !(cpuBound && this.levels[this.i - 1] < 1)) {
       // a level that fails soon after we climbed to it is blocked for longer each time
       if (now - this.lastUp.at < 20000 && this.lastUp.level === lvl) this.backoff = Math.min(this.backoff * 2, 300000);
       this.blockLevel = lvl;
       this.blockUntil = now + this.backoff;
       const from = this.i;
       this.step(-1);
-      this.probe = { from, mean };
+      this.probe = { from, mean, locked };
     } else if (this.good >= 3 && this.i < this.levels.length - 1) {
       const next = this.levels[this.i + 1];
       if (next >= this.blockLevel && now < this.blockUntil) return;
@@ -203,7 +210,7 @@ class ResolutionGovernor {
 
   get state() {
     const now = performance.now();
-    return { pixelRatio: this.pixelRatio, levels: this.levels, enabled: this.enabled, changes: this.changes, blockedFrom: now < this.blockUntil ? this.blockLevel : null, holdDrops: now < this.noDropUntil, ...this.last };
+    return { pixelRatio: this.pixelRatio, levels: this.levels, enabled: this.enabled, changes: this.changes, blockedFrom: now < this.blockUntil ? this.blockLevel : null, holdDrops: now < this.noDropUntil, cap30: this.cap30, ...this.last };
   }
 }
 
@@ -634,11 +641,17 @@ async function init() {
   await loading('Opening the gates…');
   // compile every shader (in parallel where the browser can) and draw one frame while the loader is
   // still up, so the first seconds of play don't stall on ~40-70 synchronous shader compiles
+  // Program variants depend on the render target (a null target means tone mapping + sRGB output in
+  // the shader), and the scene is only ever drawn into the composer's target, so compile against it.
   lightPool.update();
   try {
-    await renderer.compileAsync(scene, camera);
+    renderer.setRenderTarget(composer.readBuffer);
+    const compiled = renderer.compileAsync(scene, camera); // programs are created synchronously here
+    renderer.setRenderTarget(null);
+    await Promise.race([compiled, new Promise((r) => setTimeout(r, 8000))]);
   } catch {
     // older browsers: the warm-up render below still compiles what's in view
+    renderer.setRenderTarget(null);
   }
   composer.render();
   await nextFrame();
