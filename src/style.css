@@ -2112,13 +2112,26 @@ body.touch .seg-label {
     font-size: 9px;
   }
 
+  /* one row: two wrapped rows of sticky buttons would hide the name field on a 568px-tall phone */
+  .cust-actions {
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+
+  .cust-actions button {
+    flex: 1 1 auto;
+    justify-content: center;
+    min-width: 0;
+  }
+
   .cust-actions .primary {
-    padding: 12px 20px;
-    font-size: 15px;
+    padding: 12px 10px;
+    font-size: 14px;
   }
 
   .cust-actions .ghost {
-    padding: 10px 14px;
+    padding: 10px 8px;
+    font-size: 13px;
   }
 }
 
