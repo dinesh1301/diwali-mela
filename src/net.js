@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Character, randomLook } from './character.js';
 import { NameTag } from './nametag.js';
 import { profile } from './profile.js';
+import { settings } from './settings.js';
 
 /*
   Multiplayer client. Sends where our avatar is (world position of the character root, heading,
@@ -14,6 +15,9 @@ const STALE_MS = 12000;
 const LOCAL_KEY = 'melaLocalBoards';
 const BOARD_ORDER = { golgappa: 'desc', lap: 'asc', striker: 'desc' };
 const _v = new THREE.Vector3();
+// only the nearest few visitors are drawn (and posed): within 70 m, 8 on phones, 16 elsewhere
+const SHOW_R2 = 70 * 70;
+const CULL_S = 0.25;
 
 function defaultUrl() {
   const env = import.meta.env?.VITE_WS_URL;
@@ -268,6 +272,7 @@ export class Net {
       r.ready = true;
     }
     this.remote.set(p.id, r);
+    this.cullT = 0;
     return r;
   }
 
@@ -348,10 +353,31 @@ export class Net {
 
   // ---------- per frame ----------
 
+  /** Marks the nearest K ready visitors within 70 m as shown. */
+  cullRemote() {
+    const p = this.ctx.player.pos;
+    const near = (this._near ??= []);
+    near.length = 0;
+    for (const r of this.remote.values()) {
+      r.shown = false;
+      if (!r.ready) continue;
+      r.d2 = (r.cur.x - p.x) ** 2 + (r.cur.z - p.z) ** 2;
+      if (r.d2 < SHOW_R2) near.push(r);
+    }
+    near.sort((a, b) => a.d2 - b.d2);
+    const k = Math.min(near.length, settings.tier === 'low' ? 8 : 16);
+    for (let i = 0; i < k; i++) near[i].shown = true;
+  }
+
   update(dt, now) {
     if (this.connected && now - this.lastSend > SEND_MS) {
       this.lastSend = now;
       this.sendState();
+    }
+    this.cullT = (this.cullT ?? 0) - dt;
+    if (this.cullT <= 0) {
+      this.cullT = CULL_S;
+      this.cullRemote();
     }
     for (const [id, r] of this.remote) {
       if (now - r.seenAt > STALE_MS) {
@@ -359,7 +385,6 @@ export class Net {
         continue;
       }
       if (!r.ready) continue;
-      r.char.root.visible = true;
       const k = 1 - Math.exp(-dt * 12);
       r.cur.lerp(r.target, k);
       const root = r.char.root;
@@ -367,6 +392,8 @@ export class Net {
       let d = r.heading - root.rotation.y;
       d = Math.atan2(Math.sin(d), Math.cos(d));
       root.rotation.y += d * k;
+      root.visible = !!r.shown;
+      if (!r.shown) continue;
       if (r.action !== r.char.action) {
         if (r.action) r.char.setAction(r.action);
         else r.char.clearAction();
