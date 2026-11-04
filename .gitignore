@@ -8,3 +8,6 @@ Thumbs.db
 *.log
 .vite/
 bench/shots-*/
+
+# local test portrait for tools/creator-check.mjs (not shipped)
+public/test-photo.png

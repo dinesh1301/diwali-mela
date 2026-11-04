@@ -49,6 +49,7 @@ import { CONFIG } from './config.js';
 import { shadowify } from './utils.js';
 import { Voice } from './voice.js';
 import { LightPool } from './lightpool.js';
+import { loadCreatorConfig, applyCreator, personaliseIntro, stallIndexFor } from './creatorStage.js';
 
 const ZONES = [
   { id: 'gate', x: 0, z: 62, r: 9, msg: '🪔 Welcome to the Topmate Diwali Mela!' },
@@ -227,6 +228,7 @@ async function loadFonts() {
 
 async function init() {
   const params = new URLSearchParams(location.search);
+  const creatorCfg = loadCreatorConfig(params); // ?c=<slug> / ?cfg=: a creator's own mela
   settings.load();
   profile.load();
   const look = { ...randomPlayerLook(), ...(profile.look || {}) };
@@ -520,6 +522,9 @@ async function init() {
   const kuan = new Kuan(ctx, extraLights);
   const scenes = low ? null : new CrowdScenes(ctx);
   extraLights.build();
+  const cfg = await creatorCfg;
+  const creator = applyCreator(scene, cfg, { stallAnchor: cfg && world.stalls[stallIndexFor(cfg.stallNo, world.stalls.length)], ravanAnchor: { pos: new THREE.Vector3(-47.5, 0, 69.5), facing: 0.55 } });
+  personaliseIntro(cfg);
   await loading();
   const dayNight = new DayNight({ scene, sky, hemi, sun, lightSystems: [world.lights, games.lights, vehicles.lights, poster.lights, ramayan.lights, extraLights].filter(Boolean) });
   const customizer = new Customizer({
@@ -627,7 +632,9 @@ async function init() {
   } catch {
     // ignore
   }
-  if (savedPos && !params.has('place') && !params.has('pos') && vehicles.walkable(savedPos)) player.teleport(savedPos.x, savedPos.z, savedPos.h);
+  const atStall = creator.stallBoard && world.stalls[stallIndexFor(cfg.stallNo, world.stalls.length)];
+  if (atStall && !params.has('place') && !params.has('pos')) player.teleport(0, atStall.center.z + 5, face(0, atStall.center.z + 5, atStall.center.x, atStall.center.z)); // facing their stall
+  else if (savedPos && !params.has('place') && !params.has('pos') && vehicles.walkable(savedPos)) player.teleport(savedPos.x, savedPos.z, savedPos.h);
   setInterval(() => {
     if (started && player.mode === 'walk') {
       try {
@@ -671,7 +678,7 @@ async function init() {
     ravan.start();
     if (!params.has('noyt')) ramayan.start();
     if (!params.has('nonet')) net.connect();
-    window.__mela = { ...ctx, games, rides, crowd, vehicles, ramayan, poster, customizer, nameTag, boat, train, columbus, ravan, tambola, kuan, walls, dayNight, scenes, decor, voice, lightPool, governor, get gov() { return { ...governor.state, gpu: settings.gpu, midGpu: settings.midGpu }; } }; // for automated checks
+    window.__mela = { ...ctx, creator, games, rides, crowd, vehicles, ramayan, poster, customizer, nameTag, boat, train, columbus, ravan, tambola, kuan, walls, dayNight, scenes, decor, voice, lightPool, governor, get gov() { return { ...governor.state, gpu: settings.gpu, midGpu: settings.midGpu }; } }; // for automated checks
   } else {
     customizer.open('intro');
   }
@@ -760,6 +767,7 @@ async function init() {
     tambola.update(dt);
     ravan.update(dt, t);
     decor.update(dt, t);
+    creator.update(dt, t);
     updateFlames(t);
     dayNight.update(dt);
 
