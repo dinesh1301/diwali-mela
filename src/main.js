@@ -214,10 +214,13 @@ class ResolutionGovernor {
   }
 }
 
+// Every face the canvas textures use; the sample text pulls in the Devanagari subsets too (gate sign, Pushpak plate).
+const CANVAS_FONTS = [['64px "Yatra One"', 'Mela शुभ दीपावली'], ['600 24px Poppins', 'Mela पुष्पक'], ['500 24px Poppins'], ['400 24px Poppins'], ['700 24px Poppins']];
+
 async function loadFonts() {
   try {
     await Promise.race([
-      Promise.all([document.fonts.load('64px "Yatra One"'), document.fonts.load('600 24px Poppins')]),
+      Promise.all(CANVAS_FONTS.map(([f, text]) => document.fonts.load(f, text))),
       new Promise((r) => setTimeout(r, 2500)),
     ]);
   } catch {
@@ -226,6 +229,7 @@ async function loadFonts() {
 }
 
 async function init() {
+  const fontsReady = loadFonts(); // fetched while the renderer and lights are set up
   const params = new URLSearchParams(location.search);
   settings.load();
   profile.load();
@@ -250,7 +254,6 @@ async function init() {
   };
 
   await loading();
-  await loadFonts(); // sign textures are drawn on canvas, so fonts must be ready first
 
   // The canvas is transparent so the Ramleela screen (a CSS3D YouTube embed behind it) can show through.
   // No antialias: everything goes through the composer's (non-multisampled) render target, so canvas
@@ -304,6 +307,7 @@ async function init() {
   }
 
   await loading();
+  await fontsReady; // sign textures are drawn on canvas, so fonts must be ready first
   const sky = createSky(scene, fogColor);
   const world = buildWorld(scene, { reflectionScale: low ? 0.25 : 0.5 });
   world.water.limitReflectionTo(camera); // reflections skip people and props (layer 1)

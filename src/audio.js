@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { rand } from './utils.js';
 
-const MUSIC_URL = `${import.meta.env.BASE_URL}audio/diwali-song.mp3`;
+const MUSIC_URL = `${import.meta.env.BASE_URL}audio/diwali-song.m4a`; // AAC 72 kbps (2.5 MB)
 const MUSIC_LEVEL = 0.32;
 
 /**
@@ -45,12 +45,20 @@ export class MelaAudio {
   // ---------- background song ----------
 
   startMusic() {
-    this.music = new Audio(MUSIC_URL);
-    this.music.loop = true;
     this.musicGain = this.ctx.createGain();
     this.musicGain.gain.value = this.songPlaying ? MUSIC_LEVEL : 0;
-    this.ctx.createMediaElementSource(this.music).connect(this.musicGain).connect(this.master);
-    if (this.songPlaying) this.music.play().catch(() => {});
+    this.musicGain.connect(this.master);
+    if (this.songPlaying) this.songElement().play().catch(() => {});
+  }
+
+  /** The song is only downloaded once it is first played (band mode never fetches it). */
+  songElement() {
+    if (!this.music) {
+      this.music = new Audio(MUSIC_URL);
+      this.music.loop = true;
+      this.ctx.createMediaElementSource(this.music).connect(this.musicGain);
+    }
+    return this.music;
   }
 
   /** The song plays only when music is on AND the mode is 'song' (the band is synthesised elsewhere). */
@@ -69,11 +77,11 @@ export class MelaAudio {
   }
 
   applySong() {
-    if (!this.music) return;
+    if (!this.musicGain) return;
     const on = this.songPlaying;
     this.musicGain.gain.setTargetAtTime(on ? MUSIC_LEVEL : 0, this.ctx.currentTime, 0.2);
-    if (on) this.music.play().catch(() => {});
-    else setTimeout(() => !this.songPlaying && this.music.pause(), 600);
+    if (on) this.songElement().play().catch(() => {});
+    else if (this.music) setTimeout(() => !this.songPlaying && this.music.pause(), 600);
   }
 
   /** Lowers the song briefly so a moment (a win, a bell) can be heard. */

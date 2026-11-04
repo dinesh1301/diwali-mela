@@ -23,7 +23,16 @@ const port = Number(opt('port', 4179));
 const shots = opt('shots', null); // directory: saves a screenshot per spot
 const SPOTS = (opt('spots', 'gate,bazaar,games,plaza,ramleela,show')).split(',');
 
-const server = spawn('npx', ['vite', 'preview', '--port', String(port), '--strictPort'], { stdio: ['ignore', 'pipe', 'inherit'] });
+const server = spawn('npx', ['vite', 'preview', '--port', String(port), '--strictPort'], { stdio: ['ignore', 'pipe', 'inherit'], detached: true });
+// npx forks the real vite process: kill the whole group so no preview is left holding the port
+const stopServer = () => {
+  try {
+    process.kill(-server.pid, 'SIGTERM');
+  } catch {
+    // already gone
+  }
+};
+process.on('exit', stopServer);
 await new Promise((res, rej) => {
   server.stdout.on('data', (d) => String(d).includes(String(port)) && res());
   server.on('exit', (c) => rej(new Error(`preview exited ${c}`)));
@@ -94,7 +103,7 @@ for (const spot of SPOTS) {
 }
 
 await browser.close();
-server.kill();
+stopServer();
 if (out) {
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, JSON.stringify(results, null, 2));

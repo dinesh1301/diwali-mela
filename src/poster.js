@@ -29,6 +29,7 @@ const POSES = [
 const loadImage = (src) =>
   new Promise((resolve, reject) => {
     const img = new Image();
+    img.crossOrigin = 'anonymous'; // a photo from a cross-origin VITE_API_BASE must not taint the poster canvas
     img.onload = () => resolve(img);
     img.onerror = reject;
     img.src = src;

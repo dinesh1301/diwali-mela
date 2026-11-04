@@ -44,10 +44,15 @@ function plankTexture(base = '#6b3f22', along = 'y') {
   const t = canvasTexture(256, 256, (c, w, h) => {
     c.fillStyle = base;
     c.fillRect(0, 0, w, h);
-    for (let i = 0; i < 2500; i++) {
-      c.fillStyle = `rgba(${Math.random() > 0.5 ? '160,110,60' : '30,15,5'},${Math.random() * 0.25})`;
-      c.fillRect(Math.random() * w, Math.random() * h, along === 'y' ? 1 : 6, along === 'y' ? 6 : 1);
+    // grain in two colours, the strength varied with globalAlpha (no per-stroke colour parsing)
+    for (const grain of ['rgb(160,110,60)', 'rgb(30,15,5)']) {
+      c.fillStyle = grain;
+      for (let i = 0; i < 1250; i++) {
+        c.globalAlpha = Math.random() * 0.25;
+        c.fillRect(Math.random() * w, Math.random() * h, along === 'y' ? 1 : 6, along === 'y' ? 6 : 1);
+      }
     }
+    c.globalAlpha = 1;
     c.fillStyle = 'rgba(20,10,4,0.75)';
     for (let k = 0; k < 6; k++) {
       if (along === 'y') c.fillRect((k * w) / 6, 0, 3, h);
