@@ -112,6 +112,9 @@ export class CrowdScenes {
     world.colliders.push({ type: 'box', minX: 6.8, maxX: 7.6, minZ: 53.3, maxZ: 54.7 });
     this.candyMan = person(randomLook(), 8.3, 54, -Math.PI / 2);
     this.candyNext = 3;
+    // everyone not animated by a scene above (the families on the ghat) just idles
+    const busy = new Set([...this.garba.map((g) => g.ch), ...this.kids.map((k) => k.ch), parent, ...this.queue.map((q) => q.ch), this.vendor, this.candyMan]);
+    this.idle = this.all.filter((ch) => !busy.has(ch));
   }
 
   update(dt, t) {
@@ -167,7 +170,7 @@ export class CrowdScenes {
       setTimeout(() => this.candyMan.clearAction(), 1600);
     }
     this.candyMan.update(dt);
-    // the rest just idle
-    for (const ch of this.all) if (!ch.updatedThisFrame) ch.update(dt);
+    // the rest just idle (the scene members above were already posed once this frame)
+    for (const ch of this.idle) ch.update(dt);
   }
 }
