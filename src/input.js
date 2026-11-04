@@ -54,6 +54,9 @@ export class Input {
       if (e.relatedTarget instanceof HTMLIFrameElement) release();
     });
 
+    // iOS Safari ignores user-scalable=no: a two-finger walk + look would pinch-zoom the page
+    for (const ev of ['gesturestart', 'gesturechange']) document.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
+
     this.joyEl = document.getElementById('joystick');
     this.knob = this.joyEl.querySelector('.knob');
     dom.addEventListener('pointerdown', (e) => this.onDown(e));

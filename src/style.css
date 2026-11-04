@@ -1753,7 +1753,7 @@ button.icon.talking {
   }
 }
 
-/* ---------- phones and low tier: flat panels ---------- */
+/* ---------- phones: flat panels, safe areas, touch ---------- */
 
 /* backdrop-filter re-blurs the moving canvas under every panel, every frame. Phones and the low
    tier get flat, more opaque panels instead. */
@@ -1786,4 +1786,497 @@ body.touch .cust-card {
 body.low .prompt,
 body.touch .prompt {
   background: rgba(30, 12, 42, 0.9);
+}
+
+/* no rubber-banding, pinch or double-tap zoom, long-press callouts or tap flashes on game controls */
+html,
+body {
+  overscroll-behavior: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body * {
+  touch-action: manipulation;
+}
+
+input,
+textarea,
+select {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
+#places,
+#actionbar,
+.cust-card,
+.cust-right,
+.modal-card,
+.stamps,
+.board-body {
+  overscroll-behavior: contain;
+}
+
+/* notches and home indicators (env() is 0 on desktop, so these match the rules above there) */
+#hud-top {
+  top: calc(12px + env(safe-area-inset-top));
+  left: calc(16px + env(safe-area-inset-left));
+  right: calc(16px + env(safe-area-inset-right));
+}
+
+#actionbar {
+  bottom: calc(16px + env(safe-area-inset-bottom));
+}
+
+#prompts {
+  bottom: calc(104px + env(safe-area-inset-bottom));
+}
+
+#jumpBtn,
+#vehicleBtns {
+  right: calc(20px + env(safe-area-inset-right));
+  bottom: calc(110px + env(safe-area-inset-bottom));
+}
+
+#toast,
+#stampToast {
+  top: calc(70px + env(safe-area-inset-top));
+}
+
+#stampToast {
+  right: calc(16px + env(safe-area-inset-right));
+}
+
+#gameHud {
+  top: calc(66px + env(safe-area-inset-top));
+}
+
+#chips {
+  top: calc(60px + env(safe-area-inset-top));
+}
+
+.overlay {
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+}
+
+.overlay.light {
+  padding-bottom: calc(110px + env(safe-area-inset-bottom));
+}
+
+/* dvh: the visible height on mobile browsers, so Enter / Close never sit under the toolbar */
+.modal-card,
+.cust-card,
+.poster-card {
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+}
+
+.modal-card {
+  overflow-y: auto;
+}
+
+/* ---------- touch: 44px targets, 16px inputs (no iOS focus zoom) ---------- */
+
+body.touch button.icon {
+  width: 44px;
+  height: 44px;
+}
+
+body.touch #places button {
+  min-height: 40px;
+}
+
+body.touch .swatches {
+  gap: 10px;
+}
+
+body.touch .sw {
+  width: 34px;
+  height: 34px;
+}
+
+body.touch .chips .chip,
+body.touch .tabs button,
+body.touch .seg button {
+  min-height: 40px;
+}
+
+body.touch button.ghost,
+body.touch button.primary.small {
+  min-height: 44px;
+}
+
+body.touch button.ghost.tiny,
+body.touch .keybtn {
+  min-height: 36px;
+}
+
+body.touch #gameExit {
+  min-height: 40px;
+  padding: 8px 16px;
+}
+
+body.touch .cust-close {
+  width: 44px;
+  height: 44px;
+}
+
+body.touch #menu .options button {
+  min-height: 52px;
+}
+
+body.touch .srow input[type='checkbox'] {
+  width: 22px;
+  height: 22px;
+}
+
+body.touch .field input,
+body.touch .modal-card input,
+body.touch .srow select {
+  font-size: 16px;
+}
+
+body.touch .cust-section > span,
+body.touch .gh-help,
+body.touch .seg-label {
+  font-size: 13px;
+}
+
+.prompt span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* long option labels and the name fields must shrink with the card instead of widening it */
+.srow {
+  grid-template-columns: 110px minmax(0, 1fr);
+}
+
+.srow.check {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.srow select {
+  width: 100%;
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+
+.cust-right {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.cust-right,
+.cust-grid > * {
+  min-width: 0;
+}
+
+.cust-actions {
+  flex-wrap: wrap;
+}
+
+/* ---------- phone portrait ---------- */
+
+@media (max-width: 760px) {
+  /* row 1: diya + icons, row 2: places */
+  #hud-top {
+    top: calc(8px + env(safe-area-inset-top));
+    left: calc(12px + env(safe-area-inset-left));
+    right: calc(12px + env(safe-area-inset-right));
+    gap: 8px;
+  }
+
+  .brand {
+    font-size: 26px;
+    line-height: 1;
+  }
+
+  .brand span {
+    display: none;
+  }
+
+  .hud-icons {
+    gap: 6px;
+  }
+
+  #toast,
+  #stampToast,
+  #gameHud {
+    top: calc(122px + env(safe-area-inset-top));
+  }
+
+  /* all seven fireworks fit: equal columns, labels wrap instead of colliding */
+  #actionbar {
+    left: calc(8px + env(safe-area-inset-left));
+    right: calc(8px + env(safe-area-inset-right));
+    bottom: calc(8px + env(safe-area-inset-bottom));
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    gap: 2px;
+    padding: 4px;
+    border-radius: 18px;
+  }
+
+  #actionbar button {
+    justify-content: flex-start;
+    min-width: 0;
+    min-height: 56px;
+    padding: 6px 1px;
+    font-size: 10px;
+    line-height: 1.15;
+    white-space: normal;
+    text-align: center;
+  }
+
+  #actionbar button span {
+    font-size: 22px;
+  }
+
+  #prompts {
+    bottom: calc(90px + env(safe-area-inset-bottom));
+    flex-wrap: wrap;
+    justify-content: center;
+    width: max-content;
+    max-width: calc(100% - 24px);
+  }
+
+  .prompt {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  #jumpBtn,
+  #vehicleBtns {
+    right: calc(14px + env(safe-area-inset-right));
+    bottom: calc(160px + env(safe-area-inset-bottom));
+  }
+
+  #chips {
+    top: auto;
+    bottom: calc(150px + env(safe-area-inset-bottom));
+    width: calc(100% - 176px);
+  }
+
+  .overlay {
+    padding-left: max(10px, env(safe-area-inset-left));
+    padding-right: max(10px, env(safe-area-inset-right));
+  }
+
+  .overlay.light {
+    padding-bottom: calc(92px + env(safe-area-inset-bottom));
+  }
+
+  .modal-card {
+    padding: 20px 18px;
+  }
+
+  .cust-card {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 16px;
+  }
+
+  .cust-stage {
+    max-width: min(220px, 30vh);
+    max-width: min(220px, 30dvh);
+  }
+
+  .cust-actions button {
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 380px) {
+  .brand {
+    display: none;
+  }
+
+  body.touch button.icon {
+    width: 38px;
+    height: 38px;
+  }
+
+  .hud-icons {
+    gap: 4px;
+  }
+
+  #chips {
+    bottom: calc(232px + env(safe-area-inset-bottom));
+    width: calc(100% - 32px);
+  }
+
+  #actionbar button {
+    font-size: 9px;
+  }
+
+  .cust-actions .primary {
+    padding: 12px 20px;
+    font-size: 15px;
+  }
+
+  .cust-actions .ghost {
+    padding: 10px 14px;
+  }
+}
+
+@media (max-width: 340px) {
+  #actionbar button {
+    font-size: 8.5px;
+    letter-spacing: -0.2px;
+  }
+}
+
+/* ---------- phone landscape: one header row, compact bars, customiser side by side ---------- */
+
+@media (max-height: 500px) and (orientation: landscape) {
+  #hud-top {
+    top: calc(6px + env(safe-area-inset-top));
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+
+  .brand {
+    font-size: 26px;
+    line-height: 1;
+  }
+
+  .brand span {
+    display: none;
+  }
+
+  #places {
+    order: 0;
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+  }
+
+  .hud-icons {
+    gap: 6px;
+  }
+
+  #toast,
+  #stampToast {
+    top: calc(60px + env(safe-area-inset-top));
+  }
+
+  #gameHud {
+    top: calc(56px + env(safe-area-inset-top));
+    gap: 4px;
+    padding: 8px 14px;
+  }
+
+  #chips {
+    top: calc(58px + env(safe-area-inset-top));
+    bottom: auto;
+    width: auto;
+  }
+
+  #actionbar {
+    left: 50%;
+    right: auto;
+    bottom: calc(6px + env(safe-area-inset-bottom));
+    display: flex;
+    gap: 2px;
+    max-width: calc(100% - 200px);
+    padding: 4px;
+    border-radius: 16px;
+    transform: translateX(-50%);
+  }
+
+  #actionbar button {
+    min-width: 60px;
+    min-height: 0;
+    padding: 4px 6px;
+    gap: 0;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  #actionbar button span {
+    font-size: 18px;
+  }
+
+  #prompts {
+    bottom: calc(66px + env(safe-area-inset-bottom));
+  }
+
+  #jumpBtn,
+  #vehicleBtns {
+    right: calc(16px + env(safe-area-inset-right));
+    bottom: calc(14px + env(safe-area-inset-bottom));
+  }
+
+  #vehicleBtns button {
+    width: 56px;
+    height: 56px;
+  }
+
+  .overlay {
+    padding: max(8px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  }
+
+  .overlay.light {
+    padding-bottom: calc(64px + env(safe-area-inset-bottom));
+  }
+
+  .modal-card,
+  .poster-card {
+    max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    padding: 16px 20px;
+  }
+
+  .stamps,
+  .board-body {
+    max-height: none;
+  }
+
+  /* the preview stays put on the left while the options scroll on the right */
+  .cust-card {
+    grid-template-columns: minmax(180px, 36%) 1fr;
+    gap: 18px;
+    height: calc(100vh - 16px);
+    height: calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    max-height: none;
+    padding: 12px 18px;
+    overflow: hidden;
+  }
+
+  .cust-left {
+    min-height: 0;
+    gap: 4px;
+  }
+
+  .cust-brand .hindi {
+    font-size: 16px;
+  }
+
+  .cust-brand h1 {
+    font-size: 24px;
+  }
+
+  .cust-brand .sub {
+    font-size: 12px;
+  }
+
+  .cust-stage {
+    flex: 1 1 0;
+    min-height: 0;
+    max-width: none;
+    aspect-ratio: auto;
+  }
+
+  .cust-right {
+    min-height: 0;
+    padding-right: 4px;
+    overflow-y: auto;
+  }
+
+  .cust-card .controls-hint {
+    margin-top: 0;
+  }
 }

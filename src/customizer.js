@@ -83,7 +83,9 @@ export class Customizer {
     const end = () => (this.dragging = null);
     this.canvas.addEventListener('pointerup', end);
     this.canvas.addEventListener('pointercancel', end);
-    addEventListener('resize', () => this.fit());
+    // the stage's size follows the layout (portrait, landscape, phone toolbars), not just the window
+    if (window.ResizeObserver) new ResizeObserver(() => this.fit()).observe(this.canvas);
+    else addEventListener('resize', () => this.fit());
   }
 
   fit() {
