@@ -25,6 +25,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx vite build --base=/diwali-mela/
+        env:
+          # Pages serves files only: no realtime socket, no Topmate proxy. Point these at a host
+          # running server/ (VITE_WS_URL=wss://…/ws) or api/ (VITE_API_BASE=https://…/) to enable them.
+          VITE_STATIC: '1'
+          VITE_WS_URL: ${{ vars.VITE_WS_URL }}
+          VITE_API_BASE: ${{ vars.VITE_API_BASE }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

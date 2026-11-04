@@ -2,6 +2,13 @@
 
 const KEY = 'melaProfile';
 
+/*
+  Where the Topmate proxy lives. A static build (VITE_STATIC=1, e.g. GitHub Pages) has no proxy, so
+  lookups are skipped unless VITE_API_BASE points at one (e.g. a Vercel deployment of api/).
+*/
+const ENV = import.meta.env ?? {};
+const API_BASE = ENV.VITE_API_BASE || (ENV.VITE_STATIC ? '' : ENV.BASE_URL);
+
 /** Accepts "priya", "@priya" or "https://topmate.io/priya" and returns "priya". */
 export function normalizeHandle(raw) {
   let s = (raw || '').trim();
@@ -45,13 +52,16 @@ export const profile = {
   /** Looks the handle up through the same-origin proxy (see server/topmate.mjs). Cached per handle. */
   async fetchTopmate(handle = this.handle) {
     const h = normalizeHandle(handle);
-    if (!h) return null;
+    if (!h || !API_BASE) return null;
     this._cache ??= new Map();
     if (this._cache.has(h)) return this._cache.get(h);
-    const p = fetch(`${import.meta.env.BASE_URL}api/topmate?u=${encodeURIComponent(h)}`, { signal: AbortSignal.timeout(9000) })
+    const base = API_BASE.endsWith('/') ? API_BASE : `${API_BASE}/`;
+    const p = fetch(`${base}api/topmate?u=${encodeURIComponent(h)}`, { signal: AbortSignal.timeout(9000) })
       .then((r) => (r.ok ? r.json() : null))
       .catch(() => null)
       .then((data) => {
+        // the proxy returns a root-relative photo URL: resolve it against a cross-origin API base
+        if (data?.image?.startsWith('/') && /^https?:/.test(base)) data.image = new URL(data.image, base).href;
         if (h === this.handle) this.topmate = data;
         return data;
       });

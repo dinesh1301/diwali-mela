@@ -15,9 +15,14 @@ const LOCAL_KEY = 'melaLocalBoards';
 const BOARD_ORDER = { golgappa: 'desc', lap: 'asc', striker: 'desc' };
 const _v = new THREE.Vector3();
 
+const ENV = import.meta.env ?? {};
+// Same-origin attempts that never open before we give up (a static host has no socket to retry).
+const SAME_ORIGIN_TRIES = 3;
+
+/** VITE_WS_URL names a realtime server; a static build (VITE_STATIC=1) without one stays offline. */
 function defaultUrl() {
-  const env = import.meta.env?.VITE_WS_URL;
-  if (env) return env;
+  if (ENV.VITE_WS_URL) return ENV.VITE_WS_URL;
+  if (ENV.VITE_STATIC) return null;
   return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
 }
 
@@ -35,7 +40,8 @@ export class Net {
     this.listeners = {};
     this.lastSend = 0;
     this.retry = 1000;
-    this.enabled = true;
+    this.failures = 0; // consecutive attempts that never opened
+    this.enabled = !!url;
     this.voice = null; // set by Voice
     this.tmpQ = new THREE.Quaternion();
     this.tmpE = new THREE.Euler(0, 0, 0, 'YXZ');
@@ -82,6 +88,7 @@ export class Net {
     ws.onopen = () => {
       this.connected = true;
       this.retry = 1000;
+      this.failures = 0;
       this.send({ t: 'hello', name: profile.name, handle: profile.handle, look: this.ctx.player.char.look });
       this.emit('status', true);
     };
@@ -95,12 +102,14 @@ export class Net {
       this.handle(m);
     };
     ws.onclose = () => {
+      const opened = this.connected;
       this.connected = false;
       this.ws = null;
       this.id = null;
       for (const id of [...this.remote.keys()]) this.removeRemote(id);
       this.online = 1;
       this.emit('status', false);
+      if (!opened && ++this.failures >= SAME_ORIGIN_TRIES && !ENV.VITE_WS_URL) return; // no server here: stay local
       setTimeout(() => this.connect(), this.retry);
       this.retry = Math.min(15000, this.retry * 1.7);
     };
