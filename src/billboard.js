@@ -7,11 +7,12 @@ import { lowDetail } from './lod.js';
 /*
   The Mela Screen: a big festive billboard hung over the walkway just inside the gate, facing the
   entrance (everyone walks under it in their first seconds, and it is in view from the gate and down
-  the main path). It plays the creator's reels, or shows their LinkedIn posts, on a carousel; without
+  the main path). It plays the creator's reels, or shows their LinkedIn or Instagram posts, on a carousel; without
   a creator it loops painted "Topmate Diwali Mela" posters.
 
   CreatorConfig.billboard (optional):
     { kind: 'reels' | 'posts',
+      source?: 'instagram' | 'linkedin',   // where posts come from (default linkedin)
       items: [{ type: 'video' | 'image', src, poster?, caption? }]   // 1-6 items
     }
   src / poster are same-origin URLs (e.g. /api/creators/<slug>/billboard/1.mp4, .jpg). Videos are
@@ -42,6 +43,7 @@ const URL_RE = /^(https?:\/\/|\/(?!\/))/i;
 export function normaliseBillboard(raw) {
   if (!raw || typeof raw !== 'object' || !Array.isArray(raw.items)) return null;
   const kind = raw.kind === 'posts' ? 'posts' : 'reels';
+  const source = raw.source === 'instagram' ? 'instagram' : 'linkedin';
   const items = raw.items
     .filter((it) => it && typeof it === 'object' && typeof it.src === 'string' && URL_RE.test(it.src))
     .slice(0, MAX_ITEMS)
@@ -51,7 +53,7 @@ export function normaliseBillboard(raw) {
       const caption = typeof it.caption === 'string' ? it.caption.replace(/\s+/g, ' ').trim().slice(0, 60) : '';
       return { type, src: it.src, poster, caption };
     });
-  return items.length ? { kind, items } : null;
+  return items.length ? { kind, source, items } : null;
 }
 
 // ---------- painting ----------
@@ -418,6 +420,7 @@ export class Billboard {
     const bb = cfg?.billboard ?? null;
     this.custom = !!bb;
     this.kind = bb?.kind ?? 'reels';
+    this.postsOn = bb?.source === 'instagram' ? 'Instagram' : 'LinkedIn';
     this.aspect = this.kind === 'posts' ? 4 / 5 : 9 / 16;
     this.items = [];
     this.idx = 0;
@@ -431,7 +434,7 @@ export class Billboard {
     this.pos = new THREE.Vector3(BILLBOARD_SITE.x, 0, BILLBOARD_SITE.z);
 
     const first = cfg?.first || '';
-    const title = !bb ? 'Mela TV' : this.kind === 'posts' ? `${first} on LinkedIn` : `${first} ke Reels`;
+    const title = !bb ? 'Mela TV' : this.kind === 'posts' ? `${first} on ${this.postsOn}` : `${first} ke Reels`;
     const sub = !bb ? 'Topmate Diwali Mela' : this.kind === 'posts' ? 'Latest posts' : 'Fresh reels · Topmate Mela';
     this.build(title, sub, colliders);
 
@@ -801,7 +804,7 @@ export class Billboard {
     const cap = (fade > 0.5 ? next : cur).caption || '';
     if (this.hasCaptions && cap !== this.captionShown) {
       this.captionShown = cap;
-      this.caption.draw(cap || (this.kind === 'posts' ? 'On LinkedIn' : 'Reels'));
+      this.caption.draw(cap || (this.kind === 'posts' ? `On ${this.postsOn}` : 'Reels'));
     }
   }
 
