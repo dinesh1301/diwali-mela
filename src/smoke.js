@@ -1,5 +1,12 @@
 import * as THREE from 'three';
 import { rand } from './utils.js';
+import { settings } from './settings.js';
+
+// Phones: emitters run at half rate, puffs grow less and point sprites are capped smaller, which
+// is most of smoke's cost (large alpha-blended quads overdrawing each other).
+// (set by the constructor: the tier is known only once main.js has run settings.detect())
+let RATE = 1;
+let GROW = 1;
 
 /*
   Soft billowing particles for everything the hard little Debris cubes can't do: kitchen steam,
@@ -18,6 +25,10 @@ const COLORS = {
 
 export class Smoke {
   constructor(scene, max = 1500) {
+    const low = settings.tier === 'low';
+    RATE = low ? 0.5 : 1;
+    GROW = low ? 0.75 : 1;
+    const maxPointPx = low ? 110 : 220;
     this.max = max;
     this.count = 0;
     this.pos = new Float32Array(max * 3);
@@ -45,6 +56,7 @@ export class Smoke {
       a.setUsage(THREE.DynamicDrawUsage);
       geo.setAttribute(k, a);
     }
+    this.attrList = Object.values(this.attrs);
     geo.setDrawRange(0, 0);
     this.geometry = geo;
 
@@ -62,24 +74,27 @@ export class Smoke {
         varying vec3 vColor;
         varying float vAlpha;
         varying float vSeed;
+        varying vec3 vRot; // cos, sin of the puff's rotation and its squash, per puff not per pixel
         void main() {
           vColor = aColor;
           vAlpha = aAlpha;
           vSeed = aSeed;
+          float a = aSeed * 6.2831;
+          vRot = vec3(cos(a), sin(a), 1.15 + 0.3 * sin(aSeed * 40.0));
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
-          gl_PointSize = clamp(aSize * uScale / -mv.z, 1.0, 220.0);
+          gl_PointSize = clamp(aSize * uScale / -mv.z, 1.0, ${maxPointPx.toFixed(1)});
           gl_Position = projectionMatrix * mv;
         }`,
       fragmentShader: /* glsl */ `
         varying vec3 vColor;
         varying float vAlpha;
         varying float vSeed;
+        varying vec3 vRot;
         void main() {
           vec2 c = gl_PointCoord - 0.5;
           // rotate each puff a little so they don't all look identical
-          float a = vSeed * 6.2831;
-          vec2 r = vec2(c.x * cos(a) - c.y * sin(a), c.x * sin(a) + c.y * cos(a));
-          float d = length(r * vec2(1.0, 1.15 + 0.3 * sin(vSeed * 40.0)));
+          vec2 r = vec2(c.x * vRot.x - c.y * vRot.y, c.x * vRot.y + c.y * vRot.x);
+          float d = length(r * vec2(1.0, vRot.z));
           float soft = smoothstep(0.5, 0.05, d);
           soft *= 0.75 + 0.25 * sin((r.x + r.y) * 18.0 + vSeed * 30.0);
           float al = soft * vAlpha;
@@ -90,6 +105,7 @@ export class Smoke {
     this.points = new THREE.Points(geo, this.material);
     this.points.frustumCulled = false;
     this.points.renderOrder = 6;
+    if (low) this.points.layers.set(1); // phones: the river reflection skips the smoke
     scene.add(this.points);
   }
 
@@ -102,7 +118,10 @@ export class Smoke {
    * kind: smoke | steam | dust | mist | fire | ember · spread: start radius · rise: m/s up
    * life: seconds · size: start diameter · grow: diameter growth per second · peak: max alpha
    */
-  puff(x, y, z, { kind = 'smoke', count = 6, spread = 0.2, rise = 0.8, drift = 0.3, life = 2.5, size = 0.6, grow = 0.5, peak = 0.35, vx = 0, vz = 0 } = {}) {
+  puff(x, y, z, opts = {}, n = opts.count ?? 6) {
+    const { kind = 'smoke', spread = 0.2, rise = 0.8, drift = 0.3, life = 2.5, size = 0.6, peak = 0.35, vx = 0, vz = 0 } = opts;
+    const grow = (opts.grow ?? 0.5) * GROW;
+    const count = n;
     const c = COLORS[kind] ?? COLORS.smoke;
     for (let k = 0; k < count; k++) {
       if (this.count >= this.max) return;
@@ -165,12 +184,12 @@ export class Smoke {
         this.emitters.splice(k, 1);
         continue;
       }
-      e.acc += e.rate * dt;
+      e.acc += e.rate * RATE * dt;
       const n = Math.floor(e.acc);
       if (n > 0) {
         e.acc -= n;
         const p = typeof e.pos === 'function' ? e.pos(e.tmp) : e.pos;
-        this.puff(p.x, p.y, p.z, { ...e.opts, count: n });
+        this.puff(p.x, p.y, p.z, e.opts, n); // no per-emit options copy
       }
     }
     const wind = Math.sin(t * 0.3) * 0.15;
@@ -194,7 +213,8 @@ export class Smoke {
       alpha[i] = peak[i] * Math.min(1, k * 6) * (1 - k) * (1 - k);
     }
     const n = this.count;
-    for (const a of Object.values(this.attrs)) {
+    if (n === 0 && this.geometry.drawRange.count === 0) return; // nothing to upload or draw
+    for (const a of this.attrList) {
       a.clearUpdateRanges();
       a.addUpdateRange(0, n * a.itemSize);
       a.needsUpdate = true;

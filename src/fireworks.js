@@ -1,7 +1,14 @@
 import * as THREE from 'three';
 import { rand, pick, hdr } from './utils.js';
+import { settings } from './settings.js';
 
-const MAX = 40000;
+// Phones get sparser bursts and a smaller pool: every particle is a CPU update, an upload and a
+// blended point sprite. `n(k)` scales a particle count by the tier's density. Set by the
+// constructor, since the tier is known only once main.js has run settings.detect().
+let LOW = false;
+let DENSITY = 1;
+let MAX = 40000;
+const n = (k) => Math.max(1, Math.round(k * DENSITY));
 const G = 9.8;
 const STROBE = 1;
 const TRAIL = 2;
@@ -34,6 +41,21 @@ function randomUnit(out) {
   return out.set(r * Math.cos(a), z, r * Math.sin(a));
 }
 
+// One set of sparkler meshes' geometry and materials for every sparkler ever lit: a burnt-out
+// sparkler is just removed from the scene, with nothing of its own left to dispose.
+let kit = null;
+function sparklerKit() {
+  kit ??= {
+    wireGeo: new THREE.CylinderGeometry(0.004, 0.004, 0.42, 6),
+    wireMat: new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.6, roughness: 0.4 }),
+    coatGeo: new THREE.CylinderGeometry(0.009, 0.009, 1, 8),
+    coatMat: new THREE.MeshStandardMaterial({ color: 0x4a4038, roughness: 1 }),
+    tipGeo: new THREE.SphereGeometry(0.012, 8, 6),
+    tipMat: new THREE.MeshBasicMaterial({ color: hdr(0xfff2c0, 8) }),
+  };
+  return kit;
+}
+
 function randomColors() {
   const a = pick(SHELL_COLORS);
   return [a, Math.random() < 0.5 ? a : pick(SHELL_COLORS)];
@@ -49,6 +71,10 @@ export class Fireworks {
     this.camera = camera;
     this.audio = audio;
     this.site = site.clone();
+    LOW = settings.tier === 'low';
+    DENSITY = LOW ? 0.4 : 1;
+    MAX = LOW ? 12000 : 40000;
+    const maxPointPx = LOW ? 48 : 96;
 
     this.pos = new Float32Array(MAX * 3);
     this.vel = new Float32Array(MAX * 3);
@@ -89,7 +115,7 @@ export class Fireworks {
         void main() {
           vColor = aColor;
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
-          gl_PointSize = clamp(aSize * uScale / -mv.z, 1.0, 96.0);
+          gl_PointSize = clamp(aSize * uScale / -mv.z, 1.0, ${maxPointPx.toFixed(1)});
           gl_Position = projectionMatrix * mv;
         }`,
       fragmentShader: /* glsl */ `
@@ -104,6 +130,7 @@ export class Fireworks {
     this.points = new THREE.Points(geo, this.material);
     this.points.frustumCulled = false;
     this.points.renderOrder = 5;
+    this.points.layers.set(1); // the river reflection skips layer 1: no second draw of every spark
     scene.add(this.points);
 
     // Lights are created once and only dimmed, so shaders never recompile mid-show. Each has a finite
@@ -177,7 +204,7 @@ export class Fireworks {
 
   crackleSpark(x, y, z, size) {
     const sp = Math.min(3, size * 60);
-    for (let k = 0; k < 4; k++) {
+    for (let k = 0, m = LOW ? 2 : 4; k < m; k++) {
       randomUnit(_v);
       this.spawn(x, y, z, _v.x * sp, _v.y * sp, _v.z * sp, C.white, 3.5, rand(0.1, 0.22), size * 0.8, 2, 3, 0);
     }
@@ -194,8 +221,8 @@ export class Fireworks {
   }
 
   /** Glowing embers drifting up from a fire. */
-  embers(x, y, z, n = 10) {
-    for (let i = 0; i < n; i++) {
+  embers(x, y, z, count = 10) {
+    for (let i = 0, m = n(count); i < m; i++) {
       this.spawn(x + rand(-0.5, 0.5), y, z + rand(-0.5, 0.5), rand(-1.5, 1.5), rand(2, 6), rand(-1.5, 1.5), Math.random() < 0.5 ? C.gold : C.orange, 2.4, rand(0.8, 2.0), 0.12, 1.5, 1.2, Math.random() < 0.3 ? STROBE : 0);
     }
   }
@@ -222,7 +249,7 @@ export class Fireworks {
     switch (type) {
       case 'peony': {
         const s = rand(15, 20);
-        for (let i = 0; i < 280; i++) {
+        for (let i = 0, m = n(280); i < m; i++) {
           randomUnit(_v).multiplyScalar(s * rand(0.88, 1.04));
           this.spawn(p.x, p.y, p.z, _v.x, _v.y, _v.z, i % 3 === 0 ? c2 : c1, 3.2 * BURST, rand(1.7, 2.4), 0.5, 3.2, 1.25, Math.random() < 0.12 ? STROBE : 0);
         }
@@ -230,18 +257,18 @@ export class Fireworks {
       }
       case 'chrysanthemum': {
         const s = rand(13, 17);
-        for (let i = 0; i < 220; i++) {
+        for (let i = 0, m = n(220); i < m; i++) {
           randomUnit(_v).multiplyScalar(s * rand(0.9, 1.03));
           this.spawn(p.x, p.y, p.z, _v.x, _v.y, _v.z, c1, 2.8 * BURST, rand(1.6, 2.1), 0.42, 3.5, 1.3, TRAIL);
         }
         break;
       }
       case 'double': {
-        for (let i = 0; i < 200; i++) {
+        for (let i = 0, m = n(200); i < m; i++) {
           randomUnit(_v).multiplyScalar(18 * rand(0.92, 1.03));
           this.spawn(p.x, p.y, p.z, _v.x, _v.y, _v.z, c1, 3 * BURST, rand(1.8, 2.3), 0.48, 3, 1.2, 0);
         }
-        for (let i = 0; i < 120; i++) {
+        for (let i = 0, m = n(120); i < m; i++) {
           randomUnit(_v).multiplyScalar(8 * rand(0.9, 1.05));
           this.spawn(p.x, p.y, p.z, _v.x, _v.y, _v.z, c1 === c2 ? C.white : c2, 3.4 * BURST, rand(1.3, 1.6), 0.42, 3, 1.2, STROBE);
         }
@@ -257,19 +284,19 @@ export class Fireworks {
         _u.set(0, 1, 0).cross(_w).normalize();
         const v2 = new THREE.Vector3().crossVectors(_w, _u);
         const s = rand(15, 18);
-        for (let i = 0; i < 150; i++) {
-          const a = (i / 150) * Math.PI * 2;
+        for (let i = 0, m = n(150); i < m; i++) {
+          const a = (i / m) * Math.PI * 2;
           _v.copy(_u).multiplyScalar(Math.cos(a)).addScaledVector(v2, Math.sin(a)).multiplyScalar(s * rand(0.97, 1.02));
           this.spawn(p.x, p.y, p.z, _v.x, _v.y, _v.z, c1, 3.4 * BURST, rand(1.8, 2.2), 0.5, 2.5, 1.2, 0);
         }
-        for (let i = 0; i < 60; i++) {
+        for (let i = 0, m = n(60); i < m; i++) {
           randomUnit(_v).multiplyScalar(5);
           this.spawn(p.x, p.y, p.z, _v.x, _v.y, _v.z, c2 === c1 ? C.white : c2, 3 * BURST, rand(1.2, 1.5), 0.4, 2.5, 1.2, 0);
         }
         break;
       }
       case 'willow': {
-        for (let i = 0; i < 200; i++) {
+        for (let i = 0, m = n(200); i < m; i++) {
           randomUnit(_v).multiplyScalar(rand(8, 11));
           this.spawn(p.x, p.y, p.z, _v.x, _v.y, _v.z, C.gold, 2.4 * BURST, rand(3.2, 4.4), 0.4, 2.4, 1.6, TRAIL);
         }
@@ -280,8 +307,8 @@ export class Fireworks {
         _u.setFromMatrixColumn(this.camera.matrixWorld, 0);
         _w.setFromMatrixColumn(this.camera.matrixWorld, 1);
         const col = Math.random() < 0.5 ? C.pink : C.red;
-        for (let i = 0; i < 180; i++) {
-          const t = (i / 180) * Math.PI * 2;
+        for (let i = 0, m = n(180); i < m; i++) {
+          const t = (i / m) * Math.PI * 2;
           const hx = 16 * Math.pow(Math.sin(t), 3);
           const hy = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
           _v.copy(_u).multiplyScalar(hx).addScaledVector(_w, hy).multiplyScalar(15 / 16);
@@ -290,7 +317,7 @@ export class Fireworks {
         break;
       }
       case 'crackle': {
-        for (let i = 0; i < 200; i++) {
+        for (let i = 0, m = n(200); i < m; i++) {
           randomUnit(_v).multiplyScalar(rand(12, 15));
           this.spawn(p.x, p.y, p.z, _v.x, _v.y, _v.z, C.gold, 2.6 * BURST, rand(1.1, 1.6), 0.38, 3, 1.4, CRACKLE);
         }
@@ -300,7 +327,7 @@ export class Fireworks {
       case 'palm': {
         for (let arm = 0; arm < 9; arm++) {
           _w.set(rand(-1, 1), rand(0.1, 0.8), rand(-1, 1)).normalize();
-          for (let j = 0; j < 35; j++) {
+          for (let j = 0, m = n(35); j < m; j++) {
             const sp = rand(6, 17);
             this.spawn(p.x, p.y, p.z, _w.x * sp + rand(-0.4, 0.4), _w.y * sp + rand(-0.4, 0.4), _w.z * sp + rand(-0.4, 0.4), C.gold, 2.6 * BURST, rand(2, 2.8), 0.42, 3.5, 1.1, TRAIL);
           }
@@ -354,8 +381,8 @@ export class Fireworks {
           return false;
         }
         const env = Math.min(1, t / 1.0) * Math.min(1, (dur - t) / 1.5);
-        const n = Math.floor(600 * env * dt + Math.random());
-        for (let i = 0; i < n; i++) {
+        const count = Math.floor(600 * DENSITY * env * dt + Math.random());
+        for (let i = 0; i < count; i++) {
           const a = rand(0, Math.PI * 2);
           const r = rand(0, 1.6) * env;
           const vy = rand(7, 12.5) * (0.55 + 0.45 * env);
@@ -397,8 +424,8 @@ export class Fireworks {
         angle += (6 + 30 * env) * dt;
         body.rotation.set(-Math.PI / 2, 0, angle);
         const col = palette[Math.floor(t / 1.5) % palette.length];
-        const n = Math.floor(450 * env * dt + Math.random());
-        for (let i = 0; i < n; i++) {
+        const count = Math.floor(450 * DENSITY * env * dt + Math.random());
+        for (let i = 0; i < count; i++) {
           const a = angle + (i % 2) * Math.PI + rand(-0.2, 0.2);
           const sp = rand(3.5, 7) * env + 1;
           this.spawn(p.x + Math.cos(a) * 0.16, 0.08, p.z + Math.sin(a) * 0.16, -Math.sin(a) * sp, rand(0.3, 2.2), Math.cos(a) * sp, col, 2, rand(0.35, 0.75), 0.07, G, 1.0, 0);
@@ -426,10 +453,11 @@ export class Fireworks {
       return existing;
     }
     const group = new THREE.Group();
-    const wire = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.42, 6), new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.6, roughness: 0.4 }));
+    const k = sparklerKit();
+    const wire = new THREE.Mesh(k.wireGeo, k.wireMat);
     wire.position.y = 0.21;
-    const coat = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.009, 1, 8), new THREE.MeshStandardMaterial({ color: 0x4a4038, roughness: 1 }));
-    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.012, 8, 6), new THREE.MeshBasicMaterial({ color: hdr(0xfff2c0, 8) }));
+    const coat = new THREE.Mesh(k.coatGeo, k.coatMat);
+    const tip = new THREE.Mesh(k.tipGeo, k.tipMat);
     group.add(wire, coat, tip);
     group.rotation.order = 'YXZ';
     this.scene.add(group);
@@ -459,8 +487,8 @@ export class Fireworks {
       s.coat.position.y = 0.12 + coatH / 2;
       s.tip.position.y = burnY;
       s.tip.getWorldPosition(_v);
-      const n = Math.floor(s.rate * dt + Math.random());
-      for (let k = 0; k < n; k++) {
+      const count = Math.floor(s.rate * DENSITY * dt + Math.random());
+      for (let k = 0; k < count; k++) {
         randomUnit(_u).multiplyScalar(rand(0.6, 2.8));
         this.spawn(_v.x, _v.y, _v.z, _u.x, _u.y, _u.z, Math.random() < 0.6 ? C.white : C.gold, 2.2, rand(0.12, 0.4), 0.016, 2.5, 2.5, Math.random() < 0.25 ? CRACKLE : 0);
       }
@@ -522,8 +550,10 @@ export class Fireworks {
       k.v.y -= G * dt;
       k.p.addScaledVector(k.v, dt);
       this.spawn(k.p.x, k.p.y, k.p.z, 0, 0, 0, C.gold, 1.4, 0.05, 0.3, 0, 0, 0);
-      for (let j = 0; j < 3; j++) {
-        this.spawn(k.p.x + rand(-0.05, 0.05), k.p.y - (j * k.v.y * dt) / 3, k.p.z, rand(-0.6, 0.6), rand(-2, 0), rand(-0.6, 0.6), C.gold, 0.6, rand(0.3, 0.7), 0.2, 3, 2, 0);
+      // tail sparks by time (180/s), not per frame, so a 120 Hz screen doesn't spawn twice as many
+      const sparks = Math.floor(180 * DENSITY * dt + Math.random());
+      for (let j = 0; j < sparks; j++) {
+        this.spawn(k.p.x + rand(-0.05, 0.05), k.p.y - (j * k.v.y * dt) / sparks, k.p.z, rand(-0.6, 0.6), rand(-2, 0), rand(-0.6, 0.6), C.gold, 0.6, rand(0.3, 0.7), 0.2, 3, 2, 0);
       }
       if (k.v.y < 2) {
         this.burst(k.p, k.type, k.colors);
@@ -562,7 +592,7 @@ export class Fireworks {
       if (L < 0.12 && baseSize[i] > 0.33) f *= L / 0.12;
       const fl = flags[i];
       if (fl & STROBE && k > 0.4) f *= Math.sin(L * 50 + i) > 0 ? 1.4 : 0.05;
-      if (fl & TRAIL && Math.random() < 0.3) {
+      if (fl & TRAIL && Math.random() < 18 * DENSITY * dt) {
         _c[0] = base[i3];
         _c[1] = base[i3 + 1];
         _c[2] = base[i3 + 2];
@@ -579,12 +609,13 @@ export class Fireworks {
       if (l.intensity < 1) l.intensity = 0;
     }
 
-    const n = this.count;
-    this.attrs.forEach((a) => {
+    const live = this.count;
+    if (live === 0 && this.geometry.drawRange.count === 0) return; // nothing to upload or draw
+    for (const a of this.attrs) {
       a.clearUpdateRanges();
-      a.addUpdateRange(0, n * a.itemSize);
+      a.addUpdateRange(0, live * a.itemSize);
       a.needsUpdate = true;
-    });
-    this.geometry.setDrawRange(0, n);
+    }
+    this.geometry.setDrawRange(0, live);
   }
 }
