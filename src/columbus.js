@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { shape, merged } from './character.js';
 import { beam, hdr, setLayer, WARM_PALETTE } from './utils.js';
+import { mergeStatic } from './merge.js';
 import { signTexture } from './stalls.js';
 import { settings } from './settings.js';
 
@@ -96,6 +97,9 @@ export class Columbus {
     light.position.set(0, 5, 3);
     this.group.add(light);
 
+    // frame and platform as one mesh per look; the swinging pivot (arms, boat, bulbs) as another set
+    mergeStatic(this.group, { skip: (o) => o === this.pivot });
+    mergeStatic(this.pivot);
     setLayer(this.group, 1);
     world.colliders.push({ type: 'box', minX: POS.x - 3.7, maxX: POS.x + 3.7, minZ: POS.z - 2.2, maxZ: POS.z + 3.2 });
     world.tall.push({ type: 'box', minX: POS.x - 7, maxX: POS.x + 7, minZ: POS.z - 2.4, maxZ: POS.z + 2.4, h: PIVOT_H + 1.5 });

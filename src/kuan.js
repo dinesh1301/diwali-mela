@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Character, randomLook, shape, merged } from './character.js';
 import { beam, canvasTexture, hdr, setLayer, rand, WARM_PALETTE } from './utils.js';
 import { signTexture } from './stalls.js';
+import { mergeStatic } from './merge.js';
 
 /*
   Maut ka Kuan, the well of death: a wooden drum with two motorbikes riding its wall. Press E at
@@ -154,6 +155,9 @@ export class Kuan {
     sign.position.set(R + 3.4, 2.8, 4.6);
     sign.rotation.y = -Math.PI / 2;
     g.add(sign);
+
+    // drum, bands, gallery, posts and stairs: one mesh per material look (riders and spectators are added after)
+    mergeStatic(g);
 
     // the riders
     this.bikes = [bikeModel(0xe63946), bikeModel(0x3a86ff)].map((b, i) => {

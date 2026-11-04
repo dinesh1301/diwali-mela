@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { beamGeometry, canvasTexture, hdr, DAY } from './utils.js';
 import { signTexture } from './stalls.js';
+import { lowDetail } from './lod.js';
+import { mergeStatic, freezeStatic, tintEmissive } from './merge.js';
 
 const R = 14; // wheel radius
 const H = 17.5; // hub height
@@ -115,7 +117,7 @@ export class FerrisWheel {
         this.bulbData.push({ a, r: R * 0.45 });
       }
     }
-    this.bulbs = new THREE.InstancedMesh(new THREE.SphereGeometry(0.11, 8, 6), new THREE.MeshBasicMaterial(), pts.length);
+    this.bulbs = new THREE.InstancedMesh(lowDetail() ? new THREE.IcosahedronGeometry(0.11, 0) : new THREE.SphereGeometry(0.11, 8, 6), new THREE.MeshBasicMaterial(), pts.length);
     const m4 = new THREE.Matrix4();
     pts.forEach((p, i) => {
       this.bulbs.setMatrixAt(i, m4.makeTranslation(p.x, p.y, p.z));
@@ -143,21 +145,35 @@ export class FerrisWheel {
     const lampMat = new THREE.MeshBasicMaterial({ color: hdr(0xffd08a, 3.5) });
     const gold = new THREE.MeshStandardMaterial({ color: 0xd4a017, metalness: 0.7, roughness: 0.3 });
 
+    // The 16 gondolas are drawn as 4 instanced meshes (cabins, posts, roofs, lamps) whose instance
+    // matrices follow the gondola Groups; the Groups stay as the swinging seat anchors.
     this.gondolas = [];
+    this.gondolaParts = [
+      new THREE.InstancedMesh(cabinGeo, new THREE.MeshStandardMaterial({ roughness: 0.45, metalness: 0.2 }), SPOKES),
+      new THREE.InstancedMesh(postGeo, gold, SPOKES),
+      // a roof glows faintly in its own colour: emissive (0.12) times the instance colour
+      new THREE.InstancedMesh(roofGeo, tintEmissive(new THREE.MeshStandardMaterial({ roughness: 0.5, emissive: new THREE.Color(0.12, 0.12, 0.12) })), SPOKES),
+      new THREE.InstancedMesh(lampGeo, lampMat, SPOKES),
+    ];
+    const [cabins, , roofs] = this.gondolaParts;
+    cabins.castShadow = roofs.castShadow = true;
     for (let i = 0; i < SPOKES; i++) {
       const a = (i / SPOKES) * TWO_PI;
-      const color = GONDOLA_COLORS[i % GONDOLA_COLORS.length];
+      const color = new THREE.Color(GONDOLA_COLORS[i % GONDOLA_COLORS.length]);
       const g = new THREE.Group();
       g.position.set(Math.cos(a) * R, Math.sin(a) * R, 0);
       g.userData = { angle: a, phase: Math.random() * 10 };
-      g.add(
-        new THREE.Mesh(cabinGeo, new THREE.MeshStandardMaterial({ color, roughness: 0.45, metalness: 0.2 })),
-        new THREE.Mesh(postGeo, gold),
-        new THREE.Mesh(roofGeo, new THREE.MeshStandardMaterial({ color, roughness: 0.5, emissive: new THREE.Color(color).multiplyScalar(0.12) })),
-        new THREE.Mesh(lampGeo, lampMat)
-      );
+      cabins.setColorAt(i, color);
+      roofs.setColorAt(i, color);
       this.wheel.add(g);
       this.gondolas.push(g);
+    }
+    this.syncGondolas();
+    for (const m of this.gondolaParts) {
+      // the gondolas only ever swing around their place on the rim, so one sphere covers them all
+      m.computeBoundingSphere();
+      m.boundingSphere.radius += 3;
+      this.wheel.add(m);
     }
 
     // boarding platform, steps and ticket booth
@@ -192,12 +208,26 @@ export class FerrisWheel {
     this.gold = new THREE.Color(0xffb347);
     this.magenta = new THREE.Color(0xff2d95);
     this.cyan = new THREE.Color(0x35d6ff);
+
+    // platform, steps and booth: one mesh per material; the turning wheel stays live
+    mergeStatic(this.group, { skip: (o) => o === this.wheel });
+    freezeStatic(this.group, (o) => o === this.wheel || o === this.group);
+  }
+
+  syncGondolas() {
+    for (let i = 0; i < this.gondolas.length; i++) {
+      const g = this.gondolas[i];
+      g.updateMatrix();
+      for (const m of this.gondolaParts) m.setMatrixAt(i, g.matrix);
+    }
+    for (const m of this.gondolaParts) m.instanceMatrix.needsUpdate = true;
   }
 
   update(dt, t) {
     this.wheel.rotation.z += this.speed * dt;
     const rz = this.wheel.rotation.z;
     for (const g of this.gondolas) g.rotation.z = -rz + Math.sin(t * 1.1 + g.userData.phase) * 0.035;
+    this.syncGondolas();
 
     const mode = Math.floor(t / 9) % 3;
     const c = this.tmp;

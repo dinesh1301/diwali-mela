@@ -7,6 +7,7 @@ import { Garlands } from './garlands.js';
 import { Diyas } from './diyas.js';
 import { createStall, signTexture, STALL } from './stalls.js';
 import { FerrisWheel } from './ferrisWheel.js';
+import { mergeStatic, freezeStatic, mergeAdded } from './merge.js';
 
 /*
   Layout (metres, +z towards the entrance):
@@ -75,7 +76,9 @@ export function buildWorld(scene, { reflectionScale = 0.5 } = {}) {
     colliders: [],
     updaters: [],
     stalls: [],
+    live: new Set(), // world meshes that move or change: kept out of the static merge
   };
+  const before = new Set(scene.children);
 
   buildGround(ctx);
   buildGate(ctx);
@@ -85,6 +88,7 @@ export function buildWorld(scene, { reflectionScale = 0.5 } = {}) {
   buildFireworksField(ctx);
   buildGhat(ctx);
   buildSideAreas(ctx);
+  mergeWorld(ctx, before);
 
   const wheel = new FerrisWheel(scene, SITES.wheel);
   ctx.colliders.push(...wheel.colliders);
@@ -117,6 +121,15 @@ export function buildWorld(scene, { reflectionScale = 0.5 } = {}) {
 }
 
 // ---------- helpers ----------
+
+/**
+ * Folds the loose static meshes the builders above dropped into the scene (gate boxes, field posts,
+ * ghat steps, lamps...) into one mesh per material look per 40 m cell: far fewer draw calls in the
+ * main pass, the shadow pass and the river reflection, while regions still get culled.
+ */
+function mergeWorld(ctx, before) {
+  mergeAdded(ctx.scene, before, { live: ctx.live, cell: 40 });
+}
 
 /** Registers a decorated light pole (drawn later as one instanced mesh) and returns its top. */
 function pole(ctx, x, z, h) {
@@ -453,6 +466,7 @@ function buildPlaza(ctx) {
   const star = new THREE.Mesh(starGeo, new THREE.MeshBasicMaterial({ color: hdr(0xff6a1c, 2.4) }));
   star.position.set(0, 3.6, 0);
   scene.add(star);
+  ctx.live.add(star);
   ctx.updaters.push((dt, t) => {
     star.rotation.y = t * 0.4;
     star.position.y = 3.6 + Math.sin(t * 0.8) * 0.05;
@@ -573,6 +587,7 @@ function buildGhat(ctx) {
   foam.position.set(0, -1.34, -50.95);
   foam.renderOrder = 2;
   scene.add(foam);
+  ctx.live.add(foam);
   ctx.updaters.push((dt, t) => {
     foam.position.z = -50.95 + Math.sin(t * 0.9) * 0.12;
     foam.material.opacity = 0.28 + 0.14 * Math.sin(t * 0.9 + 1.2);
@@ -658,6 +673,8 @@ function buildTemple(ctx, x, z) {
     diyas.add(p.x, p.y, p.z);
   }
   colliders.push({ type: 'box', minX: x - 2.6, maxX: x + 3.4, minZ: z - 2.6, maxZ: z + 2.6 });
+  mergeStatic(g, { skip: (o) => o === flag });
+  freezeStatic(g, (o) => o === flag);
 }
 
 // ---------- side areas: games lane (east) and carousel ground (west) ----------

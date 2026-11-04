@@ -6,6 +6,7 @@ import { diyaMesh } from './items.js';
 import { beam, hdr, setLayer, clamp, rand, pick, WARM_PALETTE } from './utils.js';
 import { signTexture } from './stalls.js';
 import { SITES } from './world.js';
+import { mergeAdded } from './merge.js';
 
 export const PLAYLIST = 'PLFPJRCFRDARSZofcQcV6m7Pu2EAL8_1dv';
 const SCREEN_W = 12;
@@ -31,6 +32,7 @@ export class Ramayan {
     this.shuffled = false;
     this.volume = -1;
     this.lights = new StringLights(scene);
+    const before = new Set(scene.children);
 
     // ---- screen, frame and the CSS3D video behind it ----
     const sx = R.x;
@@ -165,6 +167,8 @@ export class Ramayan {
     const warm = new THREE.PointLight(0xffb46b, 40, 22, 2);
     warm.position.set(R.x, 3, 60);
     scene.add(warm);
+    // posts, benches, rugs, projector: one mesh per material look (the screen's hole stays its own)
+    mergeAdded(scene, before, { live: new Set([this.hole]) });
     this.lights.build();
 
     const gesture = () => {

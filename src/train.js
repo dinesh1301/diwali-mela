@@ -4,6 +4,8 @@ import { Character, randomLook } from './character.js';
 import { shape, merged } from './character.js';
 import { canvasTexture, hdr, setLayer, WARM_PALETTE } from './utils.js';
 import { signTexture } from './stalls.js';
+import { mergeStatic, mergeAdded } from './merge.js';
+import { seg } from './lod.js';
 
 /*
   The toy train: a narrow-gauge loop east of the bazaar with two stations. It runs on its own
@@ -68,6 +70,7 @@ export class Train {
     this.wantOff = false;
 
     // ---- track ----
+    const before = new Set(scene.children);
     const N = 480;
     const pts = this.curve.getSpacedPoints(N);
     pts.pop();
@@ -81,7 +84,7 @@ export class Train {
         rail.push(V(a.x - t.z * side, 0.09, a.z + t.x * side));
       }
       const rc = new THREE.CatmullRomCurve3(rail, true, 'catmullrom', 0.5);
-      const tube = new THREE.Mesh(new THREE.TubeGeometry(rc, 600, 0.045, 6, true), railMat);
+      const tube = new THREE.Mesh(new THREE.TubeGeometry(rc, seg(600, 300), 0.045, seg(6, 4), true), railMat);
       tube.castShadow = true;
       scene.add(tube);
     }
@@ -149,6 +152,8 @@ export class Train {
       return station;
     });
 
+    mergeAdded(scene, before, { cell: 40 }); // rails, platforms, posts
+
     // ---- rolling stock ----
     this.cars = [this.engine(), this.carriage(0x2a9d8f), this.carriage(0xe63946)];
     this.cars.forEach((c) => {
@@ -207,6 +212,7 @@ export class Train {
     g.add(funnel);
     g.userData.funnel = funnel;
     g.userData.seats = [];
+    mergeStatic(g); // body, wheels and lamp move together: one mesh per look
     return g;
   }
 
@@ -243,6 +249,7 @@ export class Train {
       g.add(seat);
       return seat;
     });
+    mergeStatic(g);
     return g;
   }
 

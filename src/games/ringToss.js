@@ -30,17 +30,23 @@ export class RingToss {
 
     const profile = [[0, 0], [0.06, 0], [0.065, 0.17], [0.04, 0.23], [0.024, 0.27], [0.024, 0.33], [0.028, 0.335], [0, 0.335]].map(([x, y]) => new THREE.Vector2(x, y));
     const bottleGeo = new THREE.LatheGeometry(profile, 16);
-    const glass = [0x2d6a4f, 0x7f5539, 0x1d3557].map((c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.12, metalness: 0.1, transparent: true, opacity: 0.85 }));
+    const glass = [0x2d6a4f, 0x7f5539, 0x1d3557].map((c) => new THREE.Color(c));
+    // twelve bottles, one instanced draw; rows go back to front so the glass blends the way the
+    // separately sorted bottles did when seen from the throwing line
+    const bottles = new THREE.InstancedMesh(bottleGeo, new THREE.MeshStandardMaterial({ roughness: 0.12, metalness: 0.1, transparent: true, opacity: 0.85 }), 12);
+    const m4 = new THREE.Matrix4();
     this.bottles = [];
     let k = 0;
     for (const lz of [-1.75, -1.0, -0.25]) {
       for (const lx of [-1.5, -0.5, 0.5, 1.5]) {
-        const b = new THREE.Mesh(bottleGeo, glass[k++ % 3]);
-        b.position.set(lx, TABLE_TOP, lz);
-        g.add(b);
+        bottles.setMatrixAt(k, m4.makeTranslation(lx, TABLE_TOP, lz));
+        bottles.setColorAt(k, glass[k % 3]);
+        k++;
         this.bottles.push(booth.w(lx, 0, lz));
       }
     }
+    bottles.computeBoundingSphere();
+    g.add(bottles);
     const a = booth.w(-2.35, 0, -2.15);
     const b = booth.w(2.35, 0, 0.35);
     this.table = { minX: Math.min(a.x, b.x), maxX: Math.max(a.x, b.x), minZ: Math.min(a.z, b.z), maxZ: Math.max(a.z, b.z) };

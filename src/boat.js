@@ -4,6 +4,8 @@ import { Character, randomLook } from './character.js';
 import { diyaMesh, kandeelMesh } from './items.js';
 import { collide } from './physics.js';
 import { beam, canvasTexture, hdr, pick, clamp } from './utils.js';
+import { mergeStatic, mergeAdded } from './merge.js';
+import { seg } from './lod.js';
 import { signTexture } from './stalls.js';
 
 /*
@@ -79,7 +81,7 @@ function boatModel() {
   for (let i = 0; i <= 40; i++) rim.push(V(halfW(i / 40), 0, (i / 40 - 0.5) * L));
   for (let i = 40; i >= 0; i--) rim.push(V(-halfW(i / 40), 0, (i / 40 - 0.5) * L));
   const rimCurve = new THREE.CatmullRomCurve3(rim, true, 'catmullrom', 0.2);
-  g.add(new THREE.Mesh(new THREE.TubeGeometry(rimCurve, 160, 0.055, 8, true), std(0x3d2a1c, 0.6)));
+  g.add(new THREE.Mesh(new THREE.TubeGeometry(rimCurve, seg(160, 80), 0.055, seg(8, 5), true), std(0x3d2a1c, 0.6)));
 
   const inner = plankTexture('#5a3418', 'y');
   inner.repeat.set(2, 4);
@@ -106,7 +108,7 @@ function boatModel() {
   top.position.set(0, 1.68, 0.22);
   g.add(top);
   const petals = [0xff7b00, 0xffc300, 0xff9500];
-  const flower = new THREE.SphereGeometry(0.045, 8, 6);
+  const flower = new THREE.SphereGeometry(0.045, seg(8, 5), seg(6, 4));
   const edges = [];
   for (let x = -0.9; x <= 0.9; x += 0.09) edges.push([x, -0.68], [x, 1.12]);
   for (let z = -0.6; z <= 1.05; z += 0.09) edges.push([-0.9, z], [0.9, z]);
@@ -157,6 +159,9 @@ function boatModel() {
   plate.position.set(0.97, -0.12, -1.2);
   plate.rotation.y = Math.PI / 2;
   g.add(plate);
+  // hull, rim, canopy, bulbs and lantern: one mesh per look; oars swing, the diya flickers
+  const oarSet = new Set(oars.map((o) => o.pivot));
+  mergeStatic(g, { skip: (o) => oarSet.has(o) });
   return { group: g, seat, oars };
 }
 
@@ -209,6 +214,7 @@ export class BoatRide {
   buildPier() {
     const { scene, world } = this.ctx;
     const { x, w, z0, z1 } = PIER;
+    const before = new Set(scene.children);
     const len = z0 - z1;
     const zc = (z0 + z1) / 2;
     const planks = plankTexture('#6b3f22', 'y');
@@ -246,6 +252,7 @@ export class BoatRide {
     const lamp = new THREE.PointLight(0xffb46b, 30, 14, 2);
     lamp.position.set(x, 1.6, z1 + 2);
     scene.add(lamp);
+    mergeAdded(scene, before);
 
     // the deck is walkable: patch the world's ground height and bounds for anyone on it
     const onPier = (px, pz) => px > x - w / 2 && px < x + w / 2 && pz < z0 + 0.2 && pz > z1;

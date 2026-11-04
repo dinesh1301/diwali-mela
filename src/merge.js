@@ -84,7 +84,8 @@ export function lockNoCast(mesh) {
 }
 
 function mergeable(o) {
-  if (!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh || !o.visible || o.children.length) return false;
+  // userData.live marks a mesh some code moves, scales or recolours on its own (a diya flame)
+  if (!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh || !o.visible || o.children.length || o.userData.live) return false;
   if (Array.isArray(o.material) || o.geometry.morphAttributes.position || !o.geometry.attributes.position) return false;
   if (o.onBeforeRender !== THREE.Object3D.prototype.onBeforeRender) return false;
   return true;
@@ -93,9 +94,11 @@ function mergeable(o) {
 /**
  * Merges the static meshes under root into one mesh per material look, added to root.
  * skip(o) returning true keeps o and its whole subtree untouched (animated parts, people, signs).
+ * cell (metres) also splits the batches on a ground grid, so a merge spread over the whole mela
+ * still gets frustum-culled region by region.
  * Returns the merged meshes.
  */
-export function mergeStatic(root, { skip = () => false, freeze = true } = {}) {
+export function mergeStatic(root, { skip = () => false, freeze = true, cell = 0 } = {}) {
   root.updateMatrixWorld(true);
   _inv.copy(root.matrixWorld).invert();
   const buckets = new Map();
@@ -111,7 +114,12 @@ export function mergeStatic(root, { skip = () => false, freeze = true } = {}) {
     if (!geo.boundingSphere) geo.computeBoundingSphere();
     o.matrixWorld.decompose(_v, _q, _s);
     const cast = o.castShadow || (!mat.isMeshBasicMaterial && geo.boundingSphere.radius * Math.max(Math.abs(_s.x), Math.abs(_s.y), Math.abs(_s.z)) >= MIN_CASTER_RADIUS);
-    const key = [look ?? mat.uuid, o.layers.mask, cast, o.receiveShadow, o.renderOrder, o.frustumCulled].join('#');
+    let where = '';
+    if (cell) {
+      _v.copy(geo.boundingSphere.center).applyMatrix4(o.matrixWorld);
+      where = `${Math.floor(_v.x / cell)},${Math.floor(_v.z / cell)}`;
+    }
+    const key = [look ?? mat.uuid, o.layers.mask, cast, o.receiveShadow, o.renderOrder, o.frustumCulled, where].join('#');
     let b = buckets.get(key);
     if (!b) buckets.set(key, (b = { look, mat, cast, src: o, items: [] }));
     b.items.push({ o, m: _m.clone() });
@@ -178,4 +186,20 @@ export function freezeStatic(root, skip = () => false) {
   };
   visit(root);
   return root;
+}
+
+/**
+ * For builders that drop loose meshes straight into the scene: gathers the plain meshes added to
+ * parent since `before` (a Set of its earlier children), minus `live` ones, into one frozen group
+ * and merges them. Returns that group.
+ */
+export function mergeAdded(parent, before, { live = new Set(), cell = 0 } = {}) {
+  const statics = new THREE.Group();
+  for (const o of parent.children.slice()) {
+    if (before.has(o) || !o.isMesh || o.isInstancedMesh || live.has(o) || o.onBeforeRender !== THREE.Object3D.prototype.onBeforeRender) continue;
+    statics.add(o);
+  }
+  parent.add(statics);
+  mergeStatic(statics, { cell });
+  return freezeStatic(statics);
 }

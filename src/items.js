@@ -94,6 +94,7 @@ const clay = std(0xb5562b, 0.85, { emissive: 0x3a1204 });
 export function diyaMesh() {
   const flame = mesh(flameGeo, flameMat, 0, 0.11);
   flame.userData.phase = Math.random() * 100;
+  flame.userData.live = true; // flickered by updateFlames: never merged away
   flames.add(flame);
   return group(mesh(bowlGeo, clay), flame);
 }

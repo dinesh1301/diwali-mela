@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { StringLights } from '../stringLights.js';
+import { mergeStatic, freezeStatic } from '../merge.js';
 import { buildBooth } from './booth.js';
 import { BalloonShoot } from './balloonShoot.js';
 import { RingToss } from './ringToss.js';
@@ -23,6 +24,14 @@ export class Games {
     this.games = BOOTHS.map((d, i) => {
       const booth = buildBooth(ctx, this.lights, { ...d, lamp: i % 2 === 0 });
       const game = new d.Game(ctx, booth);
+      // merge the booth shell and the game's fixed props; anything the game holds on to stays live
+      const live = new Set();
+      for (const v of Object.values(game)) {
+        if (v?.isObject3D) live.add(v);
+        else if (Array.isArray(v)) for (const x of v) if (x?.isObject3D) live.add(x);
+      }
+      mergeStatic(booth.group, { skip: (o) => live.has(o) });
+      freezeStatic(booth.group, (o) => live.has(o));
       game.finish = (r) => this.finish(game, r);
       ctx.interactions.add({
         pos: new THREE.Vector3(24.3, 0, d.z),

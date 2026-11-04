@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Character, randomLook } from '../character.js';
 import { beam, canvasTexture, setLayer, pick, rand, WARM_PALETTE } from '../utils.js';
 import { signTexture, stripes } from '../stalls.js';
+import { mergeStatic } from '../merge.js';
 import { settings } from '../settings.js';
 
 /*
@@ -162,6 +163,8 @@ export class Tambola {
     const lamp = new THREE.PointLight(0xffd9a0, 60, 16, 2);
     lamp.position.set(0, 3, 0);
     g.add(lamp);
+    const people = new Set([this.caller.root, ...this.rivals.map((r) => r.root)]);
+    mergeStatic(g, { skip: (o) => people.has(o) || o === boardMesh });
     setLayer(g, 1);
     this.group = g;
 
