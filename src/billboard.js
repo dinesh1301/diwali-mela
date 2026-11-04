@@ -455,6 +455,7 @@ export class Billboard {
   // ---------- structure ----------
 
   build(title, sub, colliders) {
+    const before = new Set(this.scene.children);
     const { x, z } = BILLBOARD_SITE;
     const sw = this.kind === 'posts' ? 3.9 : 3.2;
     const sh = sw / this.aspect;
@@ -468,6 +469,8 @@ export class Billboard {
     const PX = 5.0; // posts at the walkway edges
     const V = (a, b, c) => new THREE.Vector3(a, b, c);
     this.size = { sw, sh, y0, y1, top };
+    // the two posts' bounds (a director shot that must see past one hides the whole screen)
+    this.posts = [-1, 1].map((s) => new THREE.Box3(V(x + s * PX - 0.2, 0, z - 0.2), V(x + s * PX + 0.2, top + 0.3, z + 0.2)));
 
     const woodGeos = [];
     const box = (w, h, d, cx, cy, cz) => woodGeos.push(new THREE.BoxGeometry(w, h, d).translate(cx, cy, cz));
@@ -582,6 +585,12 @@ export class Billboard {
     this.glow = new THREE.PointLight(0xffd2b0, 26, 16, 2);
     this.glow.position.set(x, y0 - 0.6, z + 2.2);
     this.scene.add(this.glow);
+    this.parts = this.scene.children.filter((o) => !before.has(o));
+  }
+
+  /** Takes the whole structure out of the picture (director shots it would stand in front of). */
+  hide() {
+    for (const o of this.parts ?? []) o.visible = false;
   }
 
   // ---------- media helpers ----------

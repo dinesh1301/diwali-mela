@@ -45,12 +45,24 @@ export function encodeCreatorConfig(cfg) {
   return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
+/**
+ * A name fit to show visitors. Profile names carry taglines ('Priyanka Study Jobs Life',
+ * 'Ravi | SDE @ X'): cut at the first separator, then keep two words, or first + last of three
+ * ('Ravi Kumar Sharma' -> 'Ravi Sharma'); four or more words are a tagline, so the first word only.
+ */
+export function displayName(raw) {
+  const head = String(raw ?? '').split(/\s*[|·•,;:()[\]{}@#/\\]\s*|\s+[-–—]\s+/)[0];
+  const words = head.replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  const kept = words.length <= 2 ? words : words.length === 3 ? [words[0], words[2]] : [words[0]];
+  return kept.join(' ').slice(0, 32).trim();
+}
+
 function normalise(raw) {
   if (!raw || typeof raw !== 'object') return null;
-  const name = String(raw.name ?? '').trim().slice(0, 40);
+  const name = displayName(raw.name) || String(raw.name ?? '').trim().slice(0, 32);
   if (!name) return null;
   const slug = String(raw.slug ?? '').toLowerCase().replace(/[^a-z0-9._-]/g, '').slice(0, 40) || 'creator';
-  const first = String(raw.first ?? '').trim().slice(0, 24) || name.split(/\s+/)[0];
+  const first = displayName(raw.first).split(' ')[0].slice(0, 24) || name.split(/\s+/)[0];
   const stallNo = Math.max(1, Math.floor(Number(raw.stallNo) || 1));
   const photoUrl = typeof raw.photoUrl === 'string' ? raw.photoUrl : '';
   // collapse whitespace; an over-long phrase is cut at a word boundary, never mid-word
@@ -980,6 +992,8 @@ export function applyCreator(scene, cfg, { stallAnchor, ravanAnchor, colliders, 
 export function personaliseIntro(cfg) {
   if (!cfg) return;
   const h1 = document.querySelector('#intro h1');
-  if (h1) h1.textContent = `Welcome to ${cfg.name}'s Mela`;
-  document.title = `${cfg.name}'s Diwali Mela · Topmate`;
+  // a possessive greeting reads best with the first name ('Welcome to Priyanka's Mela')
+  const who = cfg.first || cfg.name;
+  if (h1) h1.textContent = `Welcome to ${who}'s Mela`;
+  document.title = `${who}'s Diwali Mela · Topmate`;
 }

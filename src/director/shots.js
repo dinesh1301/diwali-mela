@@ -38,6 +38,79 @@ function creatorStall(m) {
   return stalls[stallIndexFor(cfg?.stallNo ?? 1, stalls.length)];
 }
 
+/**
+ * Clears the sightline from a camera move to a target rectangle: every prop instance (light poles,
+ * bulbs, garland flowers, kandeels...) or loose scene-level mesh whose bounds fall inside the wedge
+ * from any of the camera positions to the target (half-width `halfW`, heights `yLo`..`yHi` at the
+ * target) is hidden. Subtrees in `keep` (the subject itself, the player) are never touched. Director
+ * mode only: the instances are collapsed in place and never restored.
+ */
+function clearSightline(m, cams, target, { halfW, yLo, yHi, keep = [], nearEnd = 0.6, whole = [] }) {
+  const kept = new Set();
+  for (const k of keep) k?.traverse((o) => kept.add(o));
+  const box = new THREE.Box3();
+  const mat = new THREE.Matrix4();
+  const ctr = new THREE.Vector3();
+  const size = new THREE.Vector3();
+  const ZERO_M = new THREE.Matrix4().makeScale(0, 0, 0);
+  const blocks = (b) => {
+    b.getCenter(ctr);
+    b.getSize(size);
+    const r = Math.hypot(size.x, size.z) / 2;
+    for (const c of cams) {
+      const dx = target.x - c.x;
+      const dz = target.z - c.z;
+      const L = Math.hypot(dx, dz);
+      const t = ((ctr.x - c.x) * dx + (ctr.z - c.z) * dz) / L;
+      if (t < 0.2 - r || t > L - nearEnd) continue;
+      const f = Math.max(0, t / L);
+      const lat = Math.abs((ctr.x - c.x) * dz - (ctr.z - c.z) * dx) / L;
+      if (lat > halfW * f + r + 0.15) continue;
+      const lo = c.y + (yLo - c.y) * f - 0.2;
+      const hi = c.y + (yHi - c.y) * f + 0.2;
+      if (b.max.y >= lo && b.min.y <= hi) return true;
+    }
+    return false;
+  };
+  let hidden = 0;
+  // whole structures (one merged mesh each, so not hideable piece by piece): { boxes, hide }
+  for (const w of whole) {
+    if (w.boxes?.some(blocks)) {
+      w.hide();
+      hidden++;
+    }
+  }
+  m.scene.updateMatrixWorld(true);
+  m.scene.traverse((o) => {
+    if (!o.isMesh || kept.has(o) || !o.visible) return;
+    const g = o.geometry;
+    if (!g.boundingBox) g.computeBoundingBox();
+    if (o.isInstancedMesh) {
+      let dirty = false;
+      for (let i = 0; i < o.count; i++) {
+        o.getMatrixAt(i, mat);
+        box.copy(g.boundingBox).applyMatrix4(mat).applyMatrix4(o.matrixWorld);
+        if (box.isEmpty() || !blocks(box)) continue;
+        o.setMatrixAt(i, ZERO_M);
+        dirty = true;
+        hidden++;
+      }
+      if (dirty) {
+        o.instanceMatrix.needsUpdate = true;
+        o.computeBoundingSphere?.();
+      }
+    } else if (o.parent === m.scene) {
+      // loose static props only (merged world cells and the ground are far bigger than this)
+      box.copy(g.boundingBox).applyMatrix4(o.matrixWorld);
+      box.getSize(size);
+      if (Math.max(size.x, size.y, size.z) > 6 || !blocks(box)) return;
+      o.visible = false;
+      hidden++;
+    }
+  });
+  return hidden;
+}
+
 /** A seated driver for a parked car or plane (the player drives one, extras drive the rest). */
 function seatDriver(m, v, pose) {
   const ch = new Character(randomLook());
@@ -80,7 +153,7 @@ export const SHOTS = {
   stall: {
     duration: 6,
     warm: 1,
-    setup({ m, state }) {
+    setup({ m, H, state }) {
       const s = creatorStall(m);
       const g = s.group;
       g.updateMatrixWorld(true);
@@ -97,6 +170,12 @@ export const SHOTS = {
       // the whole 4.8 m title board is in a 9:16 frame from there on: the pan never crops the title
       state.camPts = [P(wa + 0.2, wo + 6.3, 2.3), P(wa - 0.6, wo + 6.0, 2.4), P(1.4, 11.4, 2.55), P(0.6, 12.55, 2.6)];
       state.lookPts = [P(wa + 0.15, wo, wy), P(wa - 0.15, wo, wy), P(0.4, 1.95, 2.55), P(0, 2.15, 2.45)];
+      // nothing (a lane's light pole and its bulbs, a kandeel, a garland) between the pan and the board
+      const board = m.creator?.stallBoard;
+      const bc = board ? board.getWorldPosition(new THREE.Vector3()) : g.localToWorld(new THREE.Vector3(0, 3.55, 2.15));
+      const cams = [];
+      for (let u = 1 / 3; u <= 1.0001; u += 1 / 30) cams.push(H.path(state.camPts, u, new THREE.Vector3()));
+      state.cleared = clearSightline(m, cams, bc, { halfW: 2.9, yLo: 0.9, yHi: bc.y + 1.1, keep: [g, m.player.char?.root], whole: m.billboard?.posts ? [{ boxes: m.billboard.posts, hide: () => m.billboard.hide() }] : [] });
       state.stand = s.stand.clone();
       state.out = out;
       state.keeper = s.keeper;
