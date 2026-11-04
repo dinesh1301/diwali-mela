@@ -49,6 +49,7 @@ import { CONFIG } from './config.js';
 import { shadowify } from './utils.js';
 import { Voice } from './voice.js';
 import { LightPool } from './lightpool.js';
+import { startDirector, directorParams } from './director/director.js';
 import { loadCreatorConfig, applyCreator, personaliseIntro, stallIndexFor } from './creatorStage.js';
 
 const ZONES = [
@@ -228,6 +229,9 @@ async function loadFonts() {
 
 async function init() {
   const params = new URLSearchParams(location.search);
+  const director = directorParams(params); // ?director=<shot>: frame-stepped capture (see director/)
+  const viewW0 = () => director?.width ?? innerWidth;
+  const viewH0 = () => director?.height ?? innerHeight;
   const creatorCfg = loadCreatorConfig(params); // ?c=<slug> / ?cfg=: a creator's own mela
   settings.load();
   profile.load();
@@ -269,7 +273,7 @@ async function init() {
   const startPr = low ? Math.min(maxPr, dpr >= 2 ? 1.25 : 1) : settings.midGpu ? Math.min(maxPr, 1.25) : maxPr;
   const pinnedPr = Number(params.get('dpr')) || 0;
   renderer.setPixelRatio(pinnedPr || startPr);
-  renderer.setSize(innerWidth, innerHeight);
+  renderer.setSize(viewW0(), viewH0());
   renderer.setClearColor(0x000000, 0);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
@@ -281,7 +285,7 @@ async function init() {
   const fogColor = new THREE.Color(0x1a0d2c);
   scene.fog = new THREE.FogExp2(fogColor, 0.0075);
 
-  const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 700);
+  const camera = new THREE.PerspectiveCamera(60, viewW0() / viewH0(), 0.1, 700);
   camera.layers.enable(1);
   scene.add(camera);
   const hemi = new THREE.HemisphereLight(0x6a5aa0, 0x2a1a12, 0.8);
@@ -323,7 +327,7 @@ async function init() {
 
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.85, 0.55, 0.82); // sized in resize()
+  const bloom = new UnrealBloomPass(new THREE.Vector2(viewW0(), viewH0()), 0.85, 0.55, 0.82); // sized in resize()
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
 
@@ -523,7 +527,7 @@ async function init() {
   const scenes = low ? null : new CrowdScenes(ctx);
   extraLights.build();
   const cfg = await creatorCfg;
-  const creator = applyCreator(scene, cfg, { stallAnchor: cfg && world.stalls[stallIndexFor(cfg.stallNo, world.stalls.length)], ravanAnchor: { pos: new THREE.Vector3(-47.5, 0, 69.5), facing: 0.55 } });
+  const creator = applyCreator(scene, cfg, { stallAnchor: cfg && world.stalls[stallIndexFor(cfg.stallNo, world.stalls.length)], ravanAnchor: { pos: new THREE.Vector3(-46.6, 0, 76.5), facing: 0.22 } });
   personaliseIntro(cfg);
   await loading();
   const dayNight = new DayNight({ scene, sky, hemi, sun, lightSystems: [world.lights, games.lights, vehicles.lights, poster.lights, ramayan.lights, extraLights].filter(Boolean) });
@@ -584,8 +588,8 @@ async function init() {
   let viewW = 0;
   let viewH = 0;
   function resize() {
-    const w = innerWidth;
-    const h = innerHeight;
+    const w = viewW0();
+    const h = viewH0();
     const pr = renderer.getPixelRatio();
     viewW = w;
     viewH = h;
@@ -613,12 +617,12 @@ async function init() {
   // the new size a moment late, so check again shortly after
   let resizeTimer = 0;
   const onResize = () => {
-    if (innerWidth !== viewW || innerHeight !== viewH) {
+    if (!director && (innerWidth !== viewW || innerHeight !== viewH)) {
       resize();
       governor.reset();
     }
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => (innerWidth !== viewW || innerHeight !== viewH) && (resize(), governor.reset()), 300);
+    resizeTimer = setTimeout(() => !director && (innerWidth !== viewW || innerHeight !== viewH) && (resize(), governor.reset()), 300);
   };
   addEventListener('resize', onResize);
   addEventListener('orientationchange', onResize);
@@ -672,7 +676,7 @@ async function init() {
     customizer.close();
     profile.name = params.get('name') || profile.name || 'Mela Visitor';
     if (params.has('handle')) profile.handle = params.get('handle');
-    started = true;
+    started = !director; // director shots: no prompts, markers or keeper bubbles
     nameTag.set({ name: profile.name, handle: profile.handle });
     dayNight.start({ night: params.has('night') });
     ravan.start();
@@ -733,21 +737,18 @@ async function init() {
   // drawn at a few frames a second (or every 3rd frame) while the simulation keeps running
   const introEl = document.getElementById('intro');
   const tambolaEl = document.getElementById('tambola');
-  let frame = 0;
+  let frameNo = 0;
   let lastDraw = 0;
   let lastTime = 0;
   let throttled = false;
   let sinceShadow = 0;
 
-  const loop = (time) => {
-    const t0 = performance.now();
-    const rafDt = lastTime ? time - lastTime : 0;
-    lastTime = time;
-    frame++;
-    timer.update(time);
-    const dt = Math.min(timer.getDelta(), 0.05);
-    const t = timer.getElapsed();
+  // the director takes the camera (and the clock) for frame-stepped capture
+  let cameraHook = null;
 
+  /** One simulation step and (unless render is false) one draw. `time` is the rAF timestamp. */
+  function frame(dt, t, { time = performance.now(), render = true } = {}) {
+    frameNo++;
     tasks.update(dt);
     games.update(dt, t);
     rides.update(dt, t);
@@ -771,7 +772,8 @@ async function init() {
     updateFlames(t);
     dayNight.update(dt);
 
-    if (games.active) games.applyCamera(camera, dt);
+    if (cameraHook) cameraHook(camera, dt, t);
+    else if (games.active) games.applyCamera(camera, dt);
     else if (vehicles.active) vehicles.applyCamera(camera, dt);
     else player.updateCamera(dt);
     camera.updateMatrixWorld();
@@ -836,7 +838,7 @@ async function init() {
 
     const intro = !introEl.classList.contains('hidden');
     const covered = intro || (ui.modalOpen && tambolaEl?.classList.contains('hidden') !== false);
-    const draw = !covered || (intro ? time - lastDraw > 140 : frame % 3 === 0);
+    const draw = render && (!covered || (intro ? time - lastDraw > 140 : frameNo % 3 === 0));
     if (covered !== throttled) {
       throttled = covered;
       governor.reset(); // frame times behind a panel say nothing about the full scene
@@ -859,8 +861,22 @@ async function init() {
       ramayan.render(camera);
     }
     input.endFrame();
+    return covered;
+  }
+
+  const loop = (time) => {
+    const t0 = performance.now();
+    const rafDt = lastTime ? time - lastTime : 0;
+    lastTime = time;
+    timer.update(time);
+    const covered = frame(Math.min(timer.getDelta(), 0.05), timer.getElapsed(), { time });
     if (!covered) governor.sample(rafDt, performance.now() - t0);
   };
+  if (director) {
+    nameTag.sprite.visible = false;
+    startDirector(director, { ...window.__mela, frame, setCameraHook: (fn) => (cameraHook = fn) });
+    return;
+  }
   renderer.setAnimationLoop(loop);
 
   // a hidden tab draws nothing at all (some browsers keep firing rAF for a while)

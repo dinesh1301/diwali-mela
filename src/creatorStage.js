@@ -410,11 +410,11 @@ function paintBanner(c, w, h, cfg, img) {
   c.fillStyle = '#5c0a14';
   c.fillText('TOPMATE DIWALI MELA', tcx, h * 0.27);
   fitFont(c, cfg.name, YATRA, '', Math.round(h * 0.2), maxW, 30);
-  paintText(c, cfg.name, tcx, h * 0.49, { fill: '#fff4d0', stroke: '#5c0a14', lw: 10, off: 5 });
-  fitFont(c, 'ki or se', YATRA, '', Math.round(h * 0.09), maxW, 18);
-  paintText(c, 'ki or se', tcx, h * 0.62, { fill: '#5c0a14', stroke: 'rgba(255,240,200,0.7)', shadow: 'rgba(0,0,0,0)', lw: 4, off: 0 });
+  paintText(c, cfg.name, tcx, h * 0.49, { fill: '#7a0c18', stroke: '#fff1c4', shadow: 'rgba(90,20,0,0.35)', lw: 9, off: 4 });
+  fitFont(c, 'ki or se', YATRA, '', Math.round(h * 0.11), maxW, 18);
+  paintText(c, 'ki or se', tcx, h * 0.635, { fill: '#3a0508', stroke: 'rgba(255,240,200,0.8)', shadow: 'rgba(0,0,0,0)', lw: 5, off: 0 });
   fitFont(c, 'Diwali ki Hardik Shubhkamnayein!', YATRA, '', Math.round(h * 0.1), maxW, 18);
-  paintText(c, 'Diwali ki Hardik Shubhkamnayein!', tcx, h * 0.78, { fill: '#ffe066', stroke: '#5c0a14', lw: 8, off: 4 });
+  paintText(c, 'Diwali ki Hardik Shubhkamnayein!', tcx, h * 0.8, { fill: '#fff1c4', stroke: '#7a0c18', lw: 9, off: 4 });
   grain(c, w, h, rnd, 0.05, 7000);
 }
 
@@ -469,9 +469,9 @@ export function applyCreator(scene, cfg, { stallAnchor, ravanAnchor } = {}) {
     const grp = new THREE.Group();
     grp.position.copy(ravanAnchor.pos);
     grp.rotation.y = ravanAnchor.facing ?? 0;
-    const W = 6.4;
-    const H = 3.6;
-    const Y = 4.1;
+    const W = 5.2;
+    const H = 2.92;
+    const Y = 2.65;
     banGeo = new THREE.PlaneGeometry(W, H, 32, 6);
     banBase = banGeo.attributes.position.array.slice();
     banner = new THREE.Mesh(banGeo, new THREE.MeshBasicMaterial({ map: ban.tex, color: new THREE.Color(0.95, 0.95, 0.95), side: THREE.DoubleSide }));
@@ -518,7 +518,7 @@ export function applyCreator(scene, cfg, { stallAnchor, ravanAnchor } = {}) {
     for (let i = 0; i < pos.count; i++) {
       const x = banBase[i * 3];
       const y = banBase[i * 3 + 1];
-      const free = (1.8 - y) / 3.6; // 0 at the top, 1 at the bottom
+      const free = (1.46 - y) / 2.92; // 0 at the top, 1 at the bottom
       a[i * 3 + 2] = banBase[i * 3 + 2] + free * (Math.sin(t * 1.7 + x * 0.9) * 0.09 + Math.sin(t * 2.9 + x * 2.1 + y) * 0.03);
     }
     pos.needsUpdate = true;
