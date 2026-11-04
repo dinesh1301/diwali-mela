@@ -267,6 +267,7 @@ async function init() {
   const startPr = low ? Math.min(maxPr, dpr >= 2 ? 1.25 : 1) : settings.midGpu ? Math.min(maxPr, 1.25) : maxPr;
   const pinnedPr = Number(params.get('dpr')) || 0;
   renderer.setPixelRatio(pinnedPr || startPr);
+  document.body.classList.toggle('low', low); // style.css drops the backdrop blur on the phone tier
   renderer.setSize(innerWidth, innerHeight);
   renderer.setClearColor(0x000000, 0);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
