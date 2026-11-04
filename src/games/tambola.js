@@ -106,6 +106,9 @@ export class Tambola {
     this.boardCanvas.height = 640;
     this.boardTex = new THREE.CanvasTexture(this.boardCanvas);
     this.boardTex.colorSpace = THREE.SRGBColorSpace;
+    // redrawn on every call: no mipmap chain to rebuild each time
+    this.boardTex.generateMipmaps = false;
+    this.boardTex.minFilter = THREE.LinearFilter;
     const boardMesh = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 2.25), new THREE.MeshBasicMaterial({ map: this.boardTex, color: new THREE.Color(1.15, 1.15, 1.15) }));
     boardMesh.position.set(0, 2.4, -4.9);
     g.add(boardMesh);
@@ -177,9 +180,10 @@ export class Tambola {
       enabled: () => player.mode === 'walk' && !this.active,
       action: () => this.play(),
     });
-    this.drawBoard([]);
+    this.drawBoard(new Set());
   }
 
+  /** called: a Set of the numbers called so far. */
   drawBoard(called, current = null) {
     const c = this.boardCanvas.getContext('2d');
     const w = this.boardCanvas.width;
@@ -204,7 +208,7 @@ export class Tambola {
       const row = Math.floor((n - 1) / 10);
       const x = 30 + col * cw;
       const y = 190 + row * ch;
-      const on = called.includes(n);
+      const on = called.has(n);
       c.fillStyle = n === current ? '#ff6d3a' : on ? '#ffcf5c' : 'rgba(255,255,255,0.08)';
       c.fillRect(x + 3, y + 3, cw - 6, ch - 6);
       c.fillStyle = on || n === current ? '#2a0c00' : 'rgba(255,246,229,0.7)';
@@ -250,7 +254,7 @@ export class Tambola {
 
     const ticket = makeTicket();
     const bag = [...Array(90).keys()].map((n) => n + 1).sort(() => Math.random() - 0.5);
-    const called = [];
+    const called = new Set();
     const won = {};
     const claimed = {};
     const rivalPlan = { early: rand(9, 16), top: rand(28, 44), middle: rand(30, 48), bottom: rand(26, 46), full: rand(62, 80) };
@@ -260,18 +264,18 @@ export class Tambola {
     ui.bubble((o) => this.caller.headTop.getWorldPosition(o), 'Eyes down! Pehla number…', 2.5);
     await tasks.wait(1.6);
 
-    const marked = (n) => called.includes(n);
+    const marked = (n) => called.has(n);
     const rowDone = (r) => ticket[r].every((v) => v === null || marked(v));
     const count = () => ticket.flat().filter((v) => v !== null && marked(v)).length;
     const interval = settings.reduceMotion ? 2.4 : 1.8;
     let result = null;
     while (bag.length && !this.leave && !won.full && !claimed.full) {
       const n = bag.pop();
-      called.push(n);
+      called.add(n);
       this.caller.setAction('give');
       this.say(n);
       this.drawBoard(called, n);
-      panel.called(n, CALLS[n] || '', called.length);
+      panel.called(n, CALLS[n] || '', called.size);
       ui.bubble((o) => this.caller.headTop.getWorldPosition(o), `${CALLS[n] ? CALLS[n] + ' · ' : ''}${n}`, 1.4);
       // our claims
       const checks = [
@@ -294,7 +298,7 @@ export class Tambola {
       }
       // the room claims the rest
       for (const [id, at] of Object.entries(rivalPlan)) {
-        if (!won[id] && !claimed[id] && called.length >= at) {
+        if (!won[id] && !claimed[id] && called.size >= at) {
           claimed[id] = pick(RIVALS);
           const prize = PRIZES.find((p) => p.id === id);
           panel.prize(prize, claimed[id]);
