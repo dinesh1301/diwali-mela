@@ -51,6 +51,7 @@ export const settings = {
   voice: 'open', // open (voice-activated) | ptt (hold the Talk key)
   voiceVolume: 1,
   detected: 'high',
+  midGpu: false, // high tier, but start at a lower pixel ratio
 
   get tier() {
     return this.quality === 'auto' ? this.detected : this.quality;
@@ -100,7 +101,10 @@ export const settings = {
     const coarse = matchMedia('(pointer: coarse)').matches;
     const weakCpu = (navigator.hardwareConcurrency || 8) <= 4;
     const weakMem = (navigator.deviceMemory || 8) <= 4;
-    const weakGpu = /Mali|Adreno|PowerVR|Apple GPU|Intel\(R\) (UHD|HD|Iris)|SwiftShader|llvmpipe/i.test(gpu);
+    const weakGpu = /Mali|Adreno|PowerVR|Apple GPU|Intel\(R\) (UHD|HD|Iris)|Intel.*(UHD|HD) Graphics|Iris\(R\) Xe|SwiftShader|llvmpipe|softpipe|Microsoft Basic Render|Immortalis|Xclipse|Maleoon|Vivante|Tegra/i.test(gpu);
+    // newer integrated GPUs (Intel Arc / "Intel(R) Graphics", Apple M-series through ANGLE) cope with
+    // the high tier but not at a retina pixel ratio: they start lower and the governor raises it
+    this.midGpu = !weakGpu && /Intel.*(Arc|\(R\) Graphics)|ANGLE Metal Renderer: Apple M|Apple M\d/i.test(gpu);
     let fewUniforms = false;
     try {
       const gl = renderer.getContext();
