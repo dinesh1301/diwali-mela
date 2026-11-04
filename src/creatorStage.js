@@ -4,6 +4,7 @@ import { restockStall } from './stalls.js';
 import { STALL_THEMES, themedGoods } from './stallThemes.js';
 import { Garlands } from './garlands.js';
 import { mergeStatic } from './merge.js';
+import { normaliseBillboard } from './billboard.js';
 
 /*
   Creator personalisation: a creator's own mela. Their name and photo are painted on "their"
@@ -20,6 +21,8 @@ import { mergeStatic } from './merge.js';
     stallTheme?: 'books' | 'tech' | 'fitness' | 'food' | 'finance' | 'fashion' | 'art' | 'music' | 'travel' | 'career' | 'general',
     wallPosts?: string[],  // up to 4 image URLs (4:5) for the Wall of Fame next to the stall
     knownFor?: string,     // a short phrase, e.g. "Data science"; painted small on the stall sign
+    billboard?: { kind: 'reels' | 'posts', items: Array<{ type: 'video' | 'image', src, poster?, caption? }> },
+                           // 1-6 reels / posts for the Mela Screen over the entrance (see billboard.js)
   }
 */
 
@@ -61,7 +64,10 @@ function normalise(raw) {
   const wallPosts = (Array.isArray(raw.wallPosts) ? raw.wallPosts : [])
     .filter((u) => typeof u === 'string' && /^(https?:\/\/|\/(?!\/)|data:image\/)/i.test(u))
     .slice(0, 4);
-  return { slug, name, first, photoUrl, stallNo, stallTitle, stallTheme, knownFor, wallPosts };
+  const out = { slug, name, first, photoUrl, stallNo, stallTitle, stallTheme, knownFor, wallPosts };
+  const billboard = normaliseBillboard(raw.billboard);
+  if (billboard) out.billboard = billboard;
+  return out;
 }
 
 function slugFromPage(params) {

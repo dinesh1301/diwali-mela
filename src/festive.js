@@ -40,9 +40,10 @@ export function buildFestive(ctx, { site }) {
   const kandeel = (x, y, z) => kandeels.push(V(x, y, z));
   const fairy = { palette: FAIRY, mode: 'fixed', wire: false, spacing: 0.6 };
 
-  // ---- bazaar: a fairy-light canopy over the walkway and kandeels under the lane strands ----
-  for (let z = 50.5; z >= 16; z -= 5) lights.addStrand(V(-5.5, 5.35, z), V(5.5, 5.35, z), { ...fairy, sag: 0.45 });
+  // ---- bazaar: a fairy-light canopy over the walkway (from z 40: the bay at 43-53 holds the Mela Screen) and kandeels under the lane strands ----
+  for (let z = 40.5; z >= 16; z -= 5) lights.addStrand(V(-5.5, 5.35, z), V(5.5, 5.35, z), { ...fairy, sag: 0.45 });
   for (const z of [53, 43, 33, 23]) {
+    if (z === 53) continue; // the Mela Screen's bay (43-53) is kept clear
     for (const x of [-3.4, 0, 3.4]) kandeel(x, 4.15 - (x === 0 ? 0.25 : 0), z);
     for (const x of [-2, 2]) kandeel(x, 4.3, z - 5);
   }
@@ -64,9 +65,9 @@ export function buildFestive(ctx, { site }) {
     lights.addPolyline([V(s * 8 - 1.25, 10.36, gz + 1.25), V(s * 8 + 1.25, 10.36, gz + 1.25)], { spacing: 0.3, palette: WARM_PALETTE, mode: 'chase' });
   }
   lights.addPolyline([V(-7.2, 7.24, gz + 0.72), V(7.2, 7.24, gz + 0.72)], { spacing: 0.3, mode: 'alternate' });
-  for (const x of [-4.6, 0, 4.6]) kandeel(x, 6.1, gz);
+  for (const x of [-4.6, 4.6]) kandeel(x, 6.1, gz); // (the middle of the arch frames the Mela Screen)
   // fairy curtain draped from the gate to the first lane poles
-  for (const x of [-4.2, -1.4, 1.4, 4.2]) lights.addStrand(V(x, 7.3, gz - 0.7), V(x * 1.2, 5.4, 53), { ...fairy, sag: 0.8 });
+  for (const x of [-4.2, 4.2]) lights.addStrand(V(x, 7.3, gz - 0.7), V(x * 1.2, 5.4, 53), { ...fairy, sag: 0.8 }); // (the middle stays clear: the Mela Screen is seen through it)
 
   // ---- Khel Gali: a pole row across the lane from the booths, canopy strands to the booth roofs ----
   const KX = 20.2;

@@ -50,6 +50,17 @@ for (const spot of SPOTS) {
   const page = await context.newPage();
   // --nocoach: the phones' first-run coach card dims the scene; mark it as seen (for screenshots)
   if (flag('nocoach')) await page.addInitScript(() => localStorage.setItem('melaCoach', '1'));
+  await page.addInitScript(() => {
+    window.__ctxEvents = [];
+    const get = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function (type, ...rest) {
+      if (/webgl/.test(type) && !this.__watched) {
+        this.__watched = true;
+        for (const ev of ['webglcontextlost', 'webglcontextrestored']) this.addEventListener(ev, () => window.__ctxEvents.push(`${ev}@${Math.round(performance.now())}`));
+      }
+      return get.call(this, type, ...rest);
+    };
+  });
   const cdp = await context.newCDPSession(page);
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: cpu });
   const errors = [];
@@ -106,8 +117,28 @@ for (const spot of SPOTS) {
       fps: +(dts.length / secs).toFixed(1), p50: q(0.5), p95: q(0.95), p99: q(0.99), over33: +(dts.filter((d) => d > 33.4).length / dts.length * 100).toFixed(1), heapMB: heap,
     };
   }, secs);
+  // a lost (even if later restored) WebGL context draws nothing: report it rather than a black screenshot
+  const lost = await page.evaluate(() => window.__ctxEvents ?? []);
+  if (lost.length) errors.push(`webgl context events: ${lost.join(', ')}`);
   if (shots) {
     mkdirSync(shots, { recursive: true });
+    // a resolution-governor step blanks the canvas for a few frames (it lands ~6.7 s after load,
+    // right where this screenshot is taken): wait until the canvas shows the scene again
+    for (let i = 0; i < 10; i++) {
+      const lum = await page.evaluate(() => {
+        const s = document.createElement('canvas');
+        s.width = 16;
+        s.height = 10;
+        const c = s.getContext('2d');
+        c.drawImage(window.__mela.renderer.domElement, 0, 0, 16, 10);
+        const d = c.getImageData(0, 0, 16, 10).data;
+        let t = 0;
+        for (let k = 0; k < d.length; k += 4) t += d[k] + d[k + 1] + d[k + 2] + d[k + 3];
+        return t / (d.length / 4);
+      });
+      if (lum > 20) break;
+      await page.waitForTimeout(250);
+    }
     await page.screenshot({ path: `${shots}/${results.mode}${dusk ? '-dusk' : ''}-${spot}.png` });
   }
   results.spots[spot] = { loadMs, ...r, errors: errors.slice(0, 5) };

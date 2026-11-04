@@ -48,6 +48,7 @@ import { LightPool } from './lightpool.js';
 import { TOUCH, tk } from './touch.js';
 import { startDirector, directorParams } from './director/director.js';
 import { loadCreatorConfig, applyCreator, personaliseIntro, stallIndexFor } from './creatorStage.js';
+import { Billboard } from './billboard.js';
 
 const ZONES = [
   { id: 'gate', x: 0, z: 62, r: 9, msg: '🪔 Welcome to the Topmate Diwali Mela!' },
@@ -525,8 +526,13 @@ async function init() {
   const cfg = await creatorCfg;
   const creator = applyCreator(scene, cfg, { stallAnchor: cfg && world.stalls[stallIndexFor(cfg.stallNo, world.stalls.length)], ravanAnchor: { pos: new THREE.Vector3(-46.6, 0, 76.5), facing: 0.22 }, colliders: world.colliders, diyas: world.diyas });
   personaliseIntro(cfg);
+  // the Mela Screen over the entrance: the creator's reels / posts, or the festive default loop
+  const billboard = new Billboard({ scene, cfg, colliders: world.colliders, director: !!director });
+  billboard.camera = camera;
+  billboard.renderer = renderer;
+  billboard.onOverlay = (open) => (input.blocked = open); // the full-screen reel: no walking behind it
   await loading();
-  const dayNight = new DayNight({ scene, sky, hemi, sun, lightSystems: [world.lights, games.lights, vehicles.lights, poster.lights, ramayan.lights, extraLights].filter(Boolean) });
+  const dayNight = new DayNight({ scene, sky, hemi, sun, lightSystems: [world.lights, games.lights, vehicles.lights, poster.lights, ramayan.lights, extraLights, billboard.lights].filter(Boolean) });
   const customizer = new Customizer({
     onApply: (lk) => {
       player.char.setLook(lk);
@@ -697,7 +703,7 @@ async function init() {
     if (!params.has('noyt')) ramayan.start();
     if (!params.has('nonet')) net.connect();
     if (!director) ui.showCoach();
-    window.__mela = { ...ctx, creator, games, rides, crowd, vehicles, ramayan, poster, customizer, nameTag, boat, train, ravan, walls, dayNight, scenes, decor, voice, lightPool, governor, get gov() { return { ...governor.state, gpu: settings.gpu, midGpu: settings.midGpu }; } }; // for automated checks
+    window.__mela = { ...ctx, creator, billboard, games, rides, crowd, vehicles, ramayan, poster, customizer, nameTag, boat, train, ravan, walls, dayNight, scenes, decor, voice, lightPool, governor, get gov() { return { ...governor.state, gpu: settings.gpu, midGpu: settings.midGpu }; } }; // for automated checks
   } else {
     customizer.open('intro');
   }
@@ -791,6 +797,8 @@ async function init() {
     else if (boat.riding) boat.applyCamera(camera, dt);
     else player.updateCamera(dt);
     camera.updateMatrixWorld();
+    // after the camera: it wakes / sleeps by distance, and a tap on the screen opens the reel
+    billboard.update(dt, t, camera.position, started && player.mode === 'walk' && !ui.modalOpen ? input : null);
 
     // prompts and help: whoever owns the seat (vehicle, show, ride) supplies them
     const mode = games.active ? 'game' : player.mode;
