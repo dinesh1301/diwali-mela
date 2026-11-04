@@ -146,6 +146,7 @@ async function init() {
   if (params.get('tier')) settings.quality = params.get('tier');
   const tier = settings.tier;
   const low = tier === 'low';
+  document.body.classList.toggle('low', low); // style.css drops the backdrop blur on the phone tier
   renderer.setPixelRatio(low ? 1 : Math.min(window.devicePixelRatio, 1.75));
   renderer.setSize(innerWidth, innerHeight);
   renderer.setClearColor(0x000000, 0);
