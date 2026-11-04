@@ -1317,6 +1317,7 @@ button.icon.off {
   touch-action: none;
 }
 
+body.touch #jumpBtn.boat-hidden,
 body.touch #jumpBtn.veh-hidden {
   display: none !important;
 }

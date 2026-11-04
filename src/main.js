@@ -60,7 +60,7 @@ const ZONES = [
   { id: 'airfield', x: 52, z: 22, r: 20, msg: '✈️ Pushpak Viman Airfield: fly the plane or the heli' },
   { id: 'wheel', x: -34, z: -18, r: 12, msg: '🎡 The Giant Wheel: walk to the steps and press E', tap: '🎡 The Giant Wheel: walk to the steps and tap the button' },
   { id: 'fireworks', x: 36, z: -30, r: 15, msg: '🚀 Fireworks Zone: press 1 to launch a rocket', tap: '🚀 Fireworks Zone: tap 🚀 Rocket below to launch one' },
-  { id: 'ghat', x: 0, z: -42, r: 12, msg: '🏮 The Ghat: float a diya, release a lantern, or take a boat ride from the jetty' },
+  { id: 'ghat', x: 0, z: -42, r: 12, msg: '🏮 The Ghat: float a diya, release a lantern, or row a boat out from the jetty' },
 ];
 
 const face = (x, z, tx, tz) => Math.atan2(tx - x, tz - z);
@@ -730,6 +730,8 @@ async function init() {
   let zoneTimer = 0;
   let helpKey = '';
   let vehKind = null;
+  const joyLabel = document.querySelector('#joystick .joy-label');
+  const jumpBtn = document.getElementById('jumpBtn');
 
   // behind the intro card and other full-screen panels the scene is only a blurred backdrop, so it is
   // drawn at a few frames a second (or every 3rd frame) while the simulation keeps running
@@ -770,6 +772,7 @@ async function init() {
 
     if (games.active) games.applyCamera(camera, dt);
     else if (vehicles.active) vehicles.applyCamera(camera, dt);
+    else if (boat.riding) boat.applyCamera(camera, dt);
     else player.updateCamera(dt);
     camera.updateMatrixWorld();
 
@@ -780,6 +783,9 @@ async function init() {
     const key = mode === 'ride' ? ownerKey : mode;
     if (key !== helpKey) {
       helpKey = key;
+      // the stick says what it does now
+      if (TOUCH) joyLabel.textContent = owner === boat ? 'Row' : owner === vehicles ? (vehicles.active.kind === 'car' ? 'Drive' : 'Fly') : 'Walk';
+      if (TOUCH) jumpBtn.classList.toggle('boat-hidden', owner === boat); // nothing to jump in a boat
       nameTag.setVisible(mode !== 'game'); // the close game cameras sit right behind the head
       ui.setPrompt(null);
       ui.setPrompt2(null);
@@ -791,8 +797,8 @@ async function init() {
       vehKind = kind;
       ui.setVehicleButtons(kind);
     }
-    // touch: the stick is there while you can walk or drive, and gets out of the way otherwise
-    if (TOUCH) input.setJoystick(started && !ui.modalOpen && (mode === 'walk' || (mode === 'ride' && owner === vehicles)));
+    // touch: the stick is there while you can walk, drive or row, and gets out of the way otherwise
+    if (TOUCH) input.setJoystick(started && !ui.modalOpen && (mode === 'walk' || (mode === 'ride' && (owner === vehicles || owner === boat))));
     const canInteract = started && mode === 'walk' && !ui.modalOpen;
     const best = interactions.update(t, player, canInteract);
     if (mode === 'ride') {
