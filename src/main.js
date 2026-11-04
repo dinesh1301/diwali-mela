@@ -531,7 +531,10 @@ async function init() {
   const ravan = new Ravan(ctx);
   const scenes = low ? null : new CrowdScenes(ctx);
   extraLights.build();
-  const creator = applyCreator(scene, cfg, { stallAnchor: cfg && world.stalls[stallIndexFor(cfg.stallNo, world.stalls.length)], ravanAnchor: { pos: new THREE.Vector3(-46.6, 0, 76.5), facing: 0.22 }, colliders: world.colliders, diyas: world.diyas });
+  const ownStall = cfg && world.stalls[stallIndexFor(cfg.stallNo, world.stalls.length)];
+  const creator = applyCreator(scene, cfg, { stallAnchor: ownStall, ravanAnchor: { pos: new THREE.Vector3(-46.6, 0, 76.5), facing: 0.22 }, colliders: world.colliders, diyas: world.diyas });
+  // the creator's own stall shows their board, so its menu takes the board's name too (not the slot's)
+  if (ownStall?.def) ownStall.def.name = cfg.stallTitle || `${cfg.name} ka Stall`;
   personaliseIntro(cfg);
   await loading();
   const dayNight = new DayNight({ scene, sky, hemi, sun, lightSystems: [world.lights, games.lights, vehicles.lights, poster.lights, ramayan.lights, extraLights].filter(Boolean) });

@@ -261,7 +261,7 @@ export class FoodStalls {
     await ui.result({
       icon: '🥟',
       title: `${count} golgappa${count === 1 ? '' : 's'}!`,
-      text: `${lines[reason]}  ${count >= 10 ? `You win ${slot('game.golgappa.prize')}! 👑  ` : ''}${newBest ? 'New personal best! 🏆' : `Your best: ${best}`}`,
+      text: `${lines[reason]}  ${count >= 10 && slotSet('game.golgappa.prize') ? `You win ${slot('game.golgappa.prize')}! 👑  ` : ''}${newBest ? 'New personal best! 🏆' : `Your best: ${best}`}`,
       buttons: [{ label: 'Done', value: 'ok', primary: true }],
     });
   }

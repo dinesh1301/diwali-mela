@@ -11,7 +11,8 @@
 
   Rules for a value:
     - unknown ids, non-strings and empty strings are ignored (the default stays)
-    - text is cleaned: control / bidi characters, < > ` \ and stray braces removed, whitespace collapsed
+    - text is cleaned: control / bidi / invisible characters, < > ` \ and stray braces removed, whitespace collapsed
+    - lengths count graphemes (a Devanagari syllable or an emoji is one)
     - {first} and {name} are filled with the creator's first / full name; game strings may use {prize}
     - longer than maxLen: cut at a word boundary if it is within 1.5x maxLen, else the default stays
     - stallTheme values must be one of THEMES ('general' keeps the stall's own goods)
@@ -163,14 +164,24 @@ export const SLOT_BY_ID = new Map(SLOTS.map((s) => [s.id, s]));
 let current = {}; // id -> cleaned value (only the slots a creator set, or creatorDefaults)
 let report = { applied: [], rejected: [] };
 
-const len = (t) => [...t].length;
+// lengths and cuts are in graphemes (what a reader sees as one letter): a Devanagari syllable or a
+// ZWJ emoji is one, and a cut never leaves a dangling matra, halant or half an emoji
+const SEG = typeof Intl !== 'undefined' && Intl.Segmenter ? new Intl.Segmenter(undefined, { granularity: 'grapheme' }) : null;
+const graphemes = (t) => (SEG ? Array.from(SEG.segment(t), (x) => x.segment) : [...t]);
+
+// invisible characters: zero-width space / soft hyphen / word joiner / BOM / tag characters go; ZWJ and
+// ZWNJ stay (Devanagari conjuncts and emoji sequences need them)
+const INVISIBLE = /[\u00ad\u180e\u200b\u2060-\u2064\ufeff\ufff9-\ufffb]|\udb40[\udc00-\udc7f]/g;
+// controls, bidi embeddings / overrides / isolates and line / paragraph separators become a space
+const CONTROL = /[\u0000-\u001f\u007f-\u009f\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g;
 
 /** Cleans a value for a slot: plain text only, braces only as {prize}, clamped to the slot's length. Returns null if unusable. */
 export function cleanText(v, maxLen, vars = {}) {
-  if (typeof v !== 'string') return null;
+  if (typeof v !== 'string' || v.length > 2000) return null;
   let t = v.normalize('NFC').replace(/\{(first|name)\}/gi, (_, k) => vars[k.toLowerCase()] ?? '');
   t = t
-    .replace(/[\u0000-\u001f\u007f-\u009f​‎‏‪-‮⁦-⁩﻿]/g, ' ')
+    .replace(INVISIBLE, '')
+    .replace(CONTROL, ' ')
     .replace(/[<>`\\]/g, '')
     .split('{prize}')
     .map((s) => s.replace(/[{}]/g, ''))
@@ -178,12 +189,13 @@ export function cleanText(v, maxLen, vars = {}) {
     .replace(/\s+/g, ' ')
     .trim();
   if (!t) return null;
-  if (len(t) <= maxLen) return t;
-  if (len(t) > Math.ceil(maxLen * 1.5)) return null;
-  const chars = [...t];
-  const head = chars.slice(0, maxLen + 1).join('');
-  const cut = head.lastIndexOf(' ');
-  const out = (cut > head.length * 0.5 ? head.slice(0, cut) : chars.slice(0, maxLen).join('')).replace(/[\s,;:·-]+$/, '');
+  const g = graphemes(t);
+  if (g.length <= maxLen) return t;
+  if (g.length > Math.ceil(maxLen * 1.5)) return null;
+  // cut at the last space that keeps at least half the line, else hard at maxLen
+  let cut = -1;
+  for (let i = maxLen; i > maxLen / 2; i--) if (g[i] === ' ') { cut = i; break; }
+  const out = g.slice(0, cut > 0 ? cut : maxLen).join('').replace(/\{[a-z]*$/, '').replace(/[\s,;:·-]+$/, ''); // never half a {prize}
   return out || null;
 }
 

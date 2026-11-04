@@ -7,18 +7,21 @@ import { BalloonShoot } from './balloonShoot.js';
 import { RingToss } from './ringToss.js';
 import { Cans } from './cans.js';
 import { Striker } from './striker.js';
-import { slot } from '../personalSlots.js';
+import { slot, slotSet } from '../personalSlots.js';
 
 // sign title, sub line and prize name are personal slots: game.<id>.title / .sub / .prize
 const BOOTHS = [
-  { id: 'shoot', z: 14, c1: '#e63946', c2: '#ffd166', sign: '#5c0a10', Game: BalloonShoot, label: 'Play balloon shooting 🎯' },
-  { id: 'rings', z: 23, c1: '#3a86ff', c2: '#ffffff', sign: '#13306b', Game: RingToss, label: 'Play ring toss ⭕' },
+  { id: 'shoot', short: 'a teddy', z: 14, c1: '#e63946', c2: '#ffd166', sign: '#5c0a10', Game: BalloonShoot, label: 'Play balloon shooting 🎯' },
+  { id: 'rings', short: 'a gift', z: 23, c1: '#3a86ff', c2: '#ffffff', sign: '#13306b', Game: RingToss, label: 'Play ring toss ⭕' },
   { id: 'cans', z: 32, c1: '#06d6a0', c2: '#fff1d0', sign: '#0d4f2b', Game: Cans, label: 'Play Dabba Maar 🥫' },
   { id: 'striker', z: 41, c1: '#8338ec', c2: '#ffbe0b', sign: '#3c1361', Game: Striker, label: 'Test your strength 🔔', rail: false, roof: false },
 ];
-const boothText = (id) => {
+// the stock sign says "win a teddy" / "win a gift"; a creator's prize is named in full. prize is null
+// unless the creator set one, so the stock win and carry lines stay exactly as they were
+const boothText = ({ id, short }) => {
+  const mine = slotSet(`game.${id}.prize`);
   const prize = slot(`game.${id}.prize`);
-  return { title: slot(`game.${id}.title`), sub: slot(`game.${id}.sub`, { prize }), prize };
+  return { title: slot(`game.${id}.title`), sub: slot(`game.${id}.sub`, { prize: mine ? prize : short ?? prize }), prize: mine ? prize : null };
 };
 
 /** Khel Gali: the four game booths and the mode switch in and out of a game. */
@@ -29,7 +32,7 @@ export class Games {
     this.active = null;
     this.camLook = new THREE.Vector3();
     this.games = BOOTHS.map((b, i) => {
-      const d = { ...b, ...boothText(b.id) };
+      const d = { ...b, ...boothText(b) };
       const booth = buildBooth(ctx, this.lights, { ...d, lamp: i % 2 === 0 });
       const game = new d.Game(ctx, booth);
       game.title = `${game.title.split(' ')[0]} ${d.title}`; // keep the game's emoji, take the booth's (maybe personal) name
