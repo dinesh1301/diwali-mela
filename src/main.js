@@ -570,6 +570,10 @@ async function init() {
   if (!low) {
     shadowify(scene);
     world.water.mesh.castShadow = world.water.mesh.receiveShadow = false;
+    debris.mesh.castShadow = false; // small flying bits: invisible at the shadow map's 9 cm texel
+    // the shadow map is redrawn on a cadence (see the loop) instead of on every render call
+    renderer.shadowMap.autoUpdate = false;
+    renderer.shadowMap.needsUpdate = true;
   }
 
   let viewW = 0;
@@ -726,6 +730,7 @@ async function init() {
   let lastDraw = 0;
   let lastTime = 0;
   let throttled = false;
+  let shadowFrame = 0;
 
   const loop = (time) => {
     const t0 = performance.now();
@@ -830,6 +835,9 @@ async function init() {
     }
     if (draw) {
       lastDraw = time;
+      // shadows: every frame while the sun is still sliding into night, then every 2nd frame
+      // (rides and people move slowly enough that a 30 Hz shadow is not noticeable)
+      if (renderer.shadowMap.enabled && (dayNight.T < 95 || ++shadowFrame % 2 === 0)) renderer.shadowMap.needsUpdate = true;
       lightPool.update();
       composer.render();
       ramayan.render(camera);

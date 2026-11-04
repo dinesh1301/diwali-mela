@@ -65,13 +65,33 @@ export function setLayer(obj, layer) {
 /** Shared evening state written by DayNight: lights 0..1 (big rides' bulbs), night 0..1. */
 export const DAY = { lights: 1, night: 1 };
 
-/** Marks every mesh under obj as a shadow caster and receiver (bulbs and glow meshes skipped). */
+/*
+  One texel of the sun's shadow map covers about 9 cm, so a caster smaller than ~0.3 m (a laddoo,
+  a bulb, a cup) adds a smudge nobody can see but still costs a draw call in the shadow pass.
+*/
+const MIN_CASTER_RADIUS = 0.3;
+const _scale = new THREE.Vector3();
+const _v3 = new THREE.Vector3();
+const _q = new THREE.Quaternion();
+
+/**
+ * Marks the meshes under obj as shadow receivers, and the ones big enough to matter as casters.
+ * Skipped as casters: unlit (basic) bulbs and glows, instanced decor, and anything under 0.3 m.
+ * A mesh whose castShadow was already set by its builder (people, walls) keeps it.
+ */
 export function shadowify(obj) {
+  obj.updateMatrixWorld(true);
   obj.traverse((o) => {
     if (!o.isMesh || o.isPoints || o.isSprite) return;
-    const basic = o.material?.isMeshBasicMaterial;
-    o.castShadow = !basic;
     o.receiveShadow = true;
+    if (o.castShadow) return;
+    if (o.material?.isMeshBasicMaterial || o.isInstancedMesh) return;
+    const geo = o.geometry;
+    if (!geo) return;
+    if (!geo.boundingSphere) geo.computeBoundingSphere();
+    o.matrixWorld.decompose(_v3, _q, _scale);
+    const s = Math.max(Math.abs(_scale.x), Math.abs(_scale.y), Math.abs(_scale.z));
+    o.castShadow = geo.boundingSphere.radius * s >= MIN_CASTER_RADIUS;
   });
   return obj;
 }
