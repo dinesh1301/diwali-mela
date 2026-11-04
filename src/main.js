@@ -503,6 +503,7 @@ async function init() {
   const ramayan = new Ramayan(ctx);
   ctx.ramayan = ramayan;
   const boat = new BoatRide(ctx, { wish: () => rituals.wishLantern() });
+  net.makeBoat = () => boat.remoteHull(); // other visitors at the oars get a boat under them
   const decor = buildDecor(ctx);
   await loading();
   const vehicles = new Vehicles(ctx);

@@ -23,8 +23,10 @@ const FLOAT_Y = WATER_Y + 0.42; // the gunwale rides this high; the hull's draft
 const DECK_Y = -0.3;
 const PIER = { x: 10.2, w: 2.6, z0: -45.3, z1: -59 }; // runs out from the top step
 const DOCK = new THREE.Vector3(PIER.x, FLOAT_Y, -61.2);
-// where the boat may go: the ghat steps' front edge, the jetty, and soft limits up/down river
-const RIVER = { minX: -68, maxX: 68, minZ: -138, maxZ: -53.1 };
+// where the boat may go: the quay face (world.js) and soft limits up/down river, out of the ghat
+// steps (their submerged front edge) and the jetty
+const RIVER = { minX: -68, maxX: 68, minZ: -138, maxZ: -49.4 };
+const STEPS = { minX: -42, maxX: 42, minZ: -53.1, maxZ: -44 };
 const JETTY = { minX: PIER.x - PIER.w / 2, maxX: PIER.x + PIER.w / 2, minZ: PIER.z1 - 0.2, maxZ: -44 };
 const GHAT_X = 40; // the steps run x = -42..42; you can climb out along most of them
 const HULL = [[-1.85, 0.75], [0, 1.0], [1.85, 0.75]]; // circles along the keel: [offset, radius]
@@ -239,6 +241,11 @@ export class BoatRide {
     this.seat = model.seat;
     this.oars = model.oars;
     this.group.rotation.order = 'YXZ';
+    // a clean copy (nobody aboard, no lights) for other visitors' rowers; meshes share geometry
+    this.template = this.group.clone(true);
+    const lights = [];
+    this.template.traverse((o) => o.isLight && lights.push(o));
+    for (const o of lights) o.removeFromParent();
     scene.add(this.group);
     this.pos = this.group.position;
     this.moorAtDock();
@@ -415,7 +422,7 @@ export class BoatRide {
         out.set(clamp(x, PIER.x - 0.9, PIER.x + 0.9), DECK_Y, clamp(z, PIER.z1 + 0.45, PIER.z0 - 1));
       }
       // ghat: the steps' front edge
-      const dg = RIVER.maxZ - (z + r);
+      const dg = STEPS.minZ - (z + r);
       if (Math.abs(x) < GHAT_X && dg < bestD) {
         bestD = dg;
         best = 'ghat';
@@ -467,6 +474,11 @@ export class BoatRide {
     this.state = 'docked';
   }
 
+  /** A boat for another visitor who is rowing (see Net): placed under their seat each frame. */
+  remoteHull() {
+    return this.template.clone(true);
+  }
+
   get riding() {
     return this.state === 'ride';
   }
@@ -500,16 +512,16 @@ export class BoatRide {
     };
   }
 
-  /** Soft collisions: hull circles against the river's edges and the jetty. */
+  /** Soft collisions: hull circles against the river's edges, the jetty and the ghat steps. */
   collide(dt) {
     const fx = Math.sin(this.heading);
     const fz = Math.cos(this.heading);
     let hit = 0;
     for (const [off, r] of HULL) {
-      for (let pass = 0; pass < 2; pass++) {
+      for (let pass = 0; pass < 3; pass++) {
         const x = this.pos.x + fx * off;
         const z = this.pos.z + fz * off;
-        const n = pass === 0 ? intoBox(x, z, r, RIVER) : outOfBox(x, z, r, JETTY);
+        const n = pass === 0 ? intoBox(x, z, r, RIVER) : outOfBox(x, z, r, pass === 1 ? JETTY : STEPS);
         if (n.d <= 0) continue;
         // ease out of the overlap (not a hard snap), and lose the speed going into the obstacle
         const push = Math.min(n.d, n.d * 0.5 + 2.5 * dt);
@@ -519,7 +531,8 @@ export class BoatRide {
         if (vn < 0) {
           this.vel.x -= 1.25 * vn * n.x;
           this.vel.y -= 1.25 * vn * n.z;
-          this.vel.multiplyScalar(0.85);
+          // a square knock loses a lot of way, a glancing scrape only a little (so it slides along)
+          this.vel.multiplyScalar(1 - clamp(-vn * 0.2, 0, 0.4));
           // a knock off-centre swings the bow away
           this.yawVel = clamp(this.yawVel + off * (fx * n.z - fz * n.x) * vn * 0.2, -1.2, 1.2);
           hit = Math.max(hit, -vn);
@@ -659,7 +672,8 @@ export class BoatRide {
     c.target.copy(this.camTarget);
     const cp = camera.position;
     cp.set(Math.sin(c.yaw) * Math.cos(c.pitch), Math.sin(c.pitch), Math.cos(c.yaw) * Math.cos(c.pitch)).multiplyScalar(c.dist).add(c.target);
-    cp.y = Math.max(cp.y, (cp.z > -44 ? world.groundHeight(cp.x, cp.z) : WATER_Y) + 0.5);
+    // over the steps, the quay or the jetty the ground is higher than the water
+    cp.y = Math.max(cp.y, Math.max(WATER_Y, cp.z > -53.2 ? world.groundHeight(cp.x, cp.z) : WATER_Y) + 0.5);
     camera.lookAt(c.target);
   }
 }

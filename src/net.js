@@ -346,6 +346,7 @@ export class Net {
     this.voice?.dropPeer(id);
     this.remote.delete(id);
     // free the visitor's meshes and name label: people come and go all evening
+    r.boat?.removeFromParent();
     r.tag.dispose();
     r.char.dispose();
   }
@@ -459,7 +460,20 @@ export class Net {
       d = Math.atan2(Math.sin(d), Math.cos(d));
       root.rotation.y += d * k;
       root.visible = !!r.shown;
+      // a visitor at the oars is sent as a rower on the seat: draw a boat under them
+      const rowing = r.action === 'row' && !!this.makeBoat;
+      if (rowing && !r.boat) this.ctx.scene.add((r.boat = this.makeBoat()));
+      if (r.boat) {
+        r.boat.visible = rowing && !!r.shown;
+        if (r.boat.visible) {
+          // the seat sits 1.6 m aft of the boat's middle, 0.55 m down, and faces the stern
+          const yaw = root.rotation.y - Math.PI;
+          r.boat.position.set(root.position.x - Math.sin(yaw) * 1.6, root.position.y + 0.55, root.position.z - Math.cos(yaw) * 1.6);
+          r.boat.rotation.set(0, yaw, 0);
+        }
+      }
       if (!r.shown) continue;
+      if (r.action === 'row') r.char.actionParam += r.cur.distanceToSquared(r.target) > 1e-4 ? dt * 4.5 : 0;
       if (r.action !== r.char.action) {
         if (r.action) r.char.setAction(r.action);
         else r.char.clearAction();

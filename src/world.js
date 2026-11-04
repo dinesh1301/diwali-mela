@@ -44,7 +44,7 @@ const BOUNDS = { minX: -70, maxX: 70, minZ: -50.3, maxZ: 78 };
 
 /** Walkable height: flat ground everywhere except the ghat steps down to the river. */
 function groundHeight(x, z) {
-  if (z >= -44) return 0;
+  if (z >= -44 || Math.abs(x) > 42) return 0; // past the ends of the steps: the stone quay
   const step = Math.min(6, Math.floor((-44 - z) / 1.3));
   return -0.3 * step;
 }
@@ -519,6 +519,16 @@ function buildGhat(ctx) {
     const step = new THREE.Mesh(new THREE.BoxGeometry(84, 0.3, 1.3), stone);
     step.position.set(0, -0.15 - i * 0.3, -44.65 - i * 1.3);
     scene.add(step);
+  }
+  // past both ends of the steps the bank is a stone quay down to the water, so the ground doesn't
+  // stop in mid-air there and the boat has a real edge to bump into. Walkers stop at its lip and
+  // can't step off the end of a step onto it (or into the void).
+  for (const s of [-1, 1]) {
+    const quay = new THREE.Mesh(new THREE.BoxGeometry(258, 2, 5.4), stone);
+    quay.position.set(s * 171, -1, -46.7);
+    scene.add(quay);
+    colliders.push({ type: 'box', minX: s > 0 ? 42 : -80, maxX: s > 0 ? 80 : -42, minZ: -60, maxZ: -49.4 });
+    colliders.push({ type: 'box', minX: s * 42 - 0.15, maxX: s * 42 + 0.15, minZ: -53.2, maxZ: -45.95 });
   }
 
   const water = createWater(scene, { resolution: ctx.reflectionScale });
