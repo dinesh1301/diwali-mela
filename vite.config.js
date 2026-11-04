@@ -19,4 +19,15 @@ export default defineConfig({
   plugins: [melaServer()],
   server: { allowedHosts: TUNNEL_HOSTS },
   preview: { allowedHosts: TUNNEL_HOSTS },
+  build: {
+    // WebGL2 browsers from 2021 on (iOS 15+, Chrome/Android 100+): no down-levelling of modern syntax.
+    target: ['es2022', 'chrome100', 'safari15', 'firefox100'],
+    // three.js is ~85% of the bundle; a chunk of its own stays cached across deploys of the game code.
+    chunkSizeWarningLimit: 800,
+    rolldownOptions: {
+      output: {
+        codeSplitting: { groups: [{ name: 'three', test: /node_modules[\\/]three/ }] },
+      },
+    },
+  },
 });
