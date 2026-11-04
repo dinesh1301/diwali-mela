@@ -34,10 +34,7 @@ function board(scene, world, { x, z, ry, w, h, draw, title, sub, bg }) {
   for (const s of [-1, 1]) g.add(beam(V(s * (w / 2 + 0.05), 0, 0), V(s * (w / 2 + 0.05), 0.95, 0), 0.07, std(0x3d2a1c)));
   const cap = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.7, h * 0.22), new THREE.MeshBasicMaterial({ map: signTexture(title, sub, bg), color: new THREE.Color(1.2, 1.2, 1.2) }));
   cap.position.set(0, 0.9 + h + 0.15 + h * 0.11, 0.08);
-  g.add(frame, face, cap);
-  const lamp = new THREE.PointLight(0xffd9a0, 18, 8, 2);
-  lamp.position.set(0, 0.9 + h + 0.4, 1.2);
-  g.add(lamp);
+  g.add(frame, face, cap); // the face and caption are unlit (basic), so a board needs no lamp of its own
   scene.add(g);
   g.updateMatrixWorld(true);
   const a = g.localToWorld(V(-w / 2 - 0.2, 0, -0.15));

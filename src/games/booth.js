@@ -3,6 +3,7 @@ import { stripes, signTexture } from '../stalls.js';
 import { setLayer, WARM_PALETTE } from '../utils.js';
 
 export const BOOTH = { W: 7, D: 5, H: 3.6, X: 29 };
+let boothCount = 0;
 
 /**
  * A game booth on Khel Gali. Built in local space with its open front facing +z, then turned
@@ -65,9 +66,13 @@ export function buildBooth(ctx, lights, { z, title, sub, c1, c2, sign, rail = tr
     lights.addStrand(w(-ex, H, -ez), w(ex, H, -ez), { sag: 0.05, spacing: 0.32, wire: false, palette: WARM_PALETTE });
   }
 
-  const light = new THREE.PointLight(0xffc27a, 12, 9, 2);
-  light.position.set(0, 3.1, 1.6);
-  g.add(light);
+  // one warm light for each pair of neighbouring booths (Khel Gali builds them 9 m apart, in order),
+  // hung above the walls in front of the gap between them so it shines into both open fronts
+  if (boothCount++ % 2 === 0) {
+    const light = new THREE.PointLight(0xffc27a, 50, 15, 2);
+    light.position.set(4.5, H + 1.0, D / 2 + 0.6);
+    g.add(light);
+  }
 
   setLayer(g, 1);
   ctx.world.colliders.push(

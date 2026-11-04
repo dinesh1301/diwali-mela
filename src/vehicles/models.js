@@ -126,10 +126,13 @@ export function carModel(color = 0xe63946) {
     wheels.push({ pivot, mesh: w, front });
   }
 
-  const head = new THREE.SpotLight(0xfff0c8, 0, 28, 0.55, 0.5, 1.2);
+  // where the headlight sits and points; the one shared headlight (vehicles.js) moves to whichever
+  // car is being driven, so parked cars carry no light at all
+  const head = new THREE.Object3D();
   head.position.set(0, 0.8, 1.6);
-  head.target.position.set(0, 0, 14);
-  g.add(head, head.target);
+  const headTarget = new THREE.Object3D();
+  headTarget.position.set(0, 0, 14);
+  g.add(head, headTarget);
 
   const seat = new THREE.Object3D();
   seat.position.set(0.32, 0.4, -0.4);
@@ -139,7 +142,7 @@ export function carModel(color = 0xe63946) {
   plate.position.set(0, 0.6, -1.87);
   plate.rotation.y = Math.PI;
   g.add(plate);
-  return { group: g, seat, parts: { wheels, head, body, door } };
+  return { group: g, seat, parts: { wheels, head, headTarget, body, door } };
 }
 
 // ---------- Pushpak Heli ----------

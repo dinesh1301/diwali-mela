@@ -94,13 +94,9 @@ export class Kuan {
     ramp.rotation.x = Math.PI / 2;
     ramp.position.y = 0.25;
     g.add(ramp);
-    // the inside: warm lights at riding height, painted bands and a bulb ring just under the gallery
-    for (let i = 0; i < 3; i++) {
-      const a = (i / 3) * Math.PI * 2;
-      const l = new THREE.PointLight(0xffb46b, 26, 10, 2);
-      l.position.set(Math.cos(a) * 2.5, 2.6, Math.sin(a) * 2.5);
-      g.add(l);
-    }
+    // the inside: painted, faintly glowing bands and a bulb ring just under the gallery. The lamp
+    // over the well (below) lights the drum; the bands' emissive carries the rest, so the well
+    // needs no lights of its own at riding height.
     const bandMat = (c) => std(c, 0.8, { emissive: new THREE.Color(c).multiplyScalar(0.22), side: THREE.DoubleSide });
     for (const [y, c] of [[1.2, 0xc1121f], [1.55, 0xffd166], [4.5, 0xc1121f], [4.85, 0xffd166]]) {
       const band = new THREE.Mesh(new THREE.CylinderGeometry(R - 0.03, R - 0.03, 0.28, 40, 1, true), bandMat(c));
@@ -145,7 +141,7 @@ export class Kuan {
       bulbPts.push(V(POS.x + Math.cos(a) * (R + 1.55), H + 1.05, POS.z + Math.sin(a) * (R + 1.55)));
     }
     lights.addPolyline(bulbPts, { spacing: 0.45, mode: 'chase' });
-    const lamp = new THREE.PointLight(0xffb46b, 80, 16, 2);
+    const lamp = new THREE.PointLight(0xffb46b, 100, 16, 2); // a little brighter: it now lights the whole well
     lamp.position.set(0, H + 0.5, 0);
     g.add(lamp);
     world.colliders.push({ type: 'circle', x: POS.x, z: POS.z, r: R + 1.7 });

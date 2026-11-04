@@ -129,6 +129,15 @@ class Vehicle {
 
 // ---------- Chakri Racer ----------
 
+// One headlight for all the cars: only the car being driven has its lights on, so it moves to that
+// car instead of every parked car carrying a switched-off spotlight. It starts on the first car,
+// off, so the light pool finds it when it gathers the scene's lights.
+let headlight = null;
+function sharedHeadlight() {
+  headlight ??= new THREE.SpotLight(0xfff0c8, 0, 28, 0.55, 0.5, 1.2);
+  return headlight;
+}
+
 class Car extends Vehicle {
   constructor(ctx, spawn) {
     super(ctx, carModel(spawn.color), spawn, {
@@ -145,6 +154,23 @@ class Car extends Vehicle {
     this.steer = 0;
     this.lean = new THREE.Vector2();
     this.wheelSpin = 0;
+    if (!sharedHeadlight().parent) this.mountHeadlight();
+  }
+
+  mountHeadlight() {
+    const lamp = sharedHeadlight();
+    this.parts.head.add(lamp);
+    lamp.target = this.parts.headTarget;
+  }
+
+  /** The shared headlight follows whoever is driving and goes dark when they get out. */
+  syncHeadlight() {
+    const lamp = sharedHeadlight();
+    const mine = lamp.parent === this.parts.head;
+    if (this.occupied) {
+      if (!mine) this.mountHeadlight();
+      lamp.intensity = 90;
+    } else if (mine) lamp.intensity = 0;
   }
 
   onReset() {
@@ -160,6 +186,7 @@ class Car extends Vehicle {
   }
 
   step(dt) {
+    this.syncHeadlight();
     const { world, audio, input } = this.ctx;
     const { f: throttle, s: steer, up: brake } = this.controls();
     const fx = Math.sin(this.heading);
@@ -216,7 +243,6 @@ class Car extends Vehicle {
       w.mesh.rotation.x = this.wheelSpin;
       if (w.front) w.pivot.rotation.y = -this.steer;
     }
-    this.parts.head.intensity = this.occupied ? 90 : 0;
     if (this.occupied) {
       audio.setEngine(Math.abs(throttle), sp / MAXF);
       if (input.pressedAction('horn')) audio.horn();
