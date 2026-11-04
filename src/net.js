@@ -311,6 +311,12 @@ export class Net {
     if (p.x !== undefined) {
       r.target.set(p.x, p.y, p.z);
       r.cur.copy(r.target);
+      // pose too: a visitor standing still is only resent every couple of seconds now
+      r.heading = p.r ?? 0;
+      r.char.root.rotation.y = r.heading;
+      r.action = p.a ?? null;
+      r.speed = p.s ?? 0;
+      r.holdR = p.hr ?? null;
       r.ready = true;
     }
     this.remote.set(p.id, r);
