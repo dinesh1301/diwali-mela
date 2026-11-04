@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Character, randomLook } from './character.js';
+import { Character, randomLook, setViewer } from './character.js';
 import { balloonMesh } from './items.js';
 import { pick, rand, setLayer } from './utils.js';
 
@@ -83,7 +83,6 @@ const LINES = [
 ];
 const ACTIONS = { game: ['clap', 'cheer', null], sky: ['lookUp'], pray: ['namaste'], stall: [null, null, 'give'], look: [null], river: [null] };
 
-const _v = new THREE.Vector3();
 
 export class Crowd {
   constructor(ctx, count = 22) {
@@ -119,7 +118,6 @@ export class Crowd {
         offset: rand(-1.2, 1.2),
         wait: rand(0, 3),
         greeting: false,
-        lod: i % 3,
       };
       this.pickNext(npc);
       this.npcs.push(npc);
@@ -132,7 +130,6 @@ export class Crowd {
         action: () => this.greet(npc),
       });
     }
-    this.frame = 0;
   }
 
   pickNext(npc) {
@@ -200,7 +197,8 @@ export class Crowd {
 
   update(dt, camera) {
     const { player, world } = this.ctx;
-    this.frame++;
+    // every Character past 60 m (here, at the stalls, rides and shows) animates every 3rd frame
+    setViewer(camera.position);
     for (const npc of this.npcs) {
       let speed = 0;
       if (npc.greeting) {
@@ -259,9 +257,7 @@ export class Crowd {
       }
       npc.char.root.position.copy(npc.pos);
       npc.char.root.rotation.y = npc.heading;
-      // distant people animate every third frame to save time
-      const far = _v.copy(npc.pos).distanceToSquared(camera.position) > 3600;
-      if (!far || this.frame % 3 === npc.lod) npc.char.update(far ? dt * 3 : dt, { speed });
+      npc.char.update(dt, { speed });
     }
   }
 }
