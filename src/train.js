@@ -5,6 +5,7 @@ import { Character, randomLook } from './character.js';
 import { shape, merged } from './character.js';
 import { canvasTexture, hdr, setLayer, WARM_PALETTE } from './utils.js';
 import { signTexture } from './stalls.js';
+import { slot } from './personalSlots.js';
 import { mergeStatic, mergeAdded } from './merge.js';
 import { seg } from './lod.js';
 
@@ -19,8 +20,8 @@ import { seg } from './lod.js';
 // behind the game booths (x ≤ 31.5).
 const RECT = { x0: 16, x1: 36, z0: 8, z1: 49, r: 6 };
 const STATIONS = [
-  { name: 'Bazaar Station', near: [16, 36], side: -1 }, // platform on the west, by the bazaar
-  { name: 'Khel Gali Station', near: [36, 27], side: 1 }, // platform on the west of the east straight, by the booths
+  { slot: 'ride.train.station1', near: [16, 36], side: -1 }, // platform on the west, by the bazaar (name: a personal slot)
+  { slot: 'ride.train.station2', near: [36, 27], side: 1 }, // platform on the west of the east straight, by the booths
 ];
 
 /** A quarter (or any) arc on the ground plane, usable inside a CurvePath. */
@@ -130,7 +131,7 @@ export class Train {
       plat.receiveShadow = plat.castShadow = true;
       scene.add(plat);
       const signPos = centre.clone().add(right.clone().multiplyScalar(st.side * 1.0));
-      const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.75), new THREE.MeshBasicMaterial({ map: signTexture(st.name, tk('Toy train · press E when it stops', 'Toy train · tap the button when it stops'), '#13306b', '#ffe7a3', 1024, 288), color: new THREE.Color(1.2, 1.2, 1.2), side: THREE.DoubleSide }));
+      const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.75), new THREE.MeshBasicMaterial({ map: signTexture(slot(st.slot), tk('Toy train · press E when it stops', 'Toy train · tap the button when it stops'), '#13306b', '#ffe7a3', 1024, 288), color: new THREE.Color(1.2, 1.2, 1.2), side: THREE.DoubleSide }));
       sign.position.set(signPos.x, 2.4, signPos.z);
       sign.rotation.y = Math.atan2(t.x, t.z) + Math.PI / 2;
       scene.add(sign);

@@ -20,7 +20,8 @@ import { mergeStatic } from './merge.js';
     stallTheme?: 'books' | 'tech' | 'fitness' | 'food' | 'finance' | 'fashion' | 'art' | 'music' | 'travel' | 'career' | 'general',
     wallPosts?: string[],  // up to 4 image URLs (4:5) for the Wall of Fame next to the stall
     knownFor?: string,     // a short phrase, e.g. "Data science"; painted small on the stall sign
-  }
+    mela?: { [slotId: string]: string },  // the rest of the mela renamed for them: see src/personalSlots.js
+  }                                       // (catalog: node tools/export-slots.mjs > slots.json)
 */
 
 const SLUG_RE = /^[a-z0-9._-]{1,40}$/;
@@ -61,7 +62,9 @@ function normalise(raw) {
   const wallPosts = (Array.isArray(raw.wallPosts) ? raw.wallPosts : [])
     .filter((u) => typeof u === 'string' && /^(https?:\/\/|\/(?!\/)|data:image\/)/i.test(u))
     .slice(0, 4);
-  return { slug, name, first, photoUrl, stallNo, stallTitle, stallTheme, knownFor, wallPosts };
+  // validated slot by slot by setMelaSlots() (personalSlots.js); here only its shape
+  const mela = raw.mela && typeof raw.mela === 'object' && !Array.isArray(raw.mela) ? raw.mela : null;
+  return { slug, name, first, photoUrl, stallNo, stallTitle, stallTheme, knownFor, wallPosts, mela };
 }
 
 function slugFromPage(params) {

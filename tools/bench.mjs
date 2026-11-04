@@ -4,6 +4,7 @@
 //   npm run build && node tools/bench.mjs                 # phone (tier=low, 4x CPU throttle)
 //   node tools/bench.mjs --desktop                        # desktop, tier=high
 //   node tools/bench.mjs --out bench/after.json --secs 6  # save the result
+//   node tools/bench.mjs --cfg sample                     # a creator's personalised mela
 //
 // Frame times here come from a desktop GPU with a throttled CPU: compare them run-to-run, not with a
 // real phone. Draw calls / programs / lights are exact on any machine.
@@ -22,6 +23,9 @@ const out = opt('out', null);
 const port = Number(opt('port', 4179));
 const shots = opt('shots', null); // directory: saves a screenshot per spot
 const SPOTS = (opt('spots', 'gate,bazaar,games,plaza,ramleela,show')).split(',');
+// --cfg sample: bench a creator's mela (tools/personal-sample.mjs, every personal slot set); --cfg <b64> any ?cfg=
+const cfgOpt = opt('cfg', null);
+const cfgParam = cfgOpt === 'sample' ? (await import('./personal-sample.mjs')).b64((await import('./personal-sample.mjs')).SAMPLE) : cfgOpt;
 
 const server = spawn('npx', ['vite', 'preview', '--port', String(port), '--strictPort'], { stdio: ['ignore', 'pipe', 'inherit'], detached: true });
 // npx forks the real vite process: kill the whole group so no preview is left holding the port
@@ -53,7 +57,7 @@ for (const spot of SPOTS) {
   const place = spot === 'show' ? 'plaza&show' : spot;
   const tier = desktop ? 'high' : 'low';
   const t0 = Date.now();
-  await page.goto(`http://localhost:${port}/?play&noyt&nonet&night&tier=${tier}&place=${place}`);
+  await page.goto(`http://localhost:${port}/?play&noyt&nonet&night&tier=${tier}&place=${place}${cfgParam ? `&cfg=${cfgParam}` : ''}`);
   await page.waitForFunction(() => window.__mela && document.getElementById('loader')?.classList.contains('done'), null, { timeout: 180000 });
   const loadMs = Date.now() - t0;
   await page.waitForTimeout(1500); // settle: shader compiles, first shadow maps

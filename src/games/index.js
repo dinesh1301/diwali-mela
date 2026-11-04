@@ -7,13 +7,19 @@ import { BalloonShoot } from './balloonShoot.js';
 import { RingToss } from './ringToss.js';
 import { Cans } from './cans.js';
 import { Striker } from './striker.js';
+import { slot } from '../personalSlots.js';
 
+// sign title, sub line and prize name are personal slots: game.<id>.title / .sub / .prize
 const BOOTHS = [
-  { z: 14, title: 'Gubbara Phod', sub: 'Balloon shooting · win a teddy', c1: '#e63946', c2: '#ffd166', sign: '#5c0a10', Game: BalloonShoot, label: 'Play balloon shooting 🎯' },
-  { z: 23, title: 'Ring Toss', sub: 'Ring 2 bottles · win a gift', c1: '#3a86ff', c2: '#ffffff', sign: '#13306b', Game: RingToss, label: 'Play ring toss ⭕' },
-  { z: 32, title: 'Dabba Maar', sub: 'Knock down all 6 cans', c1: '#06d6a0', c2: '#fff1d0', sign: '#0d4f2b', Game: Cans, label: 'Play Dabba Maar 🥫' },
-  { z: 41, title: 'Taakat Pariksha', sub: 'Strongman · ring the bell', c1: '#8338ec', c2: '#ffbe0b', sign: '#3c1361', Game: Striker, label: 'Test your strength 🔔', rail: false, roof: false },
+  { id: 'shoot', z: 14, c1: '#e63946', c2: '#ffd166', sign: '#5c0a10', Game: BalloonShoot, label: 'Play balloon shooting 🎯' },
+  { id: 'rings', z: 23, c1: '#3a86ff', c2: '#ffffff', sign: '#13306b', Game: RingToss, label: 'Play ring toss ⭕' },
+  { id: 'cans', z: 32, c1: '#06d6a0', c2: '#fff1d0', sign: '#0d4f2b', Game: Cans, label: 'Play Dabba Maar 🥫' },
+  { id: 'striker', z: 41, c1: '#8338ec', c2: '#ffbe0b', sign: '#3c1361', Game: Striker, label: 'Test your strength 🔔', rail: false, roof: false },
 ];
+const boothText = (id) => {
+  const prize = slot(`game.${id}.prize`);
+  return { title: slot(`game.${id}.title`), sub: slot(`game.${id}.sub`, { prize }), prize };
+};
 
 /** Khel Gali: the four game booths and the mode switch in and out of a game. */
 export class Games {
@@ -22,9 +28,12 @@ export class Games {
     this.lights = new StringLights(ctx.scene);
     this.active = null;
     this.camLook = new THREE.Vector3();
-    this.games = BOOTHS.map((d, i) => {
+    this.games = BOOTHS.map((b, i) => {
+      const d = { ...b, ...boothText(b.id) };
       const booth = buildBooth(ctx, this.lights, { ...d, lamp: i % 2 === 0 });
       const game = new d.Game(ctx, booth);
+      game.title = `${game.title.split(' ')[0]} ${d.title}`; // keep the game's emoji, take the booth's (maybe personal) name
+      game.prizeName = d.prize;
       // merge the booth shell and the game's fixed props; anything the game holds on to stays live
       const live = new Set();
       for (const v of Object.values(game)) {
@@ -72,6 +81,7 @@ export class Games {
     if (r.win) {
       audio.cheer();
       this.prize = r.prize;
+      this.prizeName = game.prizeName;
       player.char.setAction('cheer');
       debris.burst(player.headWorld(new THREE.Vector3()), { count: 40, colors: [0xffd166, 0xff006e, 0x06d6a0, 0x3a86ff], speed: 2.5, up: 3, size: 0.06, flat: true, life: 2.5, floor: 0.05 });
     } else {
@@ -108,7 +118,8 @@ export class Games {
     if (this.prize) {
       if (this.stash) this.stash.obj.removeFromParent();
       shops.givePrize(this.prize);
-      ui.toast(this.prize === 'gift' ? tk('🎁 You are carrying your prize! Press Q to put it down.', '🎁 You are carrying your prize! Tap “Put the prize down” to set it down.') : tk('🧸 Your teddy is in your hands! Press Q to put it down.', '🧸 Your teddy is in your hands! Tap “Put the prize down” to set it down.'));
+      const won = this.prizeName ? `You are carrying ${this.prizeName}!` : this.prize === 'gift' ? 'You are carrying your prize!' : 'Your teddy is in your hands!';
+      ui.toast(`${this.prize === 'gift' ? '🎁' : '🧸'} ${won} ${tk('Press Q to put it down.', 'Tap “Put the prize down” to set it down.')}`);
     } else if (this.stash) {
       this.stash.obj.visible = true;
       player.held = this.stash;

@@ -8,6 +8,7 @@ import { mergeStatic, mergeAdded } from './merge.js';
 import { seg, lowDetail } from './lod.js';
 import { settings } from './settings.js';
 import { signTexture } from './stalls.js';
+import { slot } from './personalSlots.js';
 
 /*
   Naav ki Sair: a wooden jetty at the ghat and a rowing boat you take out yourself. Climb in at the
@@ -169,7 +170,7 @@ function boatModel() {
   seat.position.set(0, -0.55, 1.6);
   seat.rotation.y = Math.PI;
   g.add(seat);
-  const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.24), new THREE.MeshBasicMaterial({ map: signTexture('Ganga Naav', null, '#13306b'), transparent: true, color: new THREE.Color(1.2, 1.2, 1.2) }));
+  const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.24), new THREE.MeshBasicMaterial({ map: signTexture(slot('ride.boat.name'), null, '#13306b'), transparent: true, color: new THREE.Color(1.2, 1.2, 1.2) }));
   plate.position.set(0.97, -0.12, -1.2);
   plate.rotation.y = Math.PI / 2;
   g.add(plate);
@@ -319,7 +320,7 @@ export class BoatRide {
     }
     const sign = new THREE.Mesh(
       new THREE.PlaneGeometry(2.6, 0.73),
-      new THREE.MeshBasicMaterial({ map: signTexture('Naav ki Sair', tk('Row a boat · press E at the jetty', 'Row a boat · tap the button at the jetty'), '#13306b'), color: new THREE.Color(1.2, 1.2, 1.2), side: THREE.DoubleSide })
+      new THREE.MeshBasicMaterial({ map: signTexture(slot('ride.boat.sign'), tk('Row a boat · press E at the jetty', 'Row a boat · tap the button at the jetty'), '#13306b'), color: new THREE.Color(1.2, 1.2, 1.2), side: THREE.DoubleSide })
     );
     sign.position.set(x + 2.6, 2.2, -43.4);
     scene.add(sign);

@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { shape, merged } from './character.js';
 import { beam, canvasTexture, rand, setLayer, pick } from './utils.js';
 import { signTexture } from './stalls.js';
+import { slot } from './personalSlots.js';
 import { CONFIG } from './config.js';
 
 /*
@@ -108,7 +109,7 @@ export class Ravan {
 
     const sign = new THREE.Mesh(
       new THREE.PlaneGeometry(3.6, 1.0),
-      new THREE.MeshBasicMaterial({ map: signTexture('Ravan Dahan', tk('Burns on the hour · press E to light the fuse', 'Burns on the hour · tap the button to light the fuse'), '#4a0d0d', '#ffe7a3', 1024, 288), color: new THREE.Color(1.2, 1.2, 1.2), side: THREE.DoubleSide })
+      new THREE.MeshBasicMaterial({ map: signTexture(slot('sign.ravan'), tk('Burns on the hour · press E to light the fuse', 'Burns on the hour · tap the button to light the fuse'), '#4a0d0d', '#ffe7a3', 1024, 288), color: new THREE.Color(1.2, 1.2, 1.2), side: THREE.DoubleSide })
     );
     sign.position.set(POS.x + 5.5, 2.4, POS.z + 1);
     sign.rotation.y = Math.PI / 2;

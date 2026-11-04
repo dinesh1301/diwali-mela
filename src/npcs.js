@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Character, randomLook, setViewer } from './character.js';
 import { balloonMesh } from './items.js';
 import { pick, rand, setLayer } from './utils.js';
+import { slot, slotSet } from './personalSlots.js';
 
 /*
   Mela-goers wander a hand-made path graph. Some nodes are places to linger: in front of stalls,
@@ -73,9 +74,9 @@ const LINES = [
   'Happy Diwali! 🪔',
   'Shubh Deepavali! ✨',
   'Saal Mubarak! 🎉',
-  'Have you tried the jalebi? 😋',
-  'The ring toss is tricky! ⭕',
-  'Ride the giant wheel, the view is amazing! 🎡',
+  'shout.crowd.1', // personal slots (a creator's mela can put their own lines in the crowd's mouth)
+  'shout.crowd.2',
+  'shout.crowd.3',
   'Don’t miss the grand show! 🎆',
   'Aapko bhi Happy Diwali! 🙏',
   'Golgappe khaye? Ekdum teekha! 🌶️',
@@ -157,7 +158,10 @@ export class Crowd {
     ui.bubble((o) => player.headWorld(o), 'Happy Diwali! 🪔', 2.2);
     await tasks.wait(0.7);
     npc.char.setAction('namaste');
-    ui.bubble((o) => npc.char.headTop.getWorldPosition(o), pick(LINES), 2.8);
+    // a creator's own crowd lines come up half the time
+    const mine = LINES.filter((l) => l.startsWith('shout.') && slotSet(l));
+    const line = mine.length && Math.random() < 0.5 ? pick(mine) : pick(LINES);
+    ui.bubble((o) => npc.char.headTop.getWorldPosition(o), line.startsWith('shout.') ? slot(line) : line, 2.8);
     await tasks.wait(1.6);
     player.char.clearAction();
     player.setBusy(false);

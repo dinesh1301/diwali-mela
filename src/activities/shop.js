@@ -5,11 +5,14 @@ import { rand } from '../utils.js';
 import { profile } from '../profile.js';
 import { InstanceBatcher } from '../merge.js';
 import { KANDEEL_DROP } from '../wall.js';
+import { slot, slotSet } from '../personalSlots.js';
 
 const _v = new THREE.Vector3();
 const PLACED_KEY = 'melaPlaced';
 const MAX_PLACED = 60;
 
+// labels are personal slots (menu.<stall>.<n>); a renamed colour drops the stock description under it
+const named = (goods, items) => items.map((it, i) => (slotSet(`menu.${goods}.${i + 1}`) ? { ...it, label: slot(`menu.${goods}.${i + 1}`), sub: '' } : it));
 const KANDEELS = [
   { color: 0xff3d6e, icon: '🩷', label: 'Rani pink' },
   { color: 0xffb000, icon: '🧡', label: 'Marigold' },
@@ -77,21 +80,21 @@ export class Shops {
       switch (st.def.goods) {
         case 'diyas':
           await this.serve(st, diyaMesh(), 'diya', 'hold');
-          ui.bubble(keeperHead, 'Shubh Deepavali! 🪔', 2);
+          ui.bubble(keeperHead, slot('shout.diyas'), 2);
           ui.toast(tk('🪔 Press Q to place your diya, or float it on the river at the ghat', '🪔 Tap “Place the diya” to set it down, or float it on the river at the ghat'));
           break;
         case 'lanterns': {
-          const opts = profile.golden ? [...KANDEELS, GOLD_KANDEEL] : KANDEELS;
-          const i = await ui.menu('Kandeel House', 'Pick a lantern colour', opts);
+          const opts = profile.golden ? [...named('lanterns', KANDEELS), GOLD_KANDEEL] : named('lanterns', KANDEELS);
+          const i = await ui.menu(st.def.name, 'Pick a lantern colour', opts);
           if (i === null) break;
           const color = opts[i].color;
           await this.serve(st, kandeelMesh(color), 'kandeel', 'holdUp', [0, -0.05, 0.05], color);
           passport.stamp('kandeel');
-          ui.bubble(keeperHead, 'Ghar roshan ho jayega! ✨', 2);
+          ui.bubble(keeperHead, slot('shout.lanterns'), 2);
           break;
         }
         case 'bangles': {
-          const i = await ui.menu('Choodi Gali', 'Which bangles would you like to try?', BANGLES);
+          const i = await ui.menu(st.def.name, 'Which bangles would you like to try?', named('bangles', BANGLES));
           if (i === null) break;
           st.keeper.setAction('give');
           audio.chaChing();
@@ -108,14 +111,14 @@ export class Shops {
             debris.burst(_v, { count: 10, colors: [BANGLES[i].color, 0xffd166, 0xffffff], speed: 0.8, up: 1.2, size: 0.025, life: 1, floor: player.pos.y });
           }
           player.char.setAction('cheer');
-          ui.bubble(keeperHead, 'Bahut sundar lag rahe hain! ✨', 2.2);
+          ui.bubble(keeperHead, slot('shout.bangles'), 2.2);
           await tasks.wait(1.4);
           player.char.clearAction();
           passport.stamp('bangles');
           break;
         }
         case 'toys': {
-          const i = await ui.menu('Gubbare & Khilone', 'Pick a balloon', BALLOONS);
+          const i = await ui.menu(st.def.name, 'Pick a balloon', named('toys', BALLOONS));
           if (i === null) break;
           await this.giveBalloon(st, BALLOONS[i].color);
           passport.stamp('balloon');

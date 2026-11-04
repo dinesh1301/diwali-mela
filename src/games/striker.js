@@ -190,7 +190,7 @@ export class Striker {
     this.finish({
       icon: this.rang ? '🔔' : '💪',
       title: this.rang ? 'You rang the bell!' : `Best: ${rank(this.best)}`,
-      text: this.rang ? 'Asli Bahubali! You won a gift box 🎁' : 'Swing in the green zone to ring the bell. Again?',
+      text: this.rang ? `Asli Bahubali! You won ${this.prizeName ?? 'a gift box'} 🎁` : 'Swing in the green zone to ring the bell. Again?',
       win: this.rang,
       prize: 'gift',
       stamp: 'striker',

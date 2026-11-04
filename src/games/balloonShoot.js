@@ -140,7 +140,7 @@ export class BalloonShoot {
         this.finish({
           icon: win ? '🧸' : '🎈',
           title: `${this.popped} / ${SHOTS} popped`,
-          text: win ? 'Shabash, sharpshooter! You won a teddy bear 🧸' : `Pop ${TO_WIN} to win a prize. One more try?`,
+          text: win ? `Shabash, sharpshooter! You won ${this.prizeName ?? 'a teddy bear'} 🧸` : `Pop ${TO_WIN} to win a prize. One more try?`,
           win,
           prize: 'teddy',
           stamp: 'shoot',

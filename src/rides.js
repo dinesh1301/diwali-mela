@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { shape, merged } from './character.js';
 import { canvasTexture, setLayer, DAY } from './utils.js';
 import { signTexture } from './stalls.js';
+import { slot } from './personalSlots.js';
 import { SITES } from './world.js';
 
 const TWO_PI = Math.PI * 2;
@@ -144,7 +145,7 @@ export class Carousel {
     // a sign out front
     const sign = new THREE.Mesh(
       new THREE.PlaneGeometry(3, 0.85),
-      new THREE.MeshBasicMaterial({ map: signTexture('Carousel', tk('Press E to ride', 'Tap the button to ride'), '#6a0d2b'), color: new THREE.Color(1.2, 1.2, 1.2) })
+      new THREE.MeshBasicMaterial({ map: signTexture(slot('ride.carousel.sign'), tk('Press E to ride', 'Tap the button to ride'), '#6a0d2b'), color: new THREE.Color(1.2, 1.2, 1.2) })
     );
     sign.position.set(7.6, 2.2, 2.6);
     sign.rotation.y = Math.PI / 2;
@@ -227,7 +228,7 @@ export class Rides {
     player.cam.pitch = 0.15;
     player.cam.targetDist = 3.5;
     this.active = 'wheel';
-    ui.toast(tk('🎡 Enjoy the view! Press E to get off.', '🎡 Enjoy the view! Tap “Get off” when you are done.'));
+    ui.toast(`${slot('toast.wheel.on')} ${tk('Press E to get off.', 'Tap “Get off” when you are done.')}`);
     passport.stamp('wheel');
   }
 
@@ -238,7 +239,7 @@ export class Rides {
     player.cam.targetDist = 4;
     this.active = 'carousel';
     this.rideTime = 0;
-    ui.toast(tk('🎠 Wheee! Press E to get off.', '🎠 Wheee! Tap “Get off” when you are done.'));
+    ui.toast(`${slot('toast.carousel.on')} ${tk('Press E to get off.', 'Tap “Get off” when you are done.')}`);
     passport.stamp('carousel');
   }
 
@@ -264,13 +265,13 @@ export class Rides {
       this.rideTime += dt;
       if (this.rideTime > 45) {
         this.getOff();
-        ui.toast('That was fun! 🎠');
+        ui.toast(slot('toast.carousel.off'));
         return;
       }
     }
     if (this.active === 'wheel' && this.wheel.ride?.done) {
       this.getOff();
-      ui.toast('Hope you enjoyed the view! 🎡');
+      ui.toast(slot('toast.wheel.off'));
       return;
     }
     if (input.pressedAction('interact')) {

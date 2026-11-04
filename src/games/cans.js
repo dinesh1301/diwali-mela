@@ -143,7 +143,7 @@ export class Cans {
           this.finish({
             icon: win ? '🏆' : '🥫',
             title: win ? 'All 6 down!' : `${down} of 6 down`,
-            text: win ? 'Dabba gul! You won a teddy bear 🧸' : 'Knock all six off to win. Try again?',
+            text: win ? `Dabba gul! You won ${this.prizeName ?? 'a teddy bear'} 🧸` : 'Knock all six off to win. Try again?',
             win,
             prize: 'teddy',
             stamp: 'cans',
