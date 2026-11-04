@@ -333,6 +333,8 @@ export class Tambola {
   }
 
   update(dt) {
+    // nobody watches the tent from afar: past 45 m (and no game running) the players freeze
+    if (!this.active && this.ctx.camera.position.distanceToSquared(POS) > 45 * 45) return;
     this.caller.update(dt);
     for (const r of this.rivals) r.update(dt);
   }
