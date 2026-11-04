@@ -229,6 +229,21 @@ export class FerrisWheel {
     for (const g of this.gondolas) g.rotation.z = -rz + Math.sin(t * 1.1 + g.userData.phase) * 0.035;
     this.syncGondolas();
 
+    // bulb colours at 30 Hz (20 on phones), not every frame: the patterns read the same
+    if (t - (this.bulbT ?? -Infinity) >= (lowDetail() ? 1 / 20 : 1 / 30)) {
+      this.bulbT = t;
+      this.paintBulbs(t);
+    }
+    this.light.color.setHSL((t * 0.05) % 1, 0.8, 0.6);
+    this.light.intensity = 140 * DAY.lights;
+
+    if (this.ride) {
+      this.ride.angle += this.speed * dt;
+      if (this.ride.angle >= TWO_PI) this.ride.done = true;
+    }
+  }
+
+  paintBulbs(t) {
     const mode = Math.floor(t / 9) % 3;
     const c = this.tmp;
     for (let i = 0; i < this.bulbData.length; i++) {
@@ -245,13 +260,6 @@ export class FerrisWheel {
       this.bulbs.setColorAt(i, c.multiplyScalar(0.03 + 0.97 * DAY.lights));
     }
     this.bulbs.instanceColor.needsUpdate = true;
-    this.light.color.setHSL((t * 0.05) % 1, 0.8, 0.6);
-    this.light.intensity = 140 * DAY.lights;
-
-    if (this.ride) {
-      this.ride.angle += this.speed * dt;
-      if (this.ride.angle >= TWO_PI) this.ride.done = true;
-    }
   }
 
   /** Boards the gondola currently nearest the platform. */

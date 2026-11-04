@@ -3,6 +3,10 @@ import { catenary, BULB_PALETTE } from './utils.js';
 import { lowDetail } from './lod.js';
 
 const MODES = ['chase', 'twinkle', 'steady', 'alternate'];
+// Bulb colours are recomputed and re-uploaded at this rate, not every frame: thousands of bulbs,
+// and chase/twinkle patterns read the same at 20-30 Hz.
+const CELL = 48; // metres: the bulbs' culling cells
+const colorHz = () => (lowDetail() ? 20 : 30); // read at run time: the tier is known only after detect()
 
 /** Every fairy-light bulb in the mela, drawn as one instanced mesh and animated per strand. */
 /** Seconds into the evening at which the lights around a point come on (gate first, river last). */
@@ -14,6 +18,25 @@ function switchOnDelay(p) {
   return 22; // ghat and temple
 }
 
+// Per scene: the reflection-only bulb copies. Scene.onBeforeRender runs at the start of every
+// renderer.render(scene, camera), including the Reflector's nested one, before its render list is
+// built, so the copies join the reflection's list and never the main view's.
+const copies = new WeakMap();
+function reflectOnly(scene) {
+  let list = copies.get(scene);
+  if (!list) {
+    list = [];
+    copies.set(scene, list);
+    const prev = scene.onBeforeRender;
+    scene.onBeforeRender = function (renderer, sc, camera, ...rest) {
+      const show = !camera.layers.isEnabled(1);
+      for (const m of list) m.visible = show;
+      prev.call(this, renderer, sc, camera, ...rest);
+    };
+  }
+  return list;
+}
+
 export class StringLights {
   constructor(scene) {
     this.scene = scene;
@@ -22,6 +45,8 @@ export class StringLights {
     this.strands = 0;
     this.tmp = new THREE.Color();
     this.dayT = null; // null = always on
+    this.lastT = -Infinity;
+    this.dark = false; // every bulb was off at the last update, so the colours are already final
   }
 
   setDay(T) {
@@ -54,21 +79,57 @@ export class StringLights {
   }
 
   build() {
-    this.mesh = new THREE.InstancedMesh(
-      // 4,000+ bulbs drawn twice (scene and river): phones get 48 triangles instead of 80. Eight
-      // segments keep the outline an octagon from below and from the side; a 20-triangle icosahedron
-      // showed as hard hexagons on the bulbs right over the walkway.
-      lowDetail() ? new THREE.SphereGeometry(0.075, 8, 4) : new THREE.SphereGeometry(0.075, 8, 6),
-      new THREE.MeshBasicMaterial({ color: 0xffffff }),
-      this.bulbs.length
-    );
+    // 4,000+ bulbs drawn twice (scene and river): phones get 48 triangles instead of 80. Eight
+    // segments keep the outline an octagon from below and from the side; a 20-triangle icosahedron
+    // showed as hard hexagons on the bulbs right over the walkway.
+    const geo = lowDetail() ? new THREE.SphereGeometry(0.075, 8, 4) : new THREE.SphereGeometry(0.075, 8, 6);
+    // The river reflection draws at a quarter (phones) or half resolution and smears it with waves,
+    // so it gets its own copy of the bulbs as 8-20 triangle blobs sharing the same instance buffers.
+    // The real bulbs sit on layer 1, which the reflection skips; the copies stay on layer 0 and are
+    // shown only while a camera that cannot see layer 1 (the reflection's) renders the scene.
+    const blob = lowDetail() ? new THREE.OctahedronGeometry(0.075, 0) : new THREE.IcosahedronGeometry(0.075, 0);
+    const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
+
+    // Bulbs are grouped into ~48 m cells, one instanced mesh per cell, so the cells behind the
+    // camera are frustum-culled instead of drawing every bulb in the mela every frame. The colours
+    // live in one array in bulb order; each cell's colour attribute is a view of its slice.
+    const cell = (b) => `${Math.floor(b.pos.x / CELL)},${Math.floor(b.pos.z / CELL)}`;
+    for (const b of this.bulbs) b.cell = cell(b);
+    this.bulbs.sort((a, b) => (a.cell < b.cell ? -1 : a.cell > b.cell ? 1 : 0));
+    const n = this.bulbs.length;
+    this.colors = new Float32Array(n * 3);
+    const matrices = new Float32Array(n * 16);
     const m4 = new THREE.Matrix4();
     this.bulbs.forEach((b, k) => {
-      this.mesh.setMatrixAt(k, m4.makeTranslation(b.pos.x, b.pos.y, b.pos.z));
-      this.mesh.setColorAt(k, b.color);
+      m4.makeTranslation(b.pos.x, b.pos.y, b.pos.z).toArray(matrices, k * 16);
+      b.color.toArray(this.colors, k * 3);
     });
-    this.mesh.computeBoundingSphere();
-    this.scene.add(this.mesh);
+    this.chunks = [];
+    const list = reflectOnly(this.scene);
+    for (let a = 0; a < n; ) {
+      let z = a + 1;
+      while (z < n && this.bulbs[z].cell === this.bulbs[a].cell) z++;
+      const color = new THREE.InstancedBufferAttribute(this.colors.subarray(a * 3, z * 3), 3);
+      const matrix = new THREE.InstancedBufferAttribute(matrices.subarray(a * 16, z * 16), 16);
+      const mk = (g) => {
+        const m = new THREE.InstancedMesh(g, material, z - a);
+        m.instanceMatrix = matrix;
+        m.instanceColor = color;
+        return m;
+      };
+      const mesh = mk(geo);
+      mesh.computeBoundingSphere();
+      mesh.layers.set(1);
+      this.scene.add(mesh);
+      const copy = mk(blob);
+      copy.boundingSphere = mesh.boundingSphere;
+      copy.visible = false;
+      this.scene.add(copy);
+      list.push(copy);
+      this.chunks.push({ mesh, copy, color });
+      a = z;
+    }
+    this.mesh = this.chunks[0]?.mesh ?? null;
 
     if (this.wirePoints.length) {
       const wires = new THREE.LineSegments(
@@ -80,7 +141,11 @@ export class StringLights {
   }
 
   update(t) {
+    if (!this.mesh || t - this.lastT < 1 / colorHz()) return;
+    this.lastT = t;
     const c = this.tmp;
+    const colors = this.colors;
+    let lit = false;
     const alt = Math.floor(t * 1.5);
     const T = this.dayT;
     for (let k = 0; k < this.bulbs.length; k++) {
@@ -92,9 +157,10 @@ export class StringLights {
         else if (since < 1.4) on = Math.random() < 0.6 ? 1 : 0.15; // a flicker as the circuit wakes up
       }
       if (on === 0) {
-        this.mesh.setColorAt(k, c.copy(b.color).multiplyScalar(0.06));
+        if (!this.dark) c.copy(b.color).multiplyScalar(0.06).toArray(colors, k * 3);
         continue;
       }
+      lit = true;
       let s;
       switch (b.mode) {
         case 'chase':
@@ -111,8 +177,10 @@ export class StringLights {
         default:
           s = 0.85 + 0.15 * Math.sin(t * 1.3 + b.phase);
       }
-      this.mesh.setColorAt(k, c.copy(b.color).multiplyScalar((0.5 + s * 3.2) * on));
+      c.copy(b.color).multiplyScalar((0.5 + s * 3.2) * on).toArray(colors, k * 3);
     }
-    this.mesh.instanceColor.needsUpdate = true;
+    if (!lit && this.dark) return; // still all off: nothing changed since the last upload
+    this.dark = !lit;
+    for (const ch of this.chunks) ch.color.needsUpdate = true;
   }
 }

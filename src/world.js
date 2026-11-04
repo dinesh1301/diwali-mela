@@ -8,6 +8,7 @@ import { Diyas } from './diyas.js';
 import { createStall, signTexture, STALL } from './stalls.js';
 import { FerrisWheel } from './ferrisWheel.js';
 import { mergeStatic, freezeStatic, mergeAdded } from './merge.js';
+import { seg } from './lod.js';
 
 /*
   Layout (metres, +z towards the entrance):
@@ -141,7 +142,7 @@ function pole(ctx, x, z, h) {
 function buildPoles(ctx) {
   const n = ctx.poles.length;
   const shaft = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.07, 0.1, 1, 8).translate(0, 0.5, 0), std(0x5a3b26, 0.8), n);
-  const cap = new THREE.InstancedMesh(new THREE.SphereGeometry(0.14, 10, 8), std(0xd4a017, 0.3, { metalness: 0.7 }), n);
+  const cap = new THREE.InstancedMesh(new THREE.SphereGeometry(0.14, seg(10, 8), seg(8, 5)), std(0xd4a017, 0.3, { metalness: 0.7 }), n);
   const m = new THREE.Matrix4();
   ctx.poles.forEach((p, i) => {
     shaft.setMatrixAt(i, m.makeScale(1, p.h, 1).setPosition(p.x, 0, p.z));
@@ -599,7 +600,7 @@ function buildGhat(ctx) {
   for (const s of [-1, 1]) {
     const tops = [6, 14, 22, 30].map((x) => {
       const top = pole(ctx, s * x, -42.6, 4);
-      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), lampMat);
+      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.22, seg(12, 8), seg(10, 6)), lampMat);
       lamp.position.set(top.x, top.y + 0.35, top.z);
       scene.add(lamp);
       return top;
