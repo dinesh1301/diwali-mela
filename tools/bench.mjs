@@ -21,9 +21,12 @@ const cpu = Number(opt('cpu', desktop ? 1 : 4));
 const out = opt('out', null);
 const port = Number(opt('port', 4179));
 const shots = opt('shots', null); // directory: saves a screenshot per spot
+const dusk = opt('dusk', null); // --dusk 30: hold the evening 30 s after sunset instead of full night
+const extra = opt('extra', ''); // extra query, e.g. --extra '&cfg=...'
 const SPOTS = (opt('spots', 'gate,bazaar,games,plaza,ramleela,show')).split(',');
 
-const server = spawn('npx', ['vite', 'preview', '--port', String(port), '--strictPort'], { stdio: ['ignore', 'pipe', 'inherit'], detached: true });
+const dist = opt('dist', null); // serve another build (e.g. a saved "before" dist) instead of dist/
+const server = spawn('npx', ['vite', 'preview', '--port', String(port), '--strictPort', ...(dist ? ['--outDir', dist] : [])], { stdio: ['ignore', 'pipe', 'inherit'], detached: true });
 // npx forks the real vite process: kill the whole group so no preview is left holding the port
 const stopServer = () => {
   try {
@@ -45,6 +48,8 @@ const results = { mode: desktop ? 'desktop' : 'phone', cpu, secs, spots: {} };
 for (const spot of SPOTS) {
   const context = await browser.newContext(ctxOpts);
   const page = await context.newPage();
+  // --nocoach: the phones' first-run coach card dims the scene; mark it as seen (for screenshots)
+  if (flag('nocoach')) await page.addInitScript(() => localStorage.setItem('melaCoach', '1'));
   const cdp = await context.newCDPSession(page);
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: cpu });
   const errors = [];
@@ -53,7 +58,7 @@ for (const spot of SPOTS) {
   const place = spot === 'show' ? 'plaza&show' : spot;
   const tier = desktop ? 'high' : 'low';
   const t0 = Date.now();
-  await page.goto(`http://localhost:${port}/?play&noyt&nonet&night&tier=${tier}&place=${place}`);
+  await page.goto(`http://localhost:${port}/?play&noyt&nonet&${dusk ? `dayT=${dusk}` : 'night'}&tier=${tier}&place=${place}${extra}`);
   await page.waitForFunction(() => window.__mela && document.getElementById('loader')?.classList.contains('done'), null, { timeout: 180000 });
   const loadMs = Date.now() - t0;
   await page.waitForTimeout(1500); // settle: shader compiles, first shadow maps
@@ -61,12 +66,20 @@ for (const spot of SPOTS) {
     const { renderer, scene } = window.__mela;
     const raf = () => new Promise((f) => requestAnimationFrame(f));
     // one frame's totals across every render call (main, shadow, reflection, bloom)
+    // The river reflection and the shadow map run on alternating 2-frame cadences, so one frame
+    // alone swings by ~100 calls: report the mean over 12 frames (and the heaviest frame).
     renderer.info.autoReset = false;
     await raf();
-    renderer.info.reset();
-    await raf();
-    const calls = renderer.info.render.calls;
-    const tris = renderer.info.render.triangles;
+    let callSum = 0, triSum = 0, callsMax = 0;
+    for (let i = 0; i < 12; i++) {
+      renderer.info.reset();
+      await raf();
+      callSum += renderer.info.render.calls;
+      triSum += renderer.info.render.triangles;
+      callsMax = Math.max(callsMax, renderer.info.render.calls);
+    }
+    const calls = Math.round(callSum / 12);
+    const tris = Math.round(triSum / 12);
     renderer.info.autoReset = true;
     let meshes = 0, casters = 0, pts = 0, spots = 0;
     scene.traverseVisible((o) => {
@@ -88,14 +101,14 @@ for (const spot of SPOTS) {
     const q = (p) => +dts[Math.min(dts.length - 1, Math.floor(dts.length * p))].toFixed(1);
     const heap = performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) : null;
     return {
-      calls, tris, programs: renderer.info.programs.length, geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures,
+      calls, callsMax, tris, programs: renderer.info.programs.length, geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures,
       meshes, casters, pointLights: pts, spotLights: spots, pixelRatio: renderer.getPixelRatio(),
       fps: +(dts.length / secs).toFixed(1), p50: q(0.5), p95: q(0.95), p99: q(0.99), over33: +(dts.filter((d) => d > 33.4).length / dts.length * 100).toFixed(1), heapMB: heap,
     };
   }, secs);
   if (shots) {
     mkdirSync(shots, { recursive: true });
-    await page.screenshot({ path: `${shots}/${results.mode}-${spot}.png` });
+    await page.screenshot({ path: `${shots}/${results.mode}${dusk ? '-dusk' : ''}-${spot}.png` });
   }
   results.spots[spot] = { loadMs, ...r, errors: errors.slice(0, 5) };
   console.log(spot.padEnd(9), JSON.stringify(results.spots[spot]));

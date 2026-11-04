@@ -9,6 +9,7 @@ import { createStall, signTexture, STALL } from './stalls.js';
 import { FerrisWheel } from './ferrisWheel.js';
 import { mergeStatic, freezeStatic, mergeAdded } from './merge.js';
 import { seg } from './lod.js';
+import { buildFestive } from './festive.js';
 
 /*
   Layout (metres, +z towards the entrance):
@@ -94,11 +95,15 @@ export function buildWorld(scene, { reflectionScale = 0.5 } = {}) {
   const wheel = new FerrisWheel(scene, SITES.wheel);
   ctx.colliders.push(...wheel.colliders);
 
+  ctx.poleAt = (x, z, h) => pole(ctx, x, z, h);
+  const stillDiyas = buildFestive(ctx, { site: SITES });
+
   buildPoles(ctx);
   ctx.lights.build();
   ctx.garlands.build();
   ctx.diyas.build();
   ctx.floating.build();
+  stillDiyas.build();
 
   return {
     colliders: ctx.colliders,

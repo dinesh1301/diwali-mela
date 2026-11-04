@@ -269,19 +269,19 @@ async function init() {
   renderer.setSize(viewW0(), viewH0());
   renderer.setClearColor(0x000000, 0);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
+  renderer.toneMappingExposure = 1.18; // a bright festival night (the bloom threshold is set before this)
   renderer.shadowMap.enabled = !low;
   renderer.shadowMap.type = THREE.PCFShadowMap;
   document.getElementById('app').appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  const fogColor = new THREE.Color(0x1a0d2c);
-  scene.fog = new THREE.FogExp2(fogColor, 0.0075);
+  const fogColor = new THREE.Color(0x2c1a36);
+  scene.fog = new THREE.FogExp2(fogColor, 0.0055);
 
   const camera = new THREE.PerspectiveCamera(60, viewW0() / viewH0(), 0.1, 700);
   camera.layers.enable(1);
   scene.add(camera);
-  const hemi = new THREE.HemisphereLight(0x6a5aa0, 0x2a1a12, 0.8);
+  const hemi = new THREE.HemisphereLight(0x8e84cc, 0x5a3a24, 1.35);
   scene.add(hemi);
   // one directional light: the setting sun at dusk, a faint blue sky light at night; it casts the shadows
   const sun = new THREE.DirectionalLight(0xffa050, 1.2);
@@ -688,6 +688,11 @@ async function init() {
     started = !director; // director shots: no prompts, markers or keeper bubbles
     nameTag.set({ name: profile.name, handle: profile.handle });
     dayNight.start({ night: params.has('night') });
+    // &dayT=30 holds the evening at that many seconds after dusk (screenshots, the bench's --dusk)
+    if (params.get('dayT')) {
+      dayNight.T = Number(params.get('dayT')) || 0;
+      dayNight.running = false;
+    }
     ravan.start();
     if (!params.has('noyt')) ramayan.start();
     if (!params.has('nonet')) net.connect();
