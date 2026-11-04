@@ -203,3 +203,102 @@ export function mergeAdded(parent, before, { live = new Set(), cell = 0 } = {}) 
   mergeStatic(statics, { cell });
   return freezeStatic(statics);
 }
+
+/**
+ * Draws many copies of small prop Groups (placed diyas, kandeels, prizes) as instanced meshes.
+ * add(obj) hides obj's meshes and draws each one as an instance of a shared InstancedMesh (one per
+ * geometry and material look, colour per instance); obj stays in the scene as the authority for its
+ * transform. Meshes marked userData.live (flames) are re-copied every update(); the rest once.
+ */
+export class InstanceBatcher {
+  constructor(parent, capacity = 64) {
+    this.parent = parent;
+    this.capacity = capacity;
+    this.sets = new Map();
+    this.owned = new Map(); // obj -> [{ set, mesh }]
+  }
+
+  setFor(mesh) {
+    const look = lookKey(mesh.material);
+    if (look === null) return null;
+    const key = `${mesh.geometry.uuid}#${look}#${mesh.layers.mask}`;
+    let set = this.sets.get(key);
+    if (!set) {
+      const mat = mesh.material.clone();
+      mat.color.set(0xffffff);
+      const tint = emissiveTint(mesh.material);
+      if (tint !== null) {
+        mat.emissive.setScalar(tint);
+        tintEmissive(mat);
+      }
+      const im = new THREE.InstancedMesh(mesh.geometry, mat, this.capacity);
+      im.count = 0;
+      im.layers.mask = mesh.layers.mask;
+      im.receiveShadow = true;
+      im.frustumCulled = true;
+      lockNoCast(im);
+      im.setColorAt(0, _c.set(0xffffff)); // allocates instanceColor
+      this.parent.add(im);
+      set = { im, items: [] };
+      this.sets.set(key, set);
+    }
+    return set.items.length < this.capacity ? set : null;
+  }
+
+  /** Takes over drawing obj (already added to the scene); returns false if nothing could be batched. */
+  add(obj) {
+    obj.updateMatrixWorld(true);
+    const recs = [];
+    obj.traverse((o) => {
+      if (!o.isMesh || o.isInstancedMesh || Array.isArray(o.material) || !o.visible) return;
+      const set = this.setFor(o);
+      if (!set) return;
+      const i = set.items.length;
+      set.items.push(o);
+      set.im.count = set.items.length;
+      set.im.setMatrixAt(i, o.matrixWorld);
+      set.im.setColorAt(i, o.material.color);
+      set.im.instanceMatrix.needsUpdate = true;
+      set.im.instanceColor.needsUpdate = true;
+      set.im.computeBoundingSphere();
+      o.visible = false;
+      recs.push({ set, mesh: o });
+    });
+    if (recs.length) this.owned.set(obj, recs);
+    return recs.length > 0;
+  }
+
+  remove(obj) {
+    const recs = this.owned.get(obj);
+    if (!recs) return;
+    this.owned.delete(obj);
+    const m = new THREE.Matrix4();
+    for (const { set, mesh } of recs) {
+      const i = set.items.indexOf(mesh);
+      const last = set.items.length - 1;
+      if (i < 0) continue;
+      if (i !== last) {
+        const moved = set.items[last];
+        set.items[i] = moved;
+        set.im.getMatrixAt(last, m);
+        set.im.setMatrixAt(i, m);
+        set.im.setColorAt(i, moved.material.color);
+      }
+      set.items.pop();
+      set.im.count = set.items.length;
+      set.im.instanceMatrix.needsUpdate = true;
+      set.im.instanceColor.needsUpdate = true;
+      if (set.items.length) set.im.computeBoundingSphere();
+      mesh.visible = true;
+    }
+  }
+
+  /** Re-copies the live meshes (flickering flames) into their instances. */
+  update() {
+    for (const set of this.sets.values()) {
+      if (!set.items.length || !set.items[0].userData.live) continue;
+      for (let i = 0; i < set.items.length; i++) set.im.setMatrixAt(i, set.items[i].matrixWorld);
+      set.im.instanceMatrix.needsUpdate = true;
+    }
+  }
+}

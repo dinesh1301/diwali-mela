@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { hdr } from './utils.js';
+import { shape, merged } from './character.js';
 
 /* Hand-sized props. Each factory returns a Group whose origin sits where the palm holds it. */
 
@@ -99,12 +100,24 @@ export function diyaMesh() {
   return group(mesh(bowlGeo, clay), flame);
 }
 
+// Shared geometry and materials for the props visitors place around the mela, so the Deepmala
+// wall's InstanceBatcher can draw every kandeel / teddy / gift as instances of the same few meshes.
+let KG = null;
+const kandeelParts = () =>
+  (KG ??= {
+    string: new THREE.CylinderGeometry(0.004, 0.004, 0.3, 4),
+    body: new THREE.OctahedronGeometry(0.18, 0).scale(1, 1.35, 1),
+    tassel: new THREE.ConeGeometry(0.03, 0.16, 6).rotateX(Math.PI),
+    stringMat: std(0x333333),
+    goldMat: std(0xffc94a, 0.4, { metalness: 0.5 }),
+  });
+
 export function kandeelMesh(color = 0xff3d6e) {
-  const body = new THREE.OctahedronGeometry(0.18, 0).scale(1, 1.35, 1);
+  const K = kandeelParts();
   return group(
-    mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.3, 4), std(0x333333), 0, 0.15),
-    mesh(body, new THREE.MeshBasicMaterial({ color: hdr(color, 1.8) }), 0, -0.24),
-    mesh(new THREE.ConeGeometry(0.03, 0.16, 6).rotateX(Math.PI), std(0xffc94a, 0.4, { metalness: 0.5 }), 0, -0.6)
+    mesh(K.string, K.stringMat, 0, 0.15),
+    mesh(K.body, new THREE.MeshBasicMaterial({ color: hdr(color, 1.8) }), 0, -0.24),
+    mesh(K.tassel, K.goldMat, 0, -0.6)
   );
 }
 
@@ -114,28 +127,41 @@ export function balloonMesh(color = 0xff006e) {
   return group(b, knot);
 }
 
+// a teddy is one vertex-coloured mesh (fur, muzzle, eyes and bow)
+let teddy = null;
 export function teddyMesh() {
-  const fur = std(0xa0662e, 0.95);
-  const light = std(0xe0b07a, 0.95);
-  const g = group(
-    mesh(new THREE.SphereGeometry(0.11, 12, 10).scale(1, 1.15, 0.9), fur, 0, 0.12),
-    mesh(new THREE.SphereGeometry(0.085, 12, 10), fur, 0, 0.3),
-    mesh(new THREE.SphereGeometry(0.035, 8, 6), fur, -0.065, 0.37),
-    mesh(new THREE.SphereGeometry(0.035, 8, 6), fur, 0.065, 0.37),
-    mesh(new THREE.SphereGeometry(0.035, 8, 6), light, 0, 0.29, 0.07),
-    mesh(new THREE.SphereGeometry(0.012, 6, 4), std(0x111111), -0.03, 0.32, 0.075),
-    mesh(new THREE.SphereGeometry(0.012, 6, 4), std(0x111111), 0.03, 0.32, 0.075),
-    mesh(new THREE.TorusGeometry(0.06, 0.015, 6, 16).rotateX(Math.PI / 2), std(0xe0218a), 0, 0.22)
+  teddy ??= merged(
+    [
+      shape(new THREE.SphereGeometry(0.11, 12, 10), 0xa0662e, [0, 0.12, 0], [], [1, 1.15, 0.9]),
+      shape(new THREE.SphereGeometry(0.085, 12, 10), 0xa0662e, [0, 0.3, 0]),
+      shape(new THREE.SphereGeometry(0.035, 8, 6), 0xa0662e, [-0.065, 0.37, 0]),
+      shape(new THREE.SphereGeometry(0.035, 8, 6), 0xa0662e, [0.065, 0.37, 0]),
+      shape(new THREE.SphereGeometry(0.035, 8, 6), 0xe0b07a, [0, 0.29, 0.07]),
+      shape(new THREE.SphereGeometry(0.012, 6, 4), 0x111111, [-0.03, 0.32, 0.075]),
+      shape(new THREE.SphereGeometry(0.012, 6, 4), 0x111111, [0.03, 0.32, 0.075]),
+      shape(new THREE.TorusGeometry(0.06, 0.015, 6, 16), 0xe0218a, [0, 0.22, 0], [Math.PI / 2, 0, 0]),
+    ],
+    new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92 })
   );
-  return g;
+  return group(new THREE.Mesh(teddy.geometry, teddy.material));
 }
 
+// a gift is the box plus one merged mesh for both ribbons and the bow
+let gift = null;
 export function giftMesh() {
-  const box = mesh(new THREE.BoxGeometry(0.2, 0.18, 0.2), std(0xe0218a, 0.5), 0, 0.09);
-  const ribbon1 = mesh(new THREE.BoxGeometry(0.21, 0.19, 0.04), std(0xffd166, 0.3, { metalness: 0.5 }), 0, 0.09);
-  const ribbon2 = mesh(new THREE.BoxGeometry(0.04, 0.19, 0.21), ribbon1.material, 0, 0.09);
-  const bow = mesh(new THREE.TorusGeometry(0.04, 0.012, 6, 12), ribbon1.material, 0, 0.2);
-  return group(box, ribbon1, ribbon2, bow);
+  gift ??= {
+    box: new THREE.BoxGeometry(0.2, 0.18, 0.2).translate(0, 0.09, 0),
+    boxMat: std(0xe0218a, 0.5),
+    ribbon: merged(
+      [
+        shape(new THREE.BoxGeometry(0.21, 0.19, 0.04), 0xffffff, [0, 0.09, 0]),
+        shape(new THREE.BoxGeometry(0.04, 0.19, 0.21), 0xffffff, [0, 0.09, 0]),
+        shape(new THREE.TorusGeometry(0.04, 0.012, 6, 12), 0xffffff, [0, 0.2, 0]),
+      ],
+      std(0xffd166, 0.3, { metalness: 0.5 })
+    ),
+  };
+  return group(new THREE.Mesh(gift.box, gift.boxMat), new THREE.Mesh(gift.ribbon.geometry, gift.ribbon.material));
 }
 
 export function thaliMesh() {

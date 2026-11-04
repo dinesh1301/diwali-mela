@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { canvasTexture, beam, setLayer } from './utils.js';
 import { signTexture } from './stalls.js';
+import { mergeStatic, mergeAdded } from './merge.js';
 
 /*
   Three walls that visitors fill:
@@ -35,6 +36,7 @@ function board(scene, world, { x, z, ry, w, h, draw, title, sub, bg }) {
   const cap = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.7, h * 0.22), new THREE.MeshBasicMaterial({ map: signTexture(title, sub, bg), color: new THREE.Color(1.2, 1.2, 1.2) }));
   cap.position.set(0, 0.9 + h + 0.15 + h * 0.11, 0.08);
   g.add(frame, face, cap); // the face and caption are unlit (basic), so a board needs no lamp of its own
+  mergeStatic(g); // frame and legs share a look
   scene.add(g);
   g.updateMatrixWorld(true);
   const a = g.localToWorld(V(-w / 2 - 0.2, 0, -0.15));
@@ -62,6 +64,7 @@ export class Walls {
     const { scene, world, net } = ctx;
 
     // ---- Deepmala wall ----
+    const before = new Set(scene.children);
     this.slots = [];
     const wx = -13;
     const z0 = 61;
@@ -98,6 +101,7 @@ export class Walls {
     lamp.position.set(wx + 1.5, 2.6, z0 + len / 2);
     scene.add(lamp);
     this.wallCenter = V(wx + 0.4, 0, z0 + len / 2);
+    mergeAdded(scene, before); // the three shelves become one mesh
 
     // ---- leaderboard at the gate ----
     this.leader = board(scene, world, {

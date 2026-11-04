@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { diyaMesh, kandeelMesh, balloonMesh, teddyMesh, giftMesh, forgetFlames } from '../items.js';
 import { rand } from '../utils.js';
 import { profile } from '../profile.js';
+import { InstanceBatcher } from '../merge.js';
 
 const _v = new THREE.Vector3();
 const PLACED_KEY = 'melaPlaced';
@@ -45,6 +46,8 @@ export class Shops {
     this.floaters = [];
     this.flyaways = [];
     this.placed = [];
+    // every placed diya / kandeel / prize is drawn through a handful of instanced meshes
+    this.batch = new InstanceBatcher(ctx.scene, MAX_PLACED + 4);
     for (const st of ctx.world.stalls) {
       const g = st.def.goods;
       if (!LABELS[g]) continue;
@@ -267,6 +270,7 @@ export class Shops {
       obj.rotation.set(0, player.heading, 0);
     }
     scene.add(obj);
+    this.batch.add(obj);
     this.remember(kind, color, obj);
     player.char.clearAction();
     player.setBusy(false);
@@ -280,6 +284,7 @@ export class Shops {
     while (this.placed.length > MAX_PLACED) {
       const old = this.placed.shift();
       forgetFlames(old.obj);
+      this.batch.remove(old.obj);
       old.obj.removeFromParent();
     }
     try {
@@ -306,11 +311,13 @@ export class Shops {
       obj.position.set(s.x, s.y, s.z);
       obj.rotation.y = s.r;
       this.ctx.scene.add(obj);
+      this.batch.add(obj);
       this.placed.push({ kind: s.k, color: s.c, obj });
     }
   }
 
   update(dt, t) {
+    this.batch.update();
     for (let i = this.floaters.length - 1; i >= 0; i--) {
       const f = this.floaters[i];
       f.age += dt;
