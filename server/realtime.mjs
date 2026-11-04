@@ -1,6 +1,10 @@
 /*
   The mela's little realtime server: who is where (positions relayed at 10 Hz), waves, shared
-  wish lanterns, the leaderboards and the wish wall. Plain JSON over WebSocket, one shared room.
+  wish lanterns, the leaderboards and the wish wall. JSON over WebSocket, one shared room.
+  Positions use compact arrays (see net.js): clients send ['s', x, y, z, r, s, a, hr, v] when they
+  change (plus a 1 s keepalive) and each tick's snapshot ['S', online, id, ...8 fields, id, ...]
+  carries only the visitors who changed, each repeated at least every KEEP_MS so nobody goes stale.
+  A ping heartbeat drops dead sockets, and snapshots skip clients that can't keep up.
   Runs inside `vite dev`/`vite preview` (attach) or on its own (`node server/realtime.mjs`).
   Scores and wishes persist in server/data.json.
 */
@@ -15,6 +19,10 @@ const DATA = join(HERE, 'data.json');
 const BOARDS = { golgappa: 'desc', lap: 'asc', striker: 'desc' };
 const MAX_WISHES = 200;
 const TICK_MS = 100;
+const KEEP_MS = 2000; // resend an unchanged visitor this often (clients drop silent ones after 12 s)
+const PING_MS = 15000;
+const MAX_BUFFERED = 64 * 1024; // a client this far behind skips snapshots until it catches up
+const NO_STATE = null;
 
 const store = loadStore();
 const clients = new Map(); // id -> { ws, state, name, handle, seenAt }
@@ -45,9 +53,29 @@ function saveSoon() {
 const clean = (s, n) => String(s ?? '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, n);
 const num = (v, lo, hi) => (Number.isFinite(+v) ? Math.max(lo, Math.min(hi, +v)) : 0);
 
-function publicPlayer(id, c) {
-  return { id, n: c.name, h: c.handle, look: c.look, mic: !!c.mic, ...c.state };
+/** The state tuple [x, y, z, r, s, a, hr, v] as the object fields welcome/join messages use. */
+function stateObject(st) {
+  if (!st) return {};
+  return { x: st[0], y: st[1], z: st[2], r: st[3], s: st[4], a: st[5] || null, hr: st[6] || null, v: st[7] || null };
 }
+
+function publicPlayer(id, c) {
+  return { id, n: c.name, h: c.handle, look: c.look, mic: !!c.mic, ...stateObject(c.state) };
+}
+
+const str = (v, n) => (v ? clean(v, n) || 0 : 0);
+
+/** Validates a state message (compact array or the older object form) into a tuple. */
+function readState(m) {
+  const a = Array.isArray(m) ? m : ['s', m.x, m.y, m.z, m.r, m.s, m.a, m.hr, m.v];
+  return [num(a[1], -400, 400), num(a[2], -10, 300), num(a[3], -400, 400), num(a[4], -10, 10), num(a[5], 0, 60), str(a[6], 16), str(a[7], 8), str(a[8], 8)];
+}
+
+const sameState = (a, b) => {
+  if (!a || !b) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+};
 
 function send(ws, msg) {
   if (ws.readyState === 1) ws.send(JSON.stringify(msg));
@@ -85,7 +113,8 @@ function handleMessage(id, c, raw) {
   } catch {
     return;
   }
-  switch (m.t) {
+  if (!m || typeof m !== 'object') return;
+  switch (Array.isArray(m) ? m[0] : m.t) {
     case 'hello':
       c.name = clean(m.name, 24) || 'Visitor';
       c.handle = clean(m.handle, 40).replace(/^@/, '');
@@ -99,19 +128,16 @@ function handleMessage(id, c, raw) {
       });
       broadcast({ t: 'join', p: publicPlayer(id, c) }, id);
       break;
-    case 'state':
-      c.state = {
-        x: num(m.x, -400, 400),
-        y: num(m.y, -10, 300),
-        z: num(m.z, -400, 400),
-        r: num(m.r, -10, 10),
-        a: m.a ? clean(m.a, 16) : null,
-        s: num(m.s, 0, 60),
-        hr: m.hr ? clean(m.hr, 8) : null,
-        v: m.v ? clean(m.v, 8) : null,
-      };
+    case 's':
+    case 'state': {
+      const st = readState(m);
+      if (!sameState(st, c.state)) {
+        c.state = st;
+        c.dirty = true;
+      }
       c.seenAt = Date.now();
       break;
+    }
     case 'look':
       c.look = m.look && typeof m.look === 'object' ? m.look : c.look;
       c.name = clean(m.name, 24) || c.name;
@@ -166,8 +192,9 @@ export function attachRealtime(httpServer, path = '/ws') {
 function wire(wss) {
   wss.on('connection', (ws) => {
     const id = nextId++;
-    const c = { ws, state: {}, name: 'Visitor', handle: '', look: null, seenAt: Date.now() };
+    const c = { ws, state: NO_STATE, dirty: false, sentAt: 0, behind: false, name: 'Visitor', handle: '', look: null, seenAt: Date.now(), alive: true };
     clients.set(id, c);
+    ws.on('pong', () => (c.alive = true));
     ws.on('message', (raw) => handleMessage(id, c, raw));
     ws.on('close', () => {
       clients.delete(id);
@@ -175,11 +202,61 @@ function wire(wss) {
     });
     ws.on('error', () => {});
   });
+  let lastN = 0;
   setInterval(() => {
     if (!clients.size) return;
-    const players = [...clients].map(([id, c]) => ({ id, ...c.state }));
-    broadcast({ t: 'snap', players, n: clients.size });
+    const now = Date.now();
+    const delta = ['S', clients.size];
+    const full = ['S', clients.size];
+    for (const [id, c] of clients) {
+      if (!c.state) continue;
+      full.push(id, ...c.state);
+      if (c.dirty || now - c.sentAt >= KEEP_MS) {
+        delta.push(id, ...c.state);
+        c.dirty = false;
+        c.sentAt = now;
+      }
+    }
+    if (delta.length === 2 && clients.size === lastN && !hasBehind()) return;
+    lastN = clients.size;
+    const ds = JSON.stringify(delta);
+    let fs = null;
+    for (const c of clients.values()) {
+      if (c.ws.readyState !== 1) continue;
+      // a slow phone on a bad network: don't pile more positions onto its socket
+      if (c.ws.bufferedAmount > MAX_BUFFERED) {
+        c.behind = true;
+        continue;
+      }
+      if (c.behind) {
+        // it missed some deltas: catch it up with everyone's current state
+        c.behind = false;
+        c.ws.send((fs ??= JSON.stringify(full)));
+      } else c.ws.send(ds);
+    }
   }, TICK_MS);
+
+  // heartbeat: a socket that misses a pong is gone (sleeping phone, dropped Wi-Fi)
+  const beat = setInterval(() => {
+    for (const c of clients.values()) {
+      if (!c.alive) {
+        c.ws.terminate();
+        continue;
+      }
+      c.alive = false;
+      try {
+        c.ws.ping();
+      } catch {
+        // closing already
+      }
+    }
+  }, PING_MS);
+  wss.on('close', () => clearInterval(beat));
+}
+
+function hasBehind() {
+  for (const c of clients.values()) if (c.behind) return true;
+  return false;
 }
 
 export function startStandalone(port = Number(process.env.PORT) || 8787) {

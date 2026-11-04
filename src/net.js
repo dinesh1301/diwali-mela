@@ -5,11 +5,17 @@ import { profile } from './profile.js';
 
 /*
   Multiplayer client. Sends where our avatar is (world position of the character root, heading,
-  pose, speed, what it holds) at 10 Hz and mirrors everyone else with the same Character rig.
+  pose, speed, what it holds) at up to 10 Hz, only when it changed plus a 1 s keepalive, and
+  mirrors everyone else with the same Character rig. Positions travel as compact arrays: we send
+  ['s', x, y, z, heading, speed, action, held, vehicle] and the server's snapshot is
+  ['S', online, id, x, y, z, heading, speed, action, held, vehicle, id, ...] holding only the
+  visitors who moved (and each one at least every 2 s).
   Also carries waves, shared wish lanterns, scores for the leaderboards and the wish wall.
   Without a server it degrades to a local-only mode (own bests and wishes kept in the browser).
 */
 const SEND_MS = 100;
+const KEEPALIVE_MS = 1000;
+const SNAP_STRIDE = 9; // id + 8 state fields per visitor in an 'S' snapshot
 const STALE_MS = 12000;
 const LOCAL_KEY = 'melaLocalBoards';
 const BOARD_ORDER = { golgappa: 'desc', lap: 'asc', striker: 'desc' };
@@ -34,6 +40,8 @@ export class Net {
     this.wishes = [];
     this.listeners = {};
     this.lastSend = 0;
+    this.lastState = [];
+    this.lastSent = 0;
     this.retry = 1000;
     this.enabled = true;
     this.voice = null; // set by Voice
@@ -82,6 +90,7 @@ export class Net {
     ws.onopen = () => {
       this.connected = true;
       this.retry = 1000;
+      this.lastState = [];
       this.send({ t: 'hello', name: profile.name, handle: profile.handle, look: this.ctx.player.char.look });
       this.emit('status', true);
     };
@@ -113,23 +122,31 @@ export class Net {
 
   // ---------- outgoing ----------
 
-  sendState() {
+  /** Sends our state when it changed since the last send, or as a keepalive. */
+  sendState(now) {
     const { player } = this.ctx;
     const root = player.char.root;
     root.getWorldPosition(_v);
     root.getWorldQuaternion(this.tmpQ);
     this.tmpE.setFromQuaternion(this.tmpQ);
-    this.send({
-      t: 'state',
-      x: +_v.x.toFixed(2),
-      y: +_v.y.toFixed(2),
-      z: +_v.z.toFixed(2),
-      r: +this.tmpE.y.toFixed(3),
-      a: player.char.action,
-      s: +player.speed.toFixed(2),
-      hr: player.char.holdR,
-      v: player.mode === 'ride' ? 'ride' : null,
-    });
+    const st = [
+      's',
+      +_v.x.toFixed(2),
+      +_v.y.toFixed(2),
+      +_v.z.toFixed(2),
+      +this.tmpE.y.toFixed(2),
+      +player.speed.toFixed(1),
+      player.char.action || 0,
+      player.char.holdR || 0,
+      player.mode === 'ride' ? 'ride' : 0,
+    ];
+    const last = this.lastState;
+    let same = last.length === st.length;
+    for (let i = 1; same && i < st.length; i++) same = st[i] === last[i];
+    if (same && now - this.lastSent < KEEPALIVE_MS) return;
+    this.lastState = st;
+    this.lastSent = now;
+    this.send(st);
   }
 
   sendLook() {
@@ -161,9 +178,25 @@ export class Net {
 
   // ---------- incoming ----------
 
+  /** Moves (or creates) a remote visitor from a snapshot entry. */
+  applyState(id, x, y, z, heading, speed, action, holdR, now) {
+    if (!Number.isFinite(x)) return;
+    const r = this.remote.get(id) ?? this.addRemote({ id, n: 'Visitor', h: '' });
+    r.target.set(x, y, z);
+    r.heading = heading ?? r.heading;
+    r.action = action;
+    r.speed = speed ?? 0;
+    r.holdR = holdR;
+    r.seenAt = now;
+    if (!r.ready) {
+      r.cur.copy(r.target);
+      r.ready = true;
+    }
+  }
+
   handle(m) {
     const { ui, lanterns } = this.ctx;
-    switch (m.t) {
+    switch (Array.isArray(m) ? m[0] : m.t) {
       case 'welcome':
         this.id = m.id;
         for (const p of m.players) this.addRemote(p);
@@ -181,7 +214,20 @@ export class Net {
       case 'leave':
         this.removeRemote(m.id);
         break;
+      case 'S': {
+        // compact snapshot: ['S', online, id, x, y, z, r, s, a, hr, v, id, ...]
+        this.online = m[1];
+        const now = performance.now();
+        for (let i = 2; i + SNAP_STRIDE <= m.length; i += SNAP_STRIDE) {
+          const id = m[i];
+          if (id === this.id) continue;
+          this.applyState(id, m[i + 1], m[i + 2], m[i + 3], m[i + 4], m[i + 5], m[i + 6] || null, m[i + 7] || null, now);
+        }
+        this.emit('online', this.online);
+        break;
+      }
       case 'snap':
+        // the older object snapshot (kept so a client and server from different deploys still talk)
         this.online = m.n;
         for (const p of m.players) {
           if (p.id === this.id || p.x === undefined) continue;
@@ -275,8 +321,10 @@ export class Net {
     const r = this.remote.get(id);
     if (!r) return;
     this.voice?.dropPeer(id);
-    r.char.root.removeFromParent();
     this.remote.delete(id);
+    // free the visitor's meshes and name label: people come and go all evening
+    r.tag.dispose();
+    r.char.dispose();
   }
 
   nearest() {
@@ -351,7 +399,7 @@ export class Net {
   update(dt, now) {
     if (this.connected && now - this.lastSend > SEND_MS) {
       this.lastSend = now;
-      this.sendState();
+      this.sendState(now);
     }
     for (const [id, r] of this.remote) {
       if (now - r.seenAt > STALE_MS) {
