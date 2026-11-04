@@ -390,6 +390,7 @@ function makeVideo(src, { director }) {
 
 function releaseVideo(v) {
   if (!v) return;
+  v.released = true; // a late 'error' from emptying the element must not mark the reel as broken
   try {
     v.el.pause();
     v.el.removeAttribute('src');
@@ -502,6 +503,7 @@ export class Billboard {
     const back = new THREE.PlaneGeometry(sw, sh).translate(0, 0, 0.13).rotateY(Math.PI);
     const screenGeo = mergeGeometries([front, back]).translate(x, (y0 + y1) / 2, z);
     this.mat = screenMaterial();
+    this.blank = this.mat.uniforms.mapA.value;
     this.mat.uniforms.uAspect.value = this.aspect;
     this.screen = new THREE.Mesh(screenGeo, this.mat);
     this.screen.name = 'billboard-screen';
@@ -612,6 +614,7 @@ export class Billboard {
         if (isFinite(el.duration) && el.duration > 0) it.dur = Math.min(el.duration, MAX_VIDEO);
       });
       el.addEventListener('error', () => {
+        if (v.released) return;
         it.failed = !it.poster; // with a poster it carries on as a still
         it.noVideo = true;
       });
@@ -676,6 +679,23 @@ export class Billboard {
     for (const v of this.videos.values()) releaseVideo(v);
     this.videos.clear();
     if (this.fade) this.advance();
+    this.unbindReleased();
+  }
+
+  /** A released reel's texture must not stay on the screen (it would re-upload an emptied <video>). */
+  unbindReleased() {
+    const u = this.mat.uniforms;
+    const live = new Set([...this.videos.values()].map((v) => v.tex));
+    for (const k of ['mapA', 'mapB']) {
+      const t = u[k].value;
+      if (t.isVideoTexture && !live.has(t)) u[k].value = this.blank;
+    }
+    // the poster of what is showing now, so a woken screen has its still while the reel buffers
+    const cur = this.items[this.idx];
+    if (cur?.type === 'video') {
+      const st = this.still(cur);
+      if (st && u.mapA.value === this.blank) u.mapA.value = st;
+    }
   }
 
   advance() {
@@ -687,6 +707,7 @@ export class Billboard {
     if (old !== this.items[this.idx] && !keep.has(old)) {
       releaseVideo(this.videos.get(old));
       this.videos.delete(old);
+      this.unbindReleased();
     }
   }
 
@@ -695,6 +716,10 @@ export class Billboard {
     this.lights.update(t);
     if (!this.items.length) return;
     if (this.director) return this.updateDirector(dt);
+    if (this.overlay) {
+      for (const v of this.videos.values()) if (!v.el.paused) v.el.pause();
+      return;
+    }
     const d = Math.hypot(camPos.x - this.pos.x, camPos.z - this.pos.z);
     const want = !document.hidden && (this.active ? d < FAR : d < NEAR);
     if (!want) {
@@ -711,6 +736,7 @@ export class Billboard {
     let lt = this.lt;
     const isVid = cur.type === 'video' && !cur.noVideo;
     if (isVid) {
+      if (cur.poster) this.still(cur);
       const v = this.video(cur);
       if (v.ready && v.el.paused && !v.el.ended) v.el.play().catch(() => {});
       lt = v.el.currentTime;
@@ -844,6 +870,7 @@ export class Billboard {
         media.removeAttribute('src');
         media.load();
       }
+      window.removeEventListener('keydown', onKey, true);
       wrap.remove();
       this.overlay = null;
       this.onOverlay?.(false);
@@ -853,6 +880,13 @@ export class Billboard {
       shut();
     };
     wrap.addEventListener('pointerdown', (e) => e.target === wrap && shut());
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        shut();
+      }
+    };
+    window.addEventListener('keydown', onKey, true);
     document.body.appendChild(wrap);
     this.overlay = wrap;
     this.onOverlay?.(true);
