@@ -22,6 +22,7 @@ export class Input {
     this.clicks = [];
     this.lookEnabled = true; // drag rotates the camera; off during aiming games
     this.blocked = false; // a modal is open
+    this.typing = false; // the chat box has the keyboard (chat.js): no walking, no shortcuts
     this.lookPointer = null;
     this.joyPointer = null;
     this.joyEnabled = true; // the on-screen stick is shown (walking or driving, no modal)
@@ -146,11 +147,11 @@ export class Input {
   }
 
   isDown(code) {
-    return !this.blocked && this.down.has(code);
+    return !this.blocked && !this.typing && this.down.has(code);
   }
 
   wasPressed(code) {
-    return !this.blocked && this.pressed.has(code);
+    return !this.blocked && !this.typing && this.pressed.has(code);
   }
 
   // ---------- pointer ----------

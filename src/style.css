@@ -3153,3 +3153,362 @@ body.touch.in-booth .share-pill {
     width: min(760px, 100%);
   }
 }
+
+/* ---------- room chat (chat.js) ---------- */
+
+button.icon.chat-btn {
+  position: relative;
+}
+
+button.icon.chat-btn.on {
+  border-color: var(--gold);
+  box-shadow: 0 0 14px rgba(255, 190, 60, 0.45);
+}
+
+.chat-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: #e8341c;
+  color: #fff;
+  font: 700 11px/18px 'Poppins', system-ui, sans-serif;
+  text-align: center;
+  box-shadow: 0 0 0 2px rgba(30, 12, 42, 0.9);
+  pointer-events: none;
+}
+
+/* a new message while the chat is closed */
+.chat-peek {
+  position: fixed;
+  right: 16px;
+  bottom: 100px;
+  z-index: 13;
+  max-width: min(340px, calc(100% - 32px));
+  padding: 9px 14px;
+  border: 1px solid var(--panel-border);
+  border-radius: 16px 16px 4px 16px;
+  background: rgba(30, 12, 42, 0.88);
+  backdrop-filter: blur(8px);
+  color: var(--ink);
+  font: 14px/1.35 'Poppins', system-ui, sans-serif;
+  text-align: left;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.3s, transform 0.3s;
+  pointer-events: none;
+}
+
+.chat-peek.show {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+.chat-peek b {
+  color: var(--gold);
+  font-weight: 600;
+}
+
+body.chat-open .chat-peek {
+  display: none;
+}
+
+.chat-panel {
+  --kb: 0px;
+  --vvh: 100vh;
+  position: fixed;
+  right: 16px;
+  bottom: calc(16px + var(--kb));
+  z-index: 14;
+  display: flex;
+  flex-direction: column;
+  width: 360px;
+  height: min(540px, calc(var(--vvh) - 110px));
+  border: 1px solid var(--panel-border);
+  border-radius: 20px;
+  background: rgba(30, 12, 42, 0.94);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  color: var(--ink);
+  font-family: 'Poppins', system-ui, sans-serif;
+  overflow: hidden;
+  touch-action: pan-y;
+}
+
+.cp-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 10px 4px 16px;
+}
+
+.cp-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.cp-online {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.cp-close {
+  width: 36px;
+  height: 36px;
+  flex: none;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 246, 229, 0.08);
+  color: var(--ink);
+  font-size: 16px;
+}
+
+.cp-note {
+  margin: 0;
+  padding: 0 16px 6px;
+  border-bottom: 1px solid rgba(255, 207, 92, 0.12);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.cp-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.cm {
+  max-width: 82%;
+  align-self: flex-start;
+  padding: 6px 11px 7px;
+  border-radius: 14px 14px 14px 4px;
+  background: rgba(255, 246, 229, 0.1);
+}
+
+.cm.me {
+  align-self: flex-end;
+  border-radius: 14px 14px 4px 14px;
+  background: #ffcf5c;
+  color: #3a1206;
+}
+
+.cm.pending {
+  opacity: 0.6;
+}
+
+.cm-meta {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 11px;
+}
+
+.cm-meta b {
+  overflow: hidden;
+  max-width: 160px;
+  color: var(--gold);
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.cm-meta time {
+  opacity: 0.65;
+}
+
+.cm.me .cm-meta {
+  justify-content: flex-end;
+}
+
+.cm.me .cm-meta b {
+  color: #7a2c0c;
+}
+
+.cm-text {
+  font-size: 14px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.cm.sys {
+  max-width: 100%;
+  align-self: center;
+  padding: 2px 10px;
+  background: none;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.cp-quick {
+  display: flex;
+  gap: 6px;
+  padding: 6px 12px 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.cp-quick::-webkit-scrollbar {
+  display: none;
+}
+
+.cp-quick button {
+  flex: none;
+  min-height: 34px;
+  padding: 4px 12px;
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  background: rgba(255, 207, 92, 0.1);
+  color: var(--ink);
+  font: 13px 'Poppins', system-ui, sans-serif;
+  white-space: nowrap;
+}
+
+.cp-quick button:active {
+  background: rgba(255, 207, 92, 0.3);
+}
+
+.cp-form {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px 12px;
+}
+
+.cp-input {
+  flex: 1;
+  min-width: 0;
+  height: 42px;
+  padding: 0 14px;
+  border: 1px solid var(--panel-border);
+  border-radius: 21px;
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--ink);
+  font: 16px 'Poppins', system-ui, sans-serif; /* 16px: no iOS focus zoom */
+  outline: none;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.cp-input:focus {
+  border-color: var(--gold);
+}
+
+.cp-send {
+  width: 42px;
+  height: 42px;
+  flex: none;
+  border: 0;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--gold), var(--saffron));
+  color: #3a1206;
+  font-size: 18px;
+}
+
+/* phones (portrait): a bottom sheet that rides above the keyboard */
+@media (max-width: 760px) and (orientation: portrait) {
+  .chat-panel {
+    left: 0;
+    right: 0;
+    bottom: var(--kb);
+    width: auto;
+    height: min(58vh, calc(var(--vvh) - 8px - env(safe-area-inset-top)));
+    border-width: 1px 0 0;
+    border-radius: 20px 20px 0 0;
+  }
+
+  .chat-panel .cp-form {
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+
+  /* the keyboard is up: take the whole visible height, the input sits right on the keyboard */
+  .chat-panel.kb {
+    height: calc(var(--vvh) - 8px);
+  }
+
+  .chat-panel.kb .cp-form {
+    padding-bottom: 10px;
+  }
+
+  .chat-peek {
+    top: calc(max(122px + env(safe-area-inset-top), var(--hud-bottom, 0px) + 10px) + 96px); /* below the two chips */
+    right: 10px;
+    bottom: auto;
+    max-width: min(300px, calc(100% - 20px));
+  }
+
+  /* the sheet covers the stick and the buttons: keep them from peeking through */
+  body.chat-open #actionbar,
+  body.chat-open #prompts,
+  body.chat-open #jumpBtn {
+    visibility: hidden;
+  }
+}
+
+/* phones (landscape): a side panel on the right, full height */
+@media (max-height: 500px) and (orientation: landscape) {
+  .chat-panel {
+    top: calc(8px + env(safe-area-inset-top));
+    right: calc(8px + env(safe-area-inset-right));
+    bottom: calc(8px + var(--kb));
+    width: min(360px, 48vw);
+    height: auto;
+  }
+
+  .cp-note {
+    display: none;
+  }
+
+  .chat-peek {
+    bottom: 80px;
+  }
+}
+
+/* the 💬 makes eight header icons: shrink them a little so the row still fits narrow phones */
+@media (max-width: 430px) {
+  body.touch.has-chat button.icon,
+  body.has-chat button.icon {
+    width: 40px;
+    height: 40px;
+    font-size: 17px;
+  }
+
+  body.has-chat .hud-icons {
+    gap: 3px;
+  }
+}
+
+@media (max-width: 345px) {
+  body.touch.has-chat button.icon,
+  body.has-chat button.icon {
+    width: 35px;
+    height: 35px;
+    font-size: 15px;
+  }
+
+  body.has-chat .hud-icons {
+    gap: 2px;
+  }
+}

@@ -12,7 +12,8 @@ import { track, trackIds } from './track.js';
   ['s', x, y, z, heading, speed, action, held, vehicle] and the server's snapshot is
   ['S', online, id, x, y, z, heading, speed, action, held, vehicle, id, ...] holding only the
   visitors who moved (and each one at least every 2 s).
-  Also carries waves, shared wish lanterns, scores for the leaderboards and the wish wall.
+  Also carries waves, shared wish lanterns, scores for the leaderboards, the wish wall and the
+  room chat (chat.js listens for 'chat', 'chatlog', 'chatno', 'join' and 'leave').
   Without a server it degrades to a local-only mode (own bests and wishes kept in the browser).
 */
 const SEND_MS = 100;
@@ -69,7 +70,7 @@ function defaultUrl() {
 }
 
 /** Director / trailer capture never joins a room: no remote visitors in shots, nothing random. */
-function offlinePage() {
+export function offlinePage() {
   const p = new URLSearchParams(location.search);
   return p.has('director') || p.has('nonet') || typeof window.__director !== 'undefined';
 }
@@ -218,6 +219,14 @@ export class Net {
     track('chat_sent', { kind, len: String(text).length, connected: this.connected, online: this.online }); // the text itself is stored by the realtime server
   }
 
+  /** A room chat message; the hub echoes it back to us (with k) as it does to everyone. */
+  sendChat(text, k, kind = 'chat') {
+    if (!this.connected) return false;
+    this.send({ t: 'chat', text, k });
+    track('chat_sent', { kind, len: String(text).length, online: this.online }); // the text itself is stored by the realtime server
+    return true;
+  }
+
   submitScore(kind, value) {
     this.recordLocal(kind, value);
     this.send({ t: 'score', kind, value });
@@ -271,14 +280,23 @@ export class Net {
         this.emit('boards');
         this.emit('wishes');
         this.emit('online', this.online);
+        if (Array.isArray(m.chat)) this.emit('chatlog', m.chat);
         break;
       case 'join':
         this.addRemote(m.p);
+        this.emit('join', m.p);
         this.voice?.peerJoined(m.p.id, !!m.p.mic);
         ui.toast(`👋 ${m.p.n} joined the mela`, 2500);
         break;
       case 'leave':
+        this.emit('leave', m.id, this.remote.get(m.id)?.name);
         this.removeRemote(m.id);
+        break;
+      case 'chat':
+        this.emit('chat', m.m, m.k);
+        break;
+      case 'chatno':
+        this.emit('chatno', m.reason, m.k);
         break;
       case 'S': {
         // compact snapshot: ['S', online, id, x, y, z, r, s, a, hr, v, id, ...]

@@ -12,16 +12,23 @@
   goes stale. A ping heartbeat drops dead sockets (well under Cloudflare's 100 s idle cut-off), and
   snapshots skip clients that can't keep up.
 
+  Room chat: {t:'chat', text, k?} is cleaned (cleanChat: 200 chars, links other than
+  mela.topmate.io become [link], English/Hindi/Hinglish abuse becomes ***) and sent to everyone in
+  the room, the sender included, as {t:'chat', m:{i, at, id, n, h, text}} (plus the sender's k on
+  its own echo). The room keeps the last 50 (persisted with its scores) and a newcomer's welcome
+  carries the past day of them as `chat`. Each socket gets 1 message / 1.2 s (burst 5) and no
+  repeats within 30 s; a refused one is answered {t:'chatno', reason:'slow'|'dup'} to the sender.
+
   Abuse basics: a per-IP connection cap, per-room and room-count caps, a message size cap, a
-  token-bucket rate limit per socket (plus cooldowns on lanterns/bubbles/looks/scores) and
-  sanitised names, wishes and looks.
+  token-bucket rate limit per socket (plus cooldowns on lanterns/bubbles/looks/scores, and the
+  chat bucket above) and sanitised names, wishes and looks.
 
   Analytics: an optional onEvent(type, data) hook hears connects, joins, names, waves, bubbles,
-  lanterns, scores, rejections and disconnects (with how long and how many messages were dropped);
+  chat messages (text as shown, raw as typed), lanterns, scores, rejections and disconnects (with how long and how many messages were dropped);
   metaOf(req) is called once per upgrade and its result is handed back as data.meta. Both are
   wrapped so a throwing hook never breaks the hub, and nothing is called per position update.
 
-  Each room's scores and wishes persist as <dataDir>/<room>.json (debounced, atomic writes); empty
+  Each room's scores, wishes and recent chat persist as <dataDir>/<room>.json (debounced, atomic writes); empty
   rooms are flushed and dropped from memory after a minute.
 
   This file is shared: the mela-launch service vendors it as src/realtime/realtime.mjs (keep the
@@ -52,6 +59,14 @@ const MAX_DROPS = 400; // a socket that keeps flooding past the limit is cut off
 const COOLDOWN_MS = { lantern: 2000, bubble: 600, score: 400 };
 const LOOK_GAP_MS = 800; // look changes are coalesced to one broadcast per gap (the last one always goes out)
 
+// room chat: a typed message everyone in the room reads in the chat panel (see cleanChat)
+const CHAT_MAX = 200; // characters
+const CHAT_KEEP = 50; // the last this-many messages per room are kept (and persisted) for late joiners
+const CHAT_TTL_MS = 24 * 3600_000; // a newcomer is shown at most a day of history
+const CHAT_EVERY_MS = 1200; // per socket: one message per 1.2 s on average...
+const CHAT_BURST = 5; // ...with a burst of five
+const CHAT_DUP_MS = 30_000; // the same text again within 30 s (any of the last 3) is dropped
+
 export const DEFAULTS = {
   maxRooms: 2000, // rooms held in memory at once (an empty room is dropped after idleRoomMs)
   maxPerRoom: 200,
@@ -67,6 +82,61 @@ const clean = (s, n) => String(s ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').r
 const num = (v, lo, hi) => (Number.isFinite(+v) ? Math.max(lo, Math.min(hi, +v)) : 0);
 const str = (v, n) => (v ? clean(v, n) || 0 : 0);
 const cleanHandle = (v) => clean(v, 40).replace(/^@+/, '').replace(/[^\p{L}\p{N}._-]/gu, '');
+
+// ---------- chat filter ----------
+// Abuse in English, Hindi and Hinglish (romanised) is masked as *** word by word. A word is matched
+// after folding case, leetspeak (0→o, 1→i, 3→e, 4→a, 5→s, @→a, $→s) and repeated letters, either
+// exactly (WORDS: short or ambiguous words) or by prefix (STEMS: unambiguous roots).
+const fold = (w) =>
+  w
+    .toLowerCase()
+    .replace(/[0134@5$*]/g, (ch) => ({ 0: 'o', 1: 'i', 3: 'e', 4: 'a', '@': 'a', 5: 's', $: 's', '*': '' })[ch])
+    .replace(/(.)\1+/gu, '$1');
+// STEMS and OK are folded once; WORDS are compared both as typed (lower-cased) and folded.
+const STEMS = [
+  // English
+  'fuck', 'fck', 'bitch', 'btch', 'cunt', 'whore', 'slut', 'faggot', 'motherf', 'asshol', 'bastard', 'retard', 'dickhead', 'wanker', 'rapist', 'bullshit',
+  // Hinglish (romanised)
+  'chutiy', 'chutia', 'chootiy', 'bhosd', 'bhosad', 'madarch', 'madharch', 'maderch', 'behench', 'behanch', 'bhench', 'bahench', 'bahanch', 'benchod', 'bhenchod',
+  'gandu', 'gaandu', 'lauda', 'lavda', 'lawda', 'lodu', 'randi', 'randw', 'harami', 'haramkh', 'jhaatu', 'chinal', 'kamina', 'kamine', 'hijd', 'chodu',
+  // Devanagari
+  'चूतिय', 'चुतिय', 'भोसड', 'मादरच', 'बहनच', 'भेनच', 'गांडू', 'गाँडू', 'लौड', 'रंडी', 'रण्डी', 'हरामी', 'झाटू', 'कमीन', 'चोद',
+].map(fold);
+const WORDS = new Set([
+  'ass', 'arse', 'dick', 'cock', 'prick', 'twat', 'pussy', 'porn', 'nude', 'nudes', 'boobs', 'tits', 'rape', 'kys', 'stfu',
+  'shit', 'shits', 'shitty', 'shity', 'shitting', 'shiting', 'sht', 'nigger', 'niggers', 'nigga', 'niggas', 'niger', 'nigers', 'niga', 'nigas', 'fuk', 'fuker', 'fuking',
+  'bc', 'mc', 'bsdk', 'bkl', 'mkc', 'bkc', 'tmkc', 'mcbc', 'gand', 'gaand', 'lund', 'loda', 'lode', 'kutte', 'kutiya', 'jhaat', 'jhat',
+  'गांड', 'गाँड', 'लंड', 'कुत्ते', 'कुतिया', 'झाट',
+]);
+// chutti(yan) are holidays (and 'chhod' / 'chodo', "leave it", is no stem at all)
+const OK = new Set(['chutiyan', 'chuttiyan', 'chutiyon', 'chuttiyon'].map(fold));
+const abusive = (w) => {
+  const lower = w.toLowerCase();
+  const f = fold(w);
+  if (OK.has(f)) return false;
+  if (WORDS.has(lower) || WORDS.has(f)) return true;
+  for (const s of STEMS) if (f.startsWith(s)) return true;
+  return false;
+};
+const WORD_RE = /[\p{L}\p{M}\p{N}@$*]+/gu;
+// a link is anything with a scheme or www., or a dotted name ending in a common top-level domain
+const LINK_RE = /\b(?:(?:https?|ftp):\/\/|www\.)[^\s]+|\b[a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)*\.(?:com|net|org|io|in|co|me|ly|gg|xyz|app|link|info|biz|ru|tk|top|site|online|shop|live|tv|to|cc|club|store|fun|vip|page|dev|ai|us|uk|pk|bd)\b(?:[/?#][^\s]*)?/gi;
+const ALLOWED_LINK = /^(?:https?:\/\/)?(?:www\.)?mela\.topmate\.io(?:[/?#][^\s]*)?$/i;
+
+/**
+ * A chat message as the room sees it: cleaned (control and bidi characters, whitespace, 200 chars),
+ * links other than mela.topmate.io replaced by [link], abuse masked as ***. Returns the shown text
+ * and what was changed; '' when nothing is left.
+ */
+export function cleanChat(raw) {
+  const text = clean(raw, CHAT_MAX);
+  let links = 0;
+  let masked = 0;
+  const out = text
+    .replace(LINK_RE, (u) => (ALLOWED_LINK.test(u) ? u : (links++, '[link]')))
+    .replace(WORD_RE, (w) => (abusive(w) ? (masked++, '***') : w));
+  return { text: out, raw: text, links, masked };
+}
 
 /** A look is a flat bag of colours and style names (see character.js randomLook); keep it that. */
 function cleanLook(look) {
@@ -116,13 +186,14 @@ function send(ws, msg) {
   if (ws.readyState === 1) ws.send(typeof msg === 'string' ? msg : JSON.stringify(msg));
 }
 
-const emptyStore = () => ({ boards: { golgappa: [], lap: [], striker: [] }, wishes: [] });
+const emptyStore = () => ({ boards: { golgappa: [], lap: [], striker: [] }, wishes: [], chat: [] });
 
 function parseStore(text) {
   const s = JSON.parse(text);
   const boards = emptyStore().boards;
   for (const k of Object.keys(BOARDS)) if (Array.isArray(s?.boards?.[k])) boards[k] = s.boards[k].slice(0, 20);
-  return { boards, wishes: Array.isArray(s?.wishes) ? s.wishes.slice(-MAX_WISHES) : [] };
+  const chat = Array.isArray(s?.chat) ? s.chat.filter((m) => m && typeof m.text === 'string').slice(-CHAT_KEEP) : [];
+  return { boards, wishes: Array.isArray(s?.wishes) ? s.wishes.slice(-MAX_WISHES) : [], chat };
 }
 
 /** Turns ?room= into a room name: the lower-cased creator slug, or null (no room, 'public', malformed). */
@@ -226,7 +297,7 @@ export function createRealtime(opts = {}) {
       if (!oldest) return null;
       dropRoom(oldest);
     }
-    room = { name, clients: new Map(), store: loadStore(name), lastN: 0, emptySince: Date.now(), saveTimer: null, unsaved: false };
+    room = { name, clients: new Map(), store: loadStore(name), chatSeq: 0, lastN: 0, emptySince: Date.now(), saveTimer: null, unsaved: false };
     rooms.set(name, room);
     return room;
   }
@@ -270,6 +341,48 @@ export function createRealtime(opts = {}) {
     return false;
   }
 
+  /** The room's last CHAT_KEEP messages from the past day, oldest first. */
+  function recentChat(room, now) {
+    return room.store.chat.filter((m) => now - m.at < CHAT_TTL_MS);
+  }
+
+  /**
+   * A chat message: its own token bucket (CHAT_EVERY_MS, CHAT_BURST) and no repeats of the
+   * sender's last three texts within CHAT_DUP_MS; a refused one is answered to its sender only.
+   */
+  function chatMessage(room, id, c, m, now) {
+    if (!c.greeted) return;
+    const { text, raw, links, masked } = cleanChat(m.text);
+    if (!text) return;
+    const no = (reason) => send(c.ws, { t: 'chatno', reason, k: clean(m.k, 16) || undefined });
+    c.chatTokens = Math.min(CHAT_BURST, (c.chatTokens ?? CHAT_BURST) + (now - (c.chatAt ?? now)) / CHAT_EVERY_MS);
+    c.chatAt = now;
+    if (c.chatTokens < 1) {
+      c.cooled++;
+      return no('slow');
+    }
+    const key = raw.toLowerCase().replace(/[\s\p{P}]+/gu, '');
+    const recent = (c.chatRecent ??= []);
+    if (recent.some((r) => r.key === key && now - r.at < CHAT_DUP_MS)) {
+      c.cooled++;
+      return no('dup');
+    }
+    c.chatTokens -= 1;
+    recent.push({ key, at: now });
+    if (recent.length > 3) recent.shift();
+    // seq: a per-room counter, so a client can drop a message it already has (history + live)
+    const prev = room.store.chat[room.store.chat.length - 1];
+    room.chatSeq = Math.max(room.chatSeq, prev?.i ?? 0) + 1;
+    const msg = { i: room.chatSeq, at: now, id, n: c.name, h: c.handle, text };
+    room.store.chat.push(msg);
+    if (room.store.chat.length > CHAT_KEEP) room.store.chat.splice(0, room.store.chat.length - CHAT_KEEP);
+    saveSoon(room);
+    // everyone, the sender too (its echo carries the server's time and its k, to settle the pending line)
+    const k = clean(m.k, 16);
+    for (const [pid, pc] of room.clients) if (pc.ws.readyState === 1) send(pc.ws, pid === id && k ? { t: 'chat', m: msg, k } : { t: 'chat', m: msg });
+    emit('chat', { room: room.name, id, meta: c.meta, name: c.name, handle: c.handle, text, raw, links, masked });
+  }
+
   function cooled(c, kind, now) {
     const gap = COOLDOWN_MS[kind];
     if (!gap) return true;
@@ -309,6 +422,7 @@ export function createRealtime(opts = {}) {
           players: [...room.clients].filter(([pid]) => pid !== id).map(([pid, pc]) => publicPlayer(pid, pc)),
           boards: room.store.boards,
           wishes: room.store.wishes.slice(-60),
+          chat: recentChat(room, now), // the room's chat so far (old clients ignore it)
         });
         broadcast(room, { t: 'join', p: publicPlayer(id, c) }, id);
         break;
@@ -354,6 +468,9 @@ export function createRealtime(opts = {}) {
         }
         break;
       }
+      case 'chat':
+        chatMessage(room, id, c, m, now);
+        break;
       case 'lantern': {
         const text = clean(m.text, 60) || 'Happy Diwali!';
         broadcast(room, { t: 'lantern', id, text, x: num(m.x, -400, 400), y: num(m.y, -10, 300), z: num(m.z, -400, 400), dx: num(m.dx, -1, 1), dz: num(m.dz, -1, 1) }, id);

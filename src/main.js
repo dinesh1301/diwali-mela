@@ -34,7 +34,7 @@ import { settings } from './settings.js';
 import { Smoke } from './smoke.js';
 import { DayNight } from './daynight.js';
 import { Ambience } from './ambience.js';
-import { Net, melaRoom } from './net.js';
+import { Net, melaRoom, offlinePage } from './net.js';
 import { initTrack, track, sinceLoad, onTrackEnd, onTrackHide } from './track.js';
 import { buildDecor } from './decor.js';
 import { Walls } from './wall.js';
@@ -53,6 +53,7 @@ import { loadCreatorConfig, applyCreator, personaliseIntro, stallIndexFor, ramle
 import { setMelaSlots, slot, melaReport } from './personalSlots.js';
 import { Billboard } from './billboard.js';
 import { createShare } from './share.js';
+import { createChat } from './chat.js';
 
 // zone toasts: the line itself is a personal slot (zone.<id>); a controls hint, when there is one, is added after it
 const ZONES = [
@@ -534,6 +535,8 @@ async function init() {
   net.on('status', (ok) => {
     if (!ok) ui.setChip('online', '');
   });
+  // room chat: only where there is a room (a creator's mela), never in a trailer capture
+  ctx.chat = createChat({ net, ui, input, player, title: net.room ? `${cfg?.first || cfg?.name || net.room}’s mela` : '', enabled: !director && !offlinePage() });
 
   await loading();
   const shops = new Shops(ctx);
