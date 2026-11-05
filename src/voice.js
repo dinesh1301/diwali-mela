@@ -1,21 +1,36 @@
 import { tk } from './touch.js';
 import { settings } from './settings.js';
+import { rampTo } from './audio.js';
 
 /*
   Proximity voice chat. Peer-to-peer WebRTC audio in a mesh (fine for a mela room of a dozen),
   signalled through the realtime socket. Each remote voice is spatialised with a PannerNode at
-  that visitor's avatar, so people near you are loud and clear and the far side of the mela is a
-  murmur. The mic stays off until the visitor turns it on; turning it off stops the track, so the
+  that visitor's avatar for direction, while the loudness follows voiceGain(): full and clear
+  within ~1 m (an avatar is ~1.7 units tall, so a world unit is a metre), falling off fast, and
+  silent by 5 m, like talking to the person next to you in a crowd. Beyond ~9 m we also stop
+  sending our mic to that peer (replaceTrack(null), no renegotiation), so voices nobody can
+  hear cost no bandwidth either way. The mic stays off until the visitor turns it on; turning it off stops the track, so the
   browser's recording indicator goes away too. Whoever has a mic initiates the connection; the
   "perfect negotiation" pattern sorts out the case where both sides start at once.
 */
 const ICE = { iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }] };
-const NEAR = 4; // full volume inside this radius (metres)
-const FAR = 34; // silent beyond this
+export const VOICE_FULL = 1; // full volume inside this radius (metres)
+export const VOICE_EDGE = 5; // silent from here
+const SEND_OFF = 9; // stop sending our mic to a peer this far away...
+const SEND_ON = 8; // ...and start again once they come this close (hysteresis)
+const HEAD = 1.5; // mouth/ear height above an avatar's feet
 const MAX_PEERS = 12;
 const SPEAK_RMS = 0.02;
 const PLACE_S = 1 / 18; // listener and voice positions are pushed to Web Audio at ~18 Hz
 const SMOOTH = 0.06; // ...and glide between updates
+
+/** How loud a voice is at distance d (metres): 1 inside VOICE_FULL, a quadratic fall to 0 at VOICE_EDGE. */
+export function voiceGain(d) {
+  if (d <= VOICE_FULL) return 1;
+  if (d >= VOICE_EDGE) return 0;
+  const k = 1 - (d - VOICE_FULL) / (VOICE_EDGE - VOICE_FULL);
+  return k * k;
+}
 
 const rms = (analyser, buf) => {
   analyser.getByteTimeDomainData(buf);
@@ -42,6 +57,8 @@ export class Voice {
     this.placeT = 0;
     this.buf = new Uint8Array(256);
     this.warnedPeers = false;
+    this.bus = null; // every remote voice goes through this (the Voices volume slider)
+    this._me = null;
   }
 
   on(evt, fn) {
@@ -87,7 +104,7 @@ export class Voice {
     for (const p of this.peers.values()) this.attachLocal(p);
     for (const id of this.net.remote.keys()) this.ensurePeer(id);
     this.announce();
-    ui.toast(settings.voice === 'ptt' ? tk(`🎤 Mic ready: hold ${settings.keys.talk.replace('Key', '')} to talk. People within ~30 m hear you.`, '🎤 Mic ready: hold the 🎤 button to talk. People within ~30 m hear you.') : tk('🎤 Mic is live: people within ~30 m can hear you. Press V to switch it off.', '🎤 Mic is live: people within ~30 m can hear you. Tap 🎤 to switch it off.'), 4500, { important: true });
+    ui.toast(settings.voice === 'ptt' ? tk(`🎤 Mic ready: hold ${settings.keys.talk.replace('Key', '')} to talk. People right next to you hear you.`, '🎤 Mic ready: hold the 🎤 button to talk. People right next to you hear you.') : tk('🎤 Mic is live: people right next to you can hear you. Press V to switch it off.', '🎤 Mic is live: people right next to you can hear you. Tap 🎤 to switch it off.'), 4500, { important: true });
     return true;
   }
 
@@ -136,10 +153,29 @@ export class Voice {
 
   applySettings() {
     this.applyMute();
-    for (const p of this.peers.values()) {
-      if (p.gain) p.gain.gain.value = settings.voiceVolume;
-      if (p.el && !p.gain) p.el.volume = settings.voiceVolume;
+    if (this.bus) this.bus.gain.setTargetAtTime(settings.voiceVolume, this.ac.currentTime, 0.03);
+    // the <audio> fallback (no Web Audio) picks the new volume up on its next placement update
+  }
+
+  voiceBus(ac) {
+    if (!this.bus) {
+      this.bus = ac.createGain();
+      this.bus.gain.value = settings.voiceVolume;
+      this.bus.connect(this.ctx.audio.master);
     }
+    return this.bus;
+  }
+
+  audioSender(p) {
+    return p.pc.getTransceivers().find((t) => t.sender.track?.kind === 'audio' || t.receiver.track?.kind === 'audio')?.sender ?? null;
+  }
+
+  /** Sends our mic to a peer only while they are close enough to hear it. */
+  syncSend(p) {
+    const sender = this.audioSender(p);
+    if (!sender) return;
+    const track = p.far ? null : this.stream?.getAudioTracks()[0] ?? null;
+    if (sender.track !== track) sender.replaceTrack(track).catch(() => {});
   }
 
   // ---------- peers ----------
@@ -160,7 +196,7 @@ export class Voice {
       return null;
     }
     const pc = new RTCPeerConnection(ICE);
-    const p = { id, pc, makingOffer: false, ignoreOffer: false, polite: this.net.id > id, remoteTracks: 0, speaking: false };
+    const p = { id, pc, makingOffer: false, ignoreOffer: false, polite: this.net.id > id, remoteTracks: 0, speaking: false, far: false };
     this.peers.set(id, p);
     pc.onicecandidate = (e) => {
       if (e.candidate) this.net.send({ t: 'rtc', to: id, data: { candidate: e.candidate.toJSON() } });
@@ -194,9 +230,11 @@ export class Voice {
     const tx = p.pc.getTransceivers().find((t) => t.receiver.track?.kind === 'audio');
     if (tx) {
       tx.direction = 'sendrecv';
-      tx.sender.replaceTrack(track).catch(() => {});
+      tx.sender.replaceTrack(p.far ? null : track).catch(() => {});
     } else {
-      p.pc.addTrack(track, this.stream);
+      // added even when far, so the audio m-line is negotiated; it goes quiet straight away
+      const sender = p.pc.addTrack(track, this.stream);
+      if (p.far) sender.replaceTrack(null).catch(() => {});
     }
   }
 
@@ -220,20 +258,19 @@ export class Voice {
         p.panner = ac.createPanner();
         // HRTF convolves every voice: phones get the cheap stereo pan instead
         p.panner.panningModel = settings.tier === 'low' ? 'equalpower' : 'HRTF';
+        // the panner only gives direction; loudness is voiceGain() on p.gain, so the curve is ours
         p.panner.distanceModel = 'linear';
-        p.panner.refDistance = NEAR;
-        p.panner.maxDistance = FAR;
-        p.panner.rolloffFactor = 1;
+        p.panner.rolloffFactor = 0;
         p.gain = ac.createGain();
-        p.gain.gain.value = settings.voiceVolume;
+        p.gain.gain.value = 0; // until the first placement update says how close they are
         p.analyser = ac.createAnalyser();
         p.analyser.fftSize = 256;
-        p.analyser.connect(p.panner).connect(p.gain).connect(this.ctx.audio.master);
+        p.analyser.connect(p.panner).connect(p.gain).connect(this.voiceBus(ac));
       }
       p.source.connect(p.analyser);
     } else {
       p.el.muted = false;
-      p.el.volume = settings.voiceVolume;
+      p.el.volume = 0; // set from the distance on the next placement update
     }
     p.el.play().catch(() => {});
   }
@@ -289,45 +326,58 @@ export class Voice {
   update(dt, camera) {
     const ac = this.ac;
     this.placeT += dt;
-    if (ac && this.peers.size && this.placeT >= PLACE_S) {
+    if (this.peers.size && this.placeT >= PLACE_S) {
       this.placeT = 0;
-      const L = ac.listener;
-      const pos = camera.position;
-      const fwd = camera.getWorldDirection(this._fwd ??= pos.clone());
-      if (L.positionX) {
-        const t = ac.currentTime;
-        L.positionX.setTargetAtTime(pos.x, t, SMOOTH);
-        L.positionY.setTargetAtTime(pos.y, t, SMOOTH);
-        L.positionZ.setTargetAtTime(pos.z, t, SMOOTH);
-        L.forwardX.setTargetAtTime(fwd.x, t, SMOOTH);
-        L.forwardY.setTargetAtTime(fwd.y, t, SMOOTH);
-        L.forwardZ.setTargetAtTime(fwd.z, t, SMOOTH);
-        if (!this.upSet) {
-          // "up" never changes: set it once rather than scheduling it every update
-          this.upSet = true;
-          L.upX.value = 0;
-          L.upY.value = 1;
-          L.upZ.value = 0;
+      // we hear with our avatar's head (not the third-person camera, which trails metres behind);
+      // the camera only sets which way is "ahead" for panning
+      const me = (this._me ??= camera.position.clone());
+      const root = this.ctx.player?.char?.root;
+      if (root) root.getWorldPosition(me).setY(me.y + HEAD);
+      else me.copy(camera.position);
+      const fwd = camera.getWorldDirection(this._fwd ??= me.clone());
+      const t = ac?.currentTime ?? 0;
+      if (ac) {
+        const L = ac.listener;
+        if (L.positionX) {
+          L.positionX.setTargetAtTime(me.x, t, SMOOTH);
+          L.positionY.setTargetAtTime(me.y, t, SMOOTH);
+          L.positionZ.setTargetAtTime(me.z, t, SMOOTH);
+          L.forwardX.setTargetAtTime(fwd.x, t, SMOOTH);
+          L.forwardY.setTargetAtTime(fwd.y, t, SMOOTH);
+          L.forwardZ.setTargetAtTime(fwd.z, t, SMOOTH);
+          if (!this.upSet) {
+            // "up" never changes: set it once rather than scheduling it every update
+            this.upSet = true;
+            L.upX.value = 0;
+            L.upY.value = 1;
+            L.upZ.value = 0;
+          }
+        } else {
+          L.setPosition(me.x, me.y, me.z);
+          L.setOrientation(fwd.x, fwd.y, fwd.z, 0, 1, 0);
         }
-      } else {
-        L.setPosition(pos.x, pos.y, pos.z);
-        L.setOrientation(fwd.x, fwd.y, fwd.z, 0, 1, 0);
       }
       for (const p of this.peers.values()) {
         const r = this.net.remote.get(p.id);
         const x = r?.ready ? r.cur.x : 1e4;
-        const y = r?.ready ? r.cur.y + 1.5 : 0;
+        const y = r?.ready ? r.cur.y + HEAD : 0;
         const z = r?.ready ? r.cur.z : 1e4;
+        const d = Math.hypot(x - me.x, y - me.y, z - me.z);
+        p.dist = d;
+        const g = voiceGain(d);
+        if (p.far ? d < SEND_ON : d > SEND_OFF) {
+          p.far = !p.far;
+          this.syncSend(p);
+        }
         if (p.panner) {
           if (p.panner.positionX) {
-            const t = ac.currentTime;
             p.panner.positionX.setTargetAtTime(x, t, SMOOTH);
             p.panner.positionY.setTargetAtTime(y, t, SMOOTH);
             p.panner.positionZ.setTargetAtTime(z, t, SMOOTH);
           } else p.panner.setPosition(x, y, z);
+          rampTo(p.gain.gain, g, t, SMOOTH, 0.002);
         } else if (p.el) {
-          const d = Math.hypot(x - pos.x, z - pos.z);
-          p.el.volume = settings.voiceVolume * Math.max(0, Math.min(1, 1 - (d - NEAR) / (FAR - NEAR)));
+          p.el.volume = settings.voiceVolume * g;
         }
       }
     }
@@ -344,7 +394,7 @@ export class Voice {
     }
     for (const p of this.peers.values()) {
       if (!p.analyser) continue;
-      const speaking = rms(p.analyser, this.buf) > SPEAK_RMS;
+      const speaking = !p.far && rms(p.analyser, this.buf) > SPEAK_RMS; // out of earshot: not metered
       if (speaking !== p.speaking) {
         p.speaking = speaking;
         this.net.remote.get(p.id)?.tag.setSpeaking(speaking);

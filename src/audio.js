@@ -33,6 +33,7 @@ export class MelaAudio {
     this.muted = false;
     this.musicOn = true;
     this.listener = new THREE.Vector3();
+    this.musicVolume = 1; // the Music slider; set before init()
   }
 
   init() {
@@ -46,6 +47,10 @@ export class MelaAudio {
     this.master = this.ctx.createGain();
     this.master.gain.value = this.muted ? 0 : 0.7;
     this.master.connect(this.ctx.destination);
+    // the song and the mela band both go through this bus, so one slider sets the music level
+    this.musicBus = this.ctx.createGain();
+    this.musicBus.gain.value = this.musicVolume;
+    this.musicBus.connect(this.master);
 
     const len = this.ctx.sampleRate * 2;
     this.noise = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
@@ -65,12 +70,18 @@ export class MelaAudio {
     if (this.ctx) this.master.gain.setTargetAtTime(m ? 0 : 0.7, this.ctx.currentTime, 0.05);
   }
 
+  /** The Music slider (0..1): scales the song and the band, never the effects. */
+  setMusicVolume(v) {
+    this.musicVolume = v;
+    if (this.musicBus) this.musicBus.gain.setTargetAtTime(v, this.ctx.currentTime, 0.05);
+  }
+
   // ---------- background song ----------
 
   startMusic() {
     this.musicGain = this.ctx.createGain();
     this.musicGain.gain.value = this.songPlaying ? MUSIC_LEVEL : 0;
-    this.musicGain.connect(this.master);
+    this.musicGain.connect(this.musicBus);
     if (this.songPlaying) this.songElement().play().catch(() => {});
   }
 

@@ -1787,6 +1787,11 @@ body.touch #menu .options button {
   min-height: 52px;
 }
 
+/* volume sliders: a tall hit area so a thumb can grab them */
+body.touch .srow input[type='range'] {
+  height: 36px;
+}
+
 body.touch .srow input[type='checkbox'] {
   width: 22px;
   height: 22px;

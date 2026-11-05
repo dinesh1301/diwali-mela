@@ -325,6 +325,7 @@ async function init() {
   const smoke = new Smoke(scene, low ? 500 : 1500);
   const audio = new MelaAudio();
   audio.mode = CONFIG.publicBuild ? 'band' : settings.music;
+  audio.musicVolume = settings.musicVolume;
   const ambience = new Ambience(audio);
   const fireworks = new Fireworks(scene, camera, audio, SITES.fireworks);
   const lanterns = new Lanterns(scene, camera);
@@ -429,6 +430,7 @@ async function init() {
       }
       if (key === 'keys') ui.setHelp(HELP[player.mode] ?? HELP.walk);
       if (key === 'voice' || key === 'voiceVolume') voice.applySettings();
+      if (key === 'musicVolume') audio.setMusicVolume(settings.musicVolume);
       if (key === 'quality') return settings.tier !== tier ? 'Graphics changes apply after a reload.' : '';
       return '';
     },
