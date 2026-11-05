@@ -25,6 +25,16 @@ const rid = () => {
 
 function visitorId() {
   try {
+    // the service's mela_vid cookie (set with the page) wins: its server rows then join these events
+    const c = /(?:^|;\s*)mela_vid=([A-Za-z0-9_-]{6,64})(?:;|$)/.exec(document.cookie)?.[1];
+    if (c) {
+      try {
+        localStorage.setItem('mela.visitor', c);
+      } catch {
+        /* storage blocked: the cookie still holds it */
+      }
+      return c;
+    }
     let v = localStorage.getItem('mela.visitor');
     if (!v || v.length > 64) {
       v = rid();
