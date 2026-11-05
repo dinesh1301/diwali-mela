@@ -25,6 +25,7 @@ export const STAMPS = [
   { id: 'poster', icon: '📸', name: 'Selfie Point' },
   { id: 'boat', icon: '🛶', name: 'Naav ki Sair' },
   { id: 'train', icon: '🚂', name: 'Toy Train' },
+  { id: 'tambola', icon: '🎟️', name: 'Tambola' },
   { id: 'ravan', icon: '🔥', name: 'Ravan Dahan' },
 ];
 

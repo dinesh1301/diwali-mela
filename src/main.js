@@ -39,6 +39,7 @@ import { buildDecor } from './decor.js';
 import { Walls } from './wall.js';
 import { Train } from './train.js';
 import { Ravan } from './ravan.js';
+import { Tambola } from './games/tambola.js';
 import { CrowdScenes } from './extras.js';
 import { StringLights } from './stringLights.js';
 import { CONFIG } from './config.js';
@@ -55,6 +56,7 @@ import { Billboard } from './billboard.js';
 const ZONES = [
   { id: 'gate', x: 0, z: 62, r: 9 },
   { id: 'selfie', x: 15, z: 56, r: 6 },
+  { id: 'tambola', x: 33, z: 58, r: 8, hint: ['press E at the entrance to join a round', 'walk to the entrance and tap the button to join a round'] },
   { id: 'deepmala', x: -12, z: 65, r: 6, hint: ['bring a diya or kandeel and press Q to add yours', 'bring a diya or kandeel, then tap the button to add yours'] },
   { id: 'ramleela', x: -30, z: 62, r: 14 },
   { id: 'ravan', x: -56, z: 64, r: 10 },
@@ -76,6 +78,7 @@ const face = (x, z, tx, tz) => Math.atan2(tx - x, tz - z);
 const PLACES = {
   gate: [0, 70, Math.PI],
   selfie: [12.6, 56.4, Math.PI / 2],
+  tambola: [33, 67, Math.PI],
   ramleela: [-30, 52, 0],
   ravan: [-48, 66, -Math.PI / 2],
   bazaar: [0, 50, Math.PI],
@@ -532,6 +535,7 @@ async function init() {
   walls.claimFrom(shops.placed);
   const train = new Train(ctx, extraLights);
   const ravan = new Ravan(ctx);
+  const tambola = new Tambola(ctx, extraLights, { low });
   const scenes = low ? null : new CrowdScenes(ctx);
   extraLights.build();
   const ownStall = cfg && world.stalls[stallIndexFor(cfg.stallNo, world.stalls.length)];
@@ -764,7 +768,7 @@ async function init() {
     if (!params.has('noyt')) ramayan.start();
     if (!params.has('nonet')) net.connect();
     if (!director) ui.showCoach();
-    window.__mela = { ...ctx, creator, mela: melaReport(), billboard, games, rides, crowd, vehicles, ramayan, poster, customizer, nameTag, boat, train, ravan, walls, dayNight, scenes, decor, voice, lightPool, governor, get gov() { return { ...governor.state, gpu: settings.gpu, midGpu: settings.midGpu }; } }; // for automated checks
+    window.__mela = { ...ctx, creator, mela: melaReport(), billboard, games, rides, crowd, vehicles, ramayan, poster, customizer, nameTag, boat, train, ravan, tambola, walls, dayNight, scenes, decor, voice, lightPool, governor, get gov() { return { ...governor.state, gpu: settings.gpu, midGpu: settings.midGpu }; } }; // for automated checks
   } else {
     customizer.open('intro');
   }
@@ -848,6 +852,7 @@ async function init() {
     shops.update(dt, t);
     poster.update(t);
     ravan.update(dt, t);
+    tambola.update(dt);
     decor.update(dt, t);
     creator.update(dt, t);
     updateFlames(t);
@@ -927,7 +932,7 @@ async function init() {
     ui.updateBubbles(camera);
 
     const intro = !introEl.classList.contains('hidden');
-    const covered = intro || ui.modalOpen;
+    const covered = intro || (ui.modalOpen && !tambola.panelOpen); // the Tambola ticket is a light overlay: the tent stays live behind it
     const draw = render && (!covered || (intro ? time - lastDraw > 140 : frameNo % 3 === 0));
     if (covered !== throttled) {
       throttled = covered;
