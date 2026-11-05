@@ -12,6 +12,10 @@ import { track, trackIds } from './track.js';
   ['s', x, y, z, heading, speed, action, held, vehicle] and the server's snapshot is
   ['S', online, id, x, y, z, heading, speed, action, held, vehicle, id, ...] holding only the
   visitors who moved (and each one at least every 2 s).
+  The vehicle field is 'ride' on a fixed ride (wheel, carousel, train, boat) or, at the wheel of a
+  car, heli or plane, a short code from vehicles.js netCode() ('c1+0-2', 'h+5-12', 'p-30+45': kind,
+  car index, pitch and roll in degrees). Position and heading stay the seated character's, so an
+  older client still draws the rider where they are; a newer one draws the vehicle around them.
   Also carries waves, shared wish lanterns, scores for the leaderboards and the wish wall.
   Without a server it degrades to a local-only mode (own bests and wishes kept in the browser).
 */
@@ -24,7 +28,13 @@ const BOARD_ORDER = { golgappa: 'desc', lap: 'asc', striker: 'desc' };
 const _v = new THREE.Vector3();
 // only the nearest few visitors are drawn (and posed): within 70 m, 8 on phones, 16 elsewhere
 const SHOW_R2 = 70 * 70;
+const AIR_R2 = 4 * SHOW_R2; // a heli or plane overhead stays drawn out to 140 m
 const CULL_S = 0.25;
+const VEH_RE = /^(c\d?|h|p)([+-]\d{1,2})([+-]\d{1,2})$/;
+const RAD = Math.PI / 180;
+const _vp = new THREE.Vector3();
+
+const wrap = (d) => Math.atan2(Math.sin(d), Math.cos(d));
 
 const ENV = import.meta.env ?? {};
 // Same-origin attempts that never open before we give up (a static host has no socket to retry).
@@ -193,7 +203,7 @@ export class Net {
       +player.speed.toFixed(1),
       player.char.action || 0,
       player.char.holdR || 0,
-      player.mode === 'ride' ? 'ride' : 0,
+      player.mode === 'ride' ? this.vehicleCode?.(this.tmpE) || 'ride' : 0,
     ];
     const last = this.lastState;
     let same = last.length === st.length;
@@ -236,7 +246,7 @@ export class Net {
   // ---------- incoming ----------
 
   /** Moves (or creates) a remote visitor from a snapshot entry. */
-  applyState(id, x, y, z, heading, speed, action, holdR, now) {
+  applyState(id, x, y, z, heading, speed, action, holdR, veh, now) {
     if (!Number.isFinite(x)) return;
     const r = this.remote.get(id) ?? this.addRemote({ id, n: 'Visitor', h: '' });
     r.target.set(x, y, z);
@@ -244,6 +254,7 @@ export class Net {
     r.action = action;
     r.speed = speed ?? 0;
     r.holdR = holdR;
+    this.setVehicle(r, veh);
     r.seenAt = now;
     if (!r.ready) {
       r.cur.copy(r.target);
@@ -287,7 +298,7 @@ export class Net {
         for (let i = 2; i + SNAP_STRIDE <= m.length; i += SNAP_STRIDE) {
           const id = m[i];
           if (id === this.id) continue;
-          this.applyState(id, m[i + 1], m[i + 2], m[i + 3], m[i + 4], m[i + 5], m[i + 6] || null, m[i + 7] || null, now);
+          this.applyState(id, m[i + 1], m[i + 2], m[i + 3], m[i + 4], m[i + 5], m[i + 6] || null, m[i + 7] || null, m[i + 8] || null, now);
         }
         this.emit('online', this.online);
         break;
@@ -303,6 +314,7 @@ export class Net {
           r.action = p.a ?? null;
           r.speed = p.s ?? 0;
           r.holdR = p.hr ?? null;
+          this.setVehicle(r, p.v);
           r.seenAt = performance.now();
           if (!r.ready) {
             r.cur.copy(r.target);
@@ -372,9 +384,10 @@ export class Net {
     }
     const char = new Character(p.look || randomLook());
     char.root.visible = false;
+    char.root.rotation.order = 'YXZ'; // heading, then a vehicle's pitch and roll
     this.ctx.scene.add(char.root);
     const tag = new NameTag(char.headTop, { name: p.n || 'Visitor', handle: p.h || '' });
-    const r = { id: p.id, char, tag, name: p.n || 'Visitor', cur: new THREE.Vector3(), target: new THREE.Vector3(), heading: 0, action: null, speed: 0, holdR: null, ready: false, seenAt: performance.now() };
+    const r = { id: p.id, char, tag, name: p.n || 'Visitor', cur: new THREE.Vector3(), target: new THREE.Vector3(), heading: 0, action: null, speed: 0, holdR: null, ready: false, seenAt: performance.now(), veh: null, vkey: null, pitch: 0, roll: 0, pitchT: 0, rollT: 0, vehicle: null };
     if (p.x !== undefined) {
       r.target.set(p.x, p.y, p.z);
       r.cur.copy(r.target);
@@ -384,6 +397,7 @@ export class Net {
       r.action = p.a ?? null;
       r.speed = p.s ?? 0;
       r.holdR = p.hr ?? null;
+      this.setVehicle(r, p.v);
       r.ready = true;
     }
     this.remote.set(p.id, r);
@@ -398,8 +412,36 @@ export class Net {
     this.remote.delete(id);
     // free the visitor's meshes and name label: people come and go all evening
     r.boat?.removeFromParent();
+    r.vehicle?.group.removeFromParent(); // its geometry is shared (vehicles.js), nothing to free
     r.tag.dispose();
     r.char.dispose();
+  }
+
+  /**
+   * Reads a visitor's vehicle field: a car/heli/plane code gives them a light copy of that vehicle
+   * (made once, kept while they drive, dropped when they get out or switch), anything else none.
+   */
+  setVehicle(r, code) {
+    code = typeof code === 'string' ? code : null;
+    if (code === r.veh) return;
+    r.veh = code;
+    const m = code && VEH_RE.exec(code);
+    const key = m ? m[1] : null;
+    if (m) {
+      r.pitchT = +m[2] * RAD;
+      r.rollT = +m[3] * RAD;
+    }
+    if (key === r.vkey) return;
+    const fresh = !r.vkey;
+    r.vkey = key;
+    r.vehicle?.group.removeFromParent();
+    r.vehicle = key ? (this.makeVehicle?.(key) ?? null) : null;
+    if (r.vehicle) this.ctx.scene.add(r.vehicle.group);
+    if (fresh && key) {
+      r.pitch = r.pitchT;
+      r.roll = r.rollT;
+    }
+    if (!key) r.pitch = r.roll = r.pitchT = r.rollT = 0;
   }
 
   nearest() {
@@ -480,7 +522,7 @@ export class Net {
       r.shown = false;
       if (!r.ready) continue;
       r.d2 = (r.cur.x - p.x) ** 2 + (r.cur.z - p.z) ** 2;
-      if (r.d2 < SHOW_R2) near.push(r);
+      if (r.d2 < (r.vkey === 'h' || r.vkey === 'p' ? AIR_R2 : SHOW_R2)) near.push(r);
     }
     near.sort((a, b) => a.d2 - b.d2);
     const k = Math.min(near.length, settings.tier === 'low' ? 8 : 16);
@@ -511,6 +553,22 @@ export class Net {
       d = Math.atan2(Math.sin(d), Math.cos(d));
       root.rotation.y += d * k;
       root.visible = !!r.shown;
+      // at the wheel: tilt the rider with the vehicle and build the vehicle around their seat
+      if (r.vkey) {
+        r.pitch += wrap(r.pitchT - r.pitch) * k;
+        r.roll += wrap(r.rollT - r.roll) * k;
+        root.rotation.x = r.pitch;
+        root.rotation.z = r.roll;
+      } else if (root.rotation.x || root.rotation.z) root.rotation.x = root.rotation.z = 0; // out and upright
+      const veh = r.vehicle;
+      if (veh) {
+        veh.group.visible = !!r.shown;
+        if (r.shown) {
+          veh.group.rotation.copy(root.rotation);
+          veh.group.position.copy(root.position).sub(_vp.copy(veh.seat).applyEuler(root.rotation));
+          if (veh.spin) veh.spin.rotation[veh.axis] += dt * (veh.axis === 'y' ? 24 : 40);
+        }
+      }
       // a visitor at the oars is sent as a rower on the seat: draw a boat under them
       const rowing = r.action === 'row' && !!this.makeBoat;
       if (rowing && !r.boat) this.ctx.scene.add((r.boat = this.makeBoat()));

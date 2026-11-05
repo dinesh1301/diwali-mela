@@ -5,7 +5,9 @@ import { clamp, setLayer } from '../utils.js';
 import { linear } from '../tasks.js';
 import { settings } from '../settings.js';
 import { tk } from '../touch.js';
-import { carModel, heliModel, planeModel } from './models.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { paint } from '../character.js';
+import { carModel, heliModel, planeModel, vehicleMaterial, glassMat } from './models.js';
 import { buildAirfield, buildCarGround } from './spots.js';
 import { track } from '../track.js';
 import { WATER_Y } from '../world.js';
@@ -22,6 +24,14 @@ const SEARCH_ON = 110; // heli searchlight: a soft warm pool on the ground, not 
 const ZERO = new THREE.Vector3();
 const _v = new THREE.Vector3();
 const _f = new THREE.Vector3();
+
+const _m = new THREE.Matrix4();
+const _inv = new THREE.Matrix4();
+const DEG = 180 / Math.PI;
+const deg = (r) => {
+  const d = Math.max(-99, Math.min(99, Math.round(r * DEG)));
+  return d < 0 ? String(d) : `+${d}`;
+};
 
 const lerpAngle = (a, b, k) => {
   let d = b - a;
@@ -653,6 +663,88 @@ export class Vehicles {
         ctx.ui.toast('🔧 The Chakri Racers are back in the pit lane');
       },
     });
+  }
+
+  // ---------- other visitors' vehicles (see net.js) ----------
+
+  /**
+   * The vehicle code net.js sends while we sit in one: a kind letter (c = car, with its index;
+   * h = heli; p = plane) then the seat's pitch and roll in whole degrees, e.g. 'c1+0-2', 'h+5-12',
+   * 'p-30+45' (never more than the hub's 8 characters). e is the character root's world rotation
+   * (YXZ), which is the vehicle's own: the rider sits at the seat with no turn of their own.
+   */
+  netCode(e) {
+    const seat = this.ctx.player.char.root.parent;
+    let car = 0;
+    for (let i = 0; i < this.list.length; i++) {
+      const v = this.list[i];
+      if (v.seat === seat) return (v.kind === 'car' ? `c${car}` : v.kind === 'heli' ? 'h' : 'p') + deg(e.x) + deg(e.z);
+      if (v.kind === 'car') car++;
+    }
+    return null;
+  }
+
+  /**
+   * A light copy of a vehicle for another visitor to sit in: everything but the spinning rotor or
+   * propeller baked into one vertex-coloured mesh (one draw call; the geometry is built once per
+   * vehicle and shared by every copy), plus the rotor or propeller as a second mesh. No lamps,
+   * decals or lights. key is the code's kind and index ('c0'..'c2', 'h', 'p').
+   */
+  remoteModel(key) {
+    const cache = (this.remoteGeo ??= {});
+    const spec = (cache[key] ??= this.buildRemote(key));
+    if (!spec) return null;
+    const group = new THREE.Group();
+    group.rotation.order = 'YXZ';
+    group.userData.remoteVehicle = key;
+    group.add(new THREE.Mesh(spec.body, vehicleMaterial));
+    let spin = null;
+    if (spec.spin) {
+      spin = new THREE.Mesh(spec.spin.geo, vehicleMaterial);
+      spin.position.copy(spec.spin.pos);
+      group.add(spin);
+    }
+    setLayer(group, 1);
+    group.visible = false;
+    return { group, seat: spec.seat, spin, axis: spec.spin?.axis ?? null, key };
+  }
+
+  buildRemote(key) {
+    const kind = key[0] === 'c' ? 'car' : key === 'h' ? 'heli' : key === 'p' ? 'plane' : null;
+    if (!kind) return null;
+    const of = this.list.filter((v) => v.kind === kind);
+    const v = of[kind === 'car' ? +key.slice(1) || 0 : 0] ?? of[0];
+    if (!v) return null;
+    const door = v.parts.door;
+    const doorWas = door?.rotation.y ?? 0;
+    if (door) door.rotation.y = 0;
+    const g = v.group;
+    g.updateMatrixWorld(true);
+    _inv.copy(g.matrixWorld).invert();
+    const spinPart = v.parts.rotor ?? v.parts.prop ?? null;
+    const geos = [];
+    const walk = (o) => {
+      if (o === spinPart || o === v.seat) return; // the seat holds whoever is driving it
+      if (o.isMesh && (o.material === vehicleMaterial || o.material === glassMat)) {
+        let geo = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+        for (const name of Object.keys(geo.attributes)) if (name !== 'position' && name !== 'normal' && name !== 'color') geo.deleteAttribute(name);
+        if (!geo.attributes.color) paint(geo, o.material.color.getHex());
+        geo.applyMatrix4(_m.multiplyMatrices(_inv, o.matrixWorld));
+        geos.push(geo);
+      }
+      for (const c of o.children) walk(c);
+    };
+    walk(g);
+    if (door) door.rotation.y = doorWas;
+    const body = mergeGeometries(geos);
+    for (const geo of geos) geo.dispose();
+    if (!body) return null;
+    const blades = spinPart?.children.find((c) => c.isMesh && c.material === vehicleMaterial);
+    return {
+      body,
+      seat: v.seat.position.clone(),
+      spin: blades ? { geo: blades.geometry, pos: spinPart.position.clone(), axis: kind === 'heli' ? 'y' : 'z' } : null,
+    };
   }
 
   // ---------- getting in and out ----------

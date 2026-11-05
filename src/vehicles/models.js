@@ -9,7 +9,7 @@ import { slot, slotSet } from '../personalSlots.js';
 */
 
 export const vehicleMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.25 });
-const glassMat = new THREE.MeshStandardMaterial({ color: 0x152233, roughness: 0.15, metalness: 0.4 });
+export const glassMat = new THREE.MeshStandardMaterial({ color: 0x152233, roughness: 0.15, metalness: 0.4 });
 const blurMat = new THREE.MeshBasicMaterial({ color: 0x222222, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false });
 const lampMat = (hex, k = 4) => new THREE.MeshBasicMaterial({ color: hdr(hex, k) });
 

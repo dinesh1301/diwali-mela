@@ -552,6 +552,8 @@ async function init() {
   const decor = buildDecor(ctx);
   await loading();
   const vehicles = new Vehicles(ctx);
+  net.vehicleCode = (e) => vehicles.netCode(e); // at the wheel: tell the others which vehicle, and its tilt
+  net.makeVehicle = (key) => vehicles.remoteModel(key); // and draw theirs around them
   const poster = new Poster(ctx);
   const extraLights = new StringLights(scene);
   const walls = new Walls(ctx);
