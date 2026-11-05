@@ -3,6 +3,7 @@ import { Character, randomLook } from './character.js';
 import { NameTag } from './nametag.js';
 import { profile } from './profile.js';
 import { settings } from './settings.js';
+import { track, trackIds } from './track.js';
 
 /*
   Multiplayer client. Sends where our avatar is (world position of the character root, heading,
@@ -50,6 +51,9 @@ function defaultUrl() {
   const base = ENV.VITE_WS_URL || `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
   const u = new URL(base, location.href);
   u.searchParams.set('room', melaRoom());
+  const ids = trackIds(); // analytics: realtime rows carry the tracker's visitor + session
+  if (ids?.vid) u.searchParams.set('vid', ids.vid);
+  if (ids) u.searchParams.set('sid', ids.sid);
   return u.href;
 }
 
@@ -197,8 +201,9 @@ export class Net {
     if (!this.connected) this.addWish({ name: profile.name, handle: profile.handle, text, at: Date.now() });
   }
 
-  sendBubble(text) {
+  sendBubble(text, kind = 'bubble') {
     this.send({ t: 'bubble', text });
+    track('chat_sent', { kind, len: String(text).length, connected: this.connected, online: this.online }); // the text itself is stored by the realtime server
   }
 
   submitScore(kind, value) {
@@ -211,7 +216,8 @@ export class Net {
     player.char.setAction('wave');
     ui.bubble((o) => player.headWorld(o), `Hi ${r.name}! 👋`, 1.8);
     this.send({ t: 'wave', to: r.id });
-    this.sendBubble(`Hi ${r.name}! 👋`);
+    track('wave', { dir: 'out', to: r.name, online: this.online });
+    this.sendBubble(`Hi ${r.name}! 👋`, 'wave');
     tasks.wait(1.6).then(() => player.char.action === 'wave' && player.char.clearAction());
   }
 
@@ -295,6 +301,7 @@ export class Net {
       case 'wave': {
         const r = this.remote.get(m.from);
         ui.toast(`👋 ${m.n} waved at you`, 2500, { important: true });
+        track('wave', { dir: 'in', from: m.n });
         const { player, tasks } = this.ctx;
         if (player.mode === 'walk') {
           player.char.setAction('wave');

@@ -2571,3 +2571,13 @@ body.touch #toast {
     top: 31%;
   }
 }
+
+/* the analytics notice in the champions and settings panels: quiet, but readable on a phone */
+.modal-card .privacy-note,
+.privacy-note {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(255, 242, 214, 0.72);
+  text-align: center;
+}

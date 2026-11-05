@@ -5,6 +5,7 @@ import { beam, canvasTexture, setLayer, pick, rand, WARM_PALETTE } from '../util
 import { signTexture, stripes } from '../stalls.js';
 import { mergeStatic } from '../merge.js';
 import { settings } from '../settings.js';
+import { track } from '../track.js';
 
 /*
   Tambola (housie) in a tent east of the gate, past the Selfie Point. A caller draws a number every
@@ -278,6 +279,7 @@ export class Tambola {
     const panel = this.panel.open(ticket);
     this.leave = false;
     passport.stamp('tambola');
+    track('game_play', { game: 'tambola', action: 'start' });
     ui.bubble((o) => this.caller.headTop.getWorldPosition(o), 'Eyes down! Pehla number…', 2.5);
     await tasks.wait(1.6);
 
@@ -310,7 +312,7 @@ export class Tambola {
           audio.cheer();
           ui.toast(`🎉 ${prize.name}! You claimed it first`, 3000, { important: true });
           this.ctx.debris.burst(player.headWorld(new THREE.Vector3()), { count: 36, colors: [0xffd166, 0xff006e, 0x06d6a0], speed: 2.5, up: 3, size: 0.06, flat: true, life: 2.5, floor: player.pos.y });
-          net?.sendBubble(`${prize.name} in Tambola! 🎉`);
+          net?.sendBubble(`${prize.name} in Tambola! 🎉`, 'tambola');
         }
       }
       // the room claims the rest
@@ -332,6 +334,7 @@ export class Tambola {
       await tasks.wait(interval - 0.35);
     }
     const mine = Object.keys(won).length;
+    track('game_score', { game: 'tambola', score: mine, win: mine > 0, prizes: Object.keys(won), calls: called.size, left: !!this.leave });
     if (!this.leave) {
       result = await ui.result({
         icon: mine ? '🎟️' : '🙂',

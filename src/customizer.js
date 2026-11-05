@@ -5,6 +5,7 @@ const HER_STYLES = new Set(['saree', 'lehenga', 'salwar', 'long']);
 import { profile, normalizeHandle } from './profile.js';
 import { pick } from './utils.js';
 import { settings } from './settings.js';
+import { track } from './track.js';
 
 const hex = (n) => `#${n.toString(16).padStart(6, '0')}`;
 const $ = (s) => document.querySelector(s);
@@ -180,6 +181,8 @@ export class Customizer {
 
   apply(partial) {
     const L = this.look;
+    this.changes = (this.changes ?? 0) + 1;
+    for (const k in partial) (this.fields ??= new Set()).add(k);
     const was = resolveLook(L).fem ? 'f' : 'm';
     Object.assign(L, partial);
     // the outfit decides the build (a saree, lehenga, salwar or anarkali is hers, a sherwani his;
@@ -255,6 +258,8 @@ export class Customizer {
   }
 
   submit() {
+    // the Enter button's click and the form's submit both land here: only the first one counts
+    if (this.el.classList.contains('hidden')) return;
     const name = this.nameEl.value.trim().replace(/\s+/g, ' ');
     if (name.length < 2) {
       this.errorEl.textContent = 'Please tell us your name so other visitors know who you are';
@@ -271,6 +276,10 @@ export class Customizer {
     profile.save();
     if (profile.handle) profile.fetchTopmate();
     const mode = this.mode;
+    const r = resolveLook(this.look);
+    track('customize', { action: 'done', mode, changes: this.changes ?? 0, fields: [...(this.fields ?? [])], style: r.style, body: r.fem ? 'f' : 'm', name: profile.name, handle: profile.handle, topmate: !!profile.topmate?.found });
+    this.changes = 0;
+    this.fields = null;
     this.close();
     if (mode === 'intro') this.cb.onEnter?.();
     else this.cb.onDone?.();

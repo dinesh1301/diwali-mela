@@ -6,6 +6,7 @@ import { profile } from '../profile.js';
 import { InstanceBatcher } from '../merge.js';
 import { KANDEEL_DROP } from '../wall.js';
 import { slot, slotSet } from '../personalSlots.js';
+import { track } from '../track.js';
 
 const _v = new THREE.Vector3();
 const PLACED_KEY = 'melaPlaced';
@@ -72,7 +73,16 @@ export class Shops {
   }
 
   async visit(st) {
-    const { ui, player, audio, passport, tasks, debris } = this.ctx;
+    const { player, audio, passport, tasks, debris } = this.ctx;
+    const goods = st.def.goods;
+    track('stall', { stall: goods, name: st.def.name, action: 'open' });
+    // the same ui, with every menu pick (or a walk-away) tracked
+    const ui = Object.create(this.ctx.ui);
+    ui.menu = async (title, sub, items) => {
+      const i = await this.ctx.ui.menu(title, sub, items);
+      track('stall', { stall: goods, action: i === null ? 'cancel' : 'pick', item: i === null ? '' : items[i].label });
+      return i;
+    };
     player.setBusy(true);
     player.faceTowards(st.center.x, st.center.z);
     const keeperHead = (o) => st.keeper.headTop.getWorldPosition(o);
@@ -256,6 +266,7 @@ export class Shops {
       player.char.clearAction();
       player.setBusy(false);
       passport.stamp('float');
+      track('activity', { what: 'diya_float' });
       ui.bubble((o) => player.headWorld(o), 'Bahta diya, bahti khushiyan 🌊', 2.4);
       return;
     }
@@ -282,6 +293,7 @@ export class Shops {
     player.char.clearAction();
     player.setBusy(false);
     if (kind === 'diya') passport.stamp('diya');
+    track('activity', { what: `${kind}_placed`, wall: !!slot });
   }
 
   // ---------- persistence of placed things ----------

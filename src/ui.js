@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { STAMPS } from './passport.js';
 import { settings, keyLabel, KEY_LABELS, DEFAULT_KEYS } from './settings.js';
 import { TOUCH, tk } from './touch.js';
+import { track } from './track.js';
 
 const $ = (s) => document.querySelector(s);
 const _v = new THREE.Vector3();
@@ -53,6 +54,7 @@ export function createUI(h) {
   const iconBtn = (sel, fn) =>
     $(sel).addEventListener('click', (e) => {
       e.currentTarget.blur();
+      track('activity', { what: 'hud', button: sel.slice(1, -3) });
       fn();
     });
   iconBtn('#muteBtn', () => h.onMute());

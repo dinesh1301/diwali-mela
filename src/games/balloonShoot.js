@@ -144,6 +144,7 @@ export class BalloonShoot {
           win,
           prize: 'teddy',
           stamp: 'shoot',
+          score: this.popped,
         });
       }, 900);
     }

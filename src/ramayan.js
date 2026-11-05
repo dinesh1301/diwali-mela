@@ -9,6 +9,7 @@ import { signTexture } from './stalls.js';
 import { slot } from './personalSlots.js';
 import { SITES } from './world.js';
 import { mergeAdded } from './merge.js';
+import { track } from './track.js';
 
 export const PLAYLIST = 'PLFPJRCFRDARSZofcQcV6m7Pu2EAL8_1dv';
 const SCREEN_W = 12;
@@ -296,6 +297,7 @@ export class Ramayan {
       if (n > 1) this.player.playVideoAt(Math.floor(Math.random() * n));
       else this.player.nextVideo();
       this.ctx.ui.toast('📽️ Next episode…');
+      track('ramleela_seat', { action: 'next' });
     } catch {
       // ignore
     }
@@ -316,7 +318,9 @@ export class Ramayan {
     player.cam.pitch = 0.1;
     player.cam.targetDist = 5.5;
     this.seated = true;
+    this.seatedAt = performance.now();
     passport.stamp('ramayan');
+    track('ramleela_seat', { action: 'sit', video: this.nowPlaying().slice(0, 120) });
     const title = this.nowPlaying().split(/\s[-|–]\s/)[0].trim();
     ui.toast(title ? `📽️ Now playing: ${title} · ${tk('Press Q for another episode', 'Tap “Next episode” for another')}` : tk('📽️ Enjoy the show! Press Q for another episode.', '📽️ Enjoy the show! Tap “Next episode” for another one.'), 4500);
   }
@@ -328,6 +332,7 @@ export class Ramayan {
     this.taken = null;
     player.standUp(s.x, s.z - 1.0, 0);
     player.cam.targetDist = 5;
+    if (this.seated) track('ramleela_seat', { action: 'stand', secs: Math.round((performance.now() - this.seatedAt) / 1000) });
     this.seated = false;
   }
 
