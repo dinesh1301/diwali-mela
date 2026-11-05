@@ -2705,6 +2705,16 @@ body.touch.in-booth .share-pill {
   }
 }
 
+/* phone portrait: the chips (room, Ravan countdown) go below the header, however many rows it
+   wrapped to (--hud-bottom, set by share.js), and never above where they sat before */
+@media (max-width: 760px) and (orientation: portrait) {
+  body.has-share #chips,
+  body.touch.has-share #chips,
+  body.has-share #stampToast {
+    top: max(calc(122px + env(safe-area-inset-top)), calc(var(--hud-bottom, 0px) + 10px));
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .share-pill.nudge,
   .share-pill.nudge::after {
@@ -2821,8 +2831,8 @@ body.touch.in-booth .share-pill {
 }
 
 .share-pop:not(.owner) .sp-player {
-  height: min(25vh, 250px);
-  height: min(25dvh, 250px);
+  height: clamp(170px, 25vh, 250px);
+  height: clamp(170px, 25dvh, 250px);
 }
 
 .sp-player video {

@@ -72,8 +72,18 @@ export function createShare({ cfg, ui, onTrailerSound }) {
   btn.className = 'share-pill';
   btn.title = 'Share this mela';
   btn.innerHTML = `${ICON.share}<span>Share</span>`;
-  document.querySelector('#hud-top')?.appendChild(btn);
+  const hud = document.querySelector('#hud-top');
+  hud?.appendChild(btn);
   document.body.classList.add('has-share');
+  // On narrow phones (390 px iPhones) the header wraps to three rows, and status chips at a fixed
+  // 122 px slid under the places strip and the pill. Publish the header's bottom edge as
+  // --hud-bottom so the chips sit below it (CSS). Re-measured on resize only, never per frame.
+  if (hud && typeof ResizeObserver !== 'undefined') {
+    const setHudBottom = () => document.body.style.setProperty('--hud-bottom', `${Math.round(hud.getBoundingClientRect().bottom)}px`);
+    new ResizeObserver(setHudBottom).observe(hud);
+    addEventListener('resize', setHudBottom, { passive: true });
+    setHudBottom();
+  }
 
   let seen = readSeen();
   let lastNudge = -1e9;
@@ -382,7 +392,21 @@ export function createShare({ cfg, ui, onTrailerSound }) {
       await navigator.clipboard.writeText(info.melaUrl);
       return true;
     } catch {
-      return false;
+      // clipboard API refused (permissions, http, older in-app browsers): the old selection copy
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = info.melaUrl;
+        ta.setAttribute('readonly', '');
+        ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;font-size:16px';
+        pop.appendChild(ta);
+        ta.select();
+        ta.setSelectionRange(0, ta.value.length);
+        const ok = document.execCommand('copy');
+        ta.remove();
+        return ok;
+      } catch {
+        return false;
+      }
     }
   }
 
