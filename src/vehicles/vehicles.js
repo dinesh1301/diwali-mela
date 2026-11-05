@@ -364,7 +364,7 @@ class Plane extends Vehicle {
       radius: 3.2,
       stamp: 'fly',
       climb: [new THREE.Vector3(1.7, 0, -1.3), new THREE.Vector3(0.95, 0.86, -0.15)], // behind the wing, then onto it
-      help: { key: [['W S', 'Throttle up / down'], ['A D', 'Bank & turn'], ['Space', 'Pull up'], ['Shift', 'Nose down'], ['E', 'Land & get out']], tap: [['🕹️', 'Throttle & turn'], ['▲', 'Pull up'], ['▼', 'Dive'], ['👆', 'Land, then get out']] },
+      help: { key: [['W S', 'Throttle up / down · brake'], ['A D', 'Bank & turn'], ['Space', 'Pull up'], ['Shift', 'Nose down'], ['E', 'Land & get out']], tap: [['🕹️', 'Throttle & turn'], ['▲', 'Pull up'], ['▼', 'Dive'], ['👆', 'Land, then get out']] },
     });
     this.throttle = 0;
     this.pitch = 0;
@@ -416,6 +416,8 @@ class Plane extends Vehicle {
 
     let a = THRUST * this.throttle - (THRUST / (MAX * MAX)) * this.airspeed * this.airspeed - Math.sin(this.pitch) * 5;
     if (this.onGround) a -= 1.2 + (this.throttle === 0 ? 2.5 : 0);
+    // wheel brakes: throttle closed on the ground and still holding S / the stick back
+    if (this.onGround && this.throttle === 0 && f < 0) a -= 4;
     this.airspeed = Math.max(0, this.airspeed + a * dt);
 
     if (this.onGround) {
@@ -750,7 +752,7 @@ export class Vehicles {
     const tips = {
       car: tk('🏁 W to go, A/D to steer, Space to drift. Cross the start line to time a lap. E to get out.', '🏁 Push the joystick up to go, sideways to steer, hold ✋ to drift. Cross the start line to time a lap.'),
       heli: tk('🚁 Hold Space to lift off, W to fly forward, A/D to turn. Land and press E to get out.', '🚁 Hold ▲ to lift off, then the joystick to fly and turn. Land, then tap “Get out”.'),
-      plane: tk('✈️ Hold W for full throttle down the runway, then Space to pull up. Land and press E to get out.', '✈️ Hold the joystick up for full throttle down the runway, then hold ▲ to pull up. Land, then tap “Get out”.'),
+      plane: tk('✈️ Hold W for full throttle down the runway, then Space to pull up. Land, hold S to brake, and press E to get out.', '✈️ Hold the joystick up for full throttle down the runway, then hold ▲ to pull up. Land, pull the joystick back to brake, then tap “Get out”.'),
     };
     ui.toast(tips[v.kind], 5000, { important: true });
     if (v.kind === 'car') {
