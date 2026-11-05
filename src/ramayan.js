@@ -30,6 +30,7 @@ export class Ramayan {
     const { scene, world } = ctx;
     const R = SITES.ramleela;
     this.center = V(R.x, SCREEN_Y, R.z + 10);
+    this.stage = { cx: R.x, z: R.z + 10, top: SCREEN_Y + SCREEN_H / 2 + 0.8 }; // where the Ramleela board hangs
     this.seated = false;
     this.ready = false;
     this.shuffled = false;

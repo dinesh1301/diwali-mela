@@ -48,7 +48,7 @@ import { Voice } from './voice.js';
 import { LightPool } from './lightpool.js';
 import { TOUCH, tk } from './touch.js';
 import { startDirector, directorParams } from './director/director.js';
-import { loadCreatorConfig, applyCreator, personaliseIntro, stallIndexFor } from './creatorStage.js';
+import { loadCreatorConfig, applyCreator, personaliseIntro, stallIndexFor, ramleelaBoard } from './creatorStage.js';
 import { setMelaSlots, slot, melaReport } from './personalSlots.js';
 import { Billboard } from './billboard.js';
 
@@ -542,6 +542,9 @@ async function init() {
   extraLights.build();
   const ownStall = cfg && world.stalls[stallIndexFor(cfg.stallNo, world.stalls.length)];
   const creator = applyCreator(scene, cfg, { stallAnchor: ownStall, ravanAnchor: { pos: new THREE.Vector3(-46.6, 0, 76.5), facing: 0.22 }, colliders: world.colliders, diyas: world.diyas });
+  // the board over the Ramleela screen: "<Name> presents · Ramleela" (the plain mela: Topmate's)
+  const rlBoard = ramleelaBoard(scene, cfg, { ...ramayan.stage, colliders: world.colliders });
+  creator.ready = Promise.all([creator.ready, rlBoard.ready]);
   // the creator's own stall shows their board, so its menu takes the board's name too (not the slot's)
   if (ownStall?.def) ownStall.def.name = cfg.stallTitle || `${cfg.name} ka Stall`;
   personaliseIntro(cfg);
