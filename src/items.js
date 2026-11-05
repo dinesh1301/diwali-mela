@@ -146,8 +146,26 @@ export function kandeelMesh(color = 0xff3d6e) {
   );
 }
 
+/**
+ * A balloon body: a teardrop, round and full on top, narrowing to the neck at the bottom where
+ * the knot and string hang, so it always reads as floating upwards. Centred on its middle; the
+ * neck sits at y = -0.235 (the knot of balloonMesh is at -0.25). Cached per segment count.
+ */
+export function balloonGeometry(radial = 16, rings = 12) {
+  return geo(`balloon|${radial}|${rings}`, () => {
+    const pts = [];
+    for (let i = 0; i <= rings; i++) {
+      const t = (i / rings) * Math.PI; // 0 = neck (bottom), PI = crown (top)
+      const r = 0.205 * Math.sin(t) * (1 - 0.2 * Math.cos(t)) * (1 - 0.35 * Math.exp(-t * 3.2));
+      pts.push(new THREE.Vector2(Math.max(r, i === 0 || i === rings ? 0 : 0.004), -0.235 * Math.cos(t)));
+    }
+    pts[0].x = 0.012; // the neck is open a hair so the knot meets it
+    return new THREE.LatheGeometry(pts, radial);
+  });
+}
+
 export function balloonMesh(color = 0xff006e) {
-  const b = mesh(geo('balloon', () => new THREE.SphereGeometry(0.2, 16, 12).scale(1, 1.18, 1)), std(color, 0.3, { emissive: new THREE.Color(color).multiplyScalar(0.25) }));
+  const b = mesh(balloonGeometry(), std(color, 0.3, { emissive: new THREE.Color(color).multiplyScalar(0.25) }));
   const knot = mesh(geo('knot', () => new THREE.ConeGeometry(0.03, 0.05, 8).rotateX(Math.PI)), std(color), 0, -0.25);
   return group(b, knot);
 }

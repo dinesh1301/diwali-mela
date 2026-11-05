@@ -9,6 +9,9 @@ import { setLayer, rand, pick } from './utils.js';
   seller doing his rounds and a cotton-candy cart.
 */
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
+const _q = new THREE.Quaternion();
+const _q2 = new THREE.Quaternion();
+const _e = new THREE.Euler();
 const std = (color, roughness = 0.8) => new THREE.MeshStandardMaterial({ color, roughness });
 
 export class CrowdScenes {
@@ -64,17 +67,29 @@ export class CrowdScenes {
     // ---- balloon seller on his rounds ----
     this.vendor = person(randomLook(), 3, 52, Math.PI);
     this.vendor.holdR = 'holdUp';
+    // the bunch floats above his raised hand: balloons up, knots down, every string gathered in
+    // his fist. It hangs off the hand but is turned upright in world space each frame (update),
+    // so however the arm swings the balloons never tip over or point at the ground.
     const bunch = new THREE.Group();
+    this.bunchBalloons = [];
     for (let i = 0; i < 9; i++) {
       const b = balloonMesh(pick([0xff006e, 0xffbe0b, 0x3a86ff, 0x06d6a0, 0xfb5607]));
-      const a = (i / 9) * Math.PI * 2;
-      b.position.set(Math.cos(a) * 0.35, -1.2 - (i % 3) * 0.3, Math.sin(a) * 0.35);
-      b.rotation.x = Math.PI;
+      const a = (i / 9) * Math.PI * 2 + (i % 2) * 0.35;
+      const ring = i % 3; // three tiers, the higher ones spread wider like a real bunch
+      const r = 0.2 + ring * 0.09;
+      b.position.set(Math.cos(a) * r, 1.0 + ring * 0.24 + (i % 2) * 0.06, Math.sin(a) * r);
+      b.userData.home = b.position.clone();
+      b.userData.phase = i * 1.7;
       bunch.add(b);
-      const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([V(0, 0, 0), b.position.clone().add(V(0, 0.25, 0))]), new THREE.LineBasicMaterial({ color: 0xdddddd }));
-      bunch.add(line);
+      this.bunchBalloons.push(b);
     }
+    // all nine strings are one line-segments draw: hand (origin) to each knot
+    this.bunchStrings = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(new Array(18).fill(0).map(() => V(0, 0, 0))), new THREE.LineBasicMaterial({ color: 0xdddddd }));
+    this.bunchStrings.frustumCulled = false;
+    bunch.add(this.bunchStrings);
+    this.bunch = bunch;
     this.vendor.handR.add(bunch);
+    this.placeBunch(0);
     this.vendorPath = [V(3, 0, 52), V(3.5, 0, 36), V(-3.2, 0, 24), V(-3.5, 0, 12), V(3.2, 0, 20), V(-3, 0, 44)];
     this.vendorI = 0;
     this.vendorPos = V(3, 0, 52);
@@ -146,6 +161,7 @@ export class CrowdScenes {
     }
     this.vendor.root.position.copy(this.vendorPos);
     this.vendor.update(dt, { speed: d < 0.4 ? 0 : 0.9 });
+    this.placeBunch(t);
     this.candyNext -= dt;
     if (this.candyNext <= 0) {
       this.candyNext = rand(4, 10);
@@ -155,5 +171,23 @@ export class CrowdScenes {
     this.candyMan.update(dt);
     // the rest just idle (the scene members above were already posed once this frame)
     for (const ch of this.idle) ch.update(dt);
+  }
+
+  /** Keeps the balloon bunch upright over the vendor's hand, swaying and bobbing a little. */
+  placeBunch(t) {
+    const { bunch, bunchBalloons: bs } = this;
+    // undo the hand's world rotation, then add a slow sway: the bunch stays upright whatever the arm does
+    bunch.parent?.getWorldQuaternion(_q).invert();
+    _e.set(Math.sin(t * 0.9) * 0.07, 0, Math.sin(t * 0.7 + 1.3) * 0.08);
+    bunch.quaternion.copy(_q).multiply(_q2.setFromEuler(_e));
+    const p = this.bunchStrings.geometry.attributes.position;
+    bs.forEach((b, i) => {
+      const h = b.userData.home;
+      const ph = b.userData.phase;
+      b.position.set(h.x + Math.sin(t * 1.1 + ph) * 0.03, h.y + Math.sin(t * 1.6 + ph) * 0.035, h.z + Math.cos(t * 1.3 + ph) * 0.03);
+      b.rotation.set(Math.sin(t * 1.2 + ph) * 0.12, 0, Math.cos(t * 1.0 + ph) * 0.12);
+      p.setXYZ(i * 2 + 1, b.position.x, b.position.y - 0.25, b.position.z);
+    });
+    p.needsUpdate = true;
   }
 }

@@ -83,6 +83,7 @@ const LINES = [
   'Golgappe khaye? Ekdum teekha! 🌶️',
   'Float a diya at the ghat 🌊',
 ];
+let STRING_MAT = null; // one material for every kid's balloon string
 const ACTIONS = { game: ['clap', 'cheer', null], sky: ['lookUp'], pray: ['namaste'], stall: [null, null, 'give'], look: [null], river: [null] };
 
 
@@ -94,15 +95,22 @@ export class Crowd {
     for (let i = 0; i < count; i++) {
       const kid = i % 5 === 0;
       const char = new Character(randomLook({ kid }));
+      let balloon = null;
       if (kid && Math.random() < 0.7) {
-        // balloon on a string, hung from the (scaled) body above the raised right hand
+        // balloon on a string: the string rises from the raised right hand to the knot, the
+        // balloon floats above it. Both hang off a pivot at the hand so the pair sways together.
         const b = balloonMesh(pick([0xff006e, 0xffbe0b, 0x3a86ff, 0x06d6a0]));
-        b.position.set(-0.3, 2.35, 0.3);
+        b.position.set(-0.03, 0.85, -0.03);
         const string = new THREE.Line(
-          new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-0.3, 2.1, 0.3), new THREE.Vector3(-0.27, 1.5, 0.33)]),
-          new THREE.LineBasicMaterial({ color: 0xdddddd })
+          new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-0.03, 0.6, -0.03), new THREE.Vector3(0, 0, 0)]),
+          (STRING_MAT ??= new THREE.LineBasicMaterial({ color: 0xdddddd }))
         );
-        char.body.add(b, string);
+        const pivot = new THREE.Group();
+        pivot.position.set(-0.27, 1.5, 0.33);
+        pivot.add(b, string);
+        pivot.userData.phase = rand(0, 6);
+        char.body.add(pivot);
+        balloon = pivot;
         char.holdR = 'holdUp';
       }
       setLayer(char.root, 1);
@@ -120,6 +128,7 @@ export class Crowd {
         offset: rand(-1.2, 1.2),
         wait: rand(0, 3),
         greeting: false,
+        balloon,
       };
       this.pickNext(npc);
       this.npcs.push(npc);
@@ -205,6 +214,7 @@ export class Crowd {
     const { player, world } = this.ctx;
     // every Character past 60 m (here, at the stalls, rides and shows) animates every 3rd frame
     setViewer(camera.position);
+    this.t = (this.t ?? 0) + dt;
     for (const npc of this.npcs) {
       let speed = 0;
       if (npc.greeting) {
@@ -264,6 +274,12 @@ export class Crowd {
       npc.char.root.position.copy(npc.pos);
       npc.char.root.rotation.y = npc.heading;
       npc.char.update(dt, { speed });
+      if (npc.balloon) {
+        // a slow sway about the hand, a bit livelier while walking
+        const ph = npc.balloon.userData.phase;
+        const k = speed > 0 ? 0.14 : 0.08;
+        npc.balloon.rotation.set(Math.sin(this.t * 1.3 + ph) * k, 0, Math.sin(this.t * 0.9 + ph * 1.7) * k);
+      }
     }
   }
 }
