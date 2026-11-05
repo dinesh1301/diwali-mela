@@ -5,6 +5,7 @@ import { beam, canvasTexture, rand, setLayer, pick } from './utils.js';
 import { signTexture } from './stalls.js';
 import { slot } from './personalSlots.js';
 import { CONFIG } from './config.js';
+import { track } from './track.js';
 
 /*
   Ravan Dahan: a twelve-metre effigy on the Ramleela maidan that burns on a schedule, with
@@ -146,7 +147,8 @@ export class Ravan {
     this.nextAt = performance.now() + 15000;
     this.warned = true;
     ui.toast('🔥 The fuse is lit! Ravan Dahan in 15 seconds at the Ramleela Maidan', 5000, { important: true });
-    this.ctx.net?.sendBubble('Ravan Dahan in 15 seconds! 🔥');
+    this.ctx.net?.sendBubble('Ravan Dahan in 15 seconds! 🔥', 'ravan');
+    track('activity', { what: 'ravan_fuse' });
     player.char.setAction('cheer');
     setTimeout(() => player.char.action === 'cheer' && player.char.clearAction(), 1500);
   }
@@ -220,6 +222,7 @@ export class Ravan {
       if (!this.stamped && Math.hypot(player.pos.x - POS.x, player.pos.z - POS.z) < 45) {
         this.stamped = true;
         passport.stamp('ravan');
+        track('activity', { what: 'ravan_watched' });
         debris.burst(player.headWorld(new THREE.Vector3()), { count: 30, colors: [0xffd166, 0xff6d00, 0xffffff], speed: 2.5, up: 3, size: 0.06, flat: true, life: 2.5, floor: player.pos.y });
       }
       if (T > 46) {

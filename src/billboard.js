@@ -3,6 +3,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { beamGeometry, canvasTexture, WARM_PALETTE } from './utils.js';
 import { StringLights } from './stringLights.js';
 import { lowDetail } from './lod.js';
+import { track } from './track.js';
 
 /*
   The Mela Screen: a big festive billboard hung over the walkway just inside the gate, facing the
@@ -901,6 +902,8 @@ export class Billboard {
       window.removeEventListener('keydown', onKey, true);
       wrap.remove();
       this.overlay = null;
+      this.onShut?.();
+      this.onShut = null;
       this.onOverlay?.(false);
     };
     close.onclick = (e) => {
@@ -918,6 +921,10 @@ export class Billboard {
     document.body.appendChild(wrap);
     this.overlay = wrap;
     this.onOverlay?.(true);
+    const opened = performance.now();
+    const item = { type: it.type, idx: this.items.indexOf(it), kind: this.kind, src: String(it.src || it.poster || '').slice(-120) };
+    track('billboard', { action: 'open', ...item });
+    this.onShut = () => track('billboard', { action: 'close', ...item, secs: Math.round((performance.now() - opened) / 100) / 10 });
   }
 
   // ---------- director mode ----------

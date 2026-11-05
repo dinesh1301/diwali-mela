@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { foodMesh, FOOD_COLORS } from '../items.js';
 import { pick, rand } from '../utils.js';
 import { slot, slotSet } from '../personalSlots.js';
+import { track } from '../track.js';
 
 const _v = new THREE.Vector3();
 
@@ -61,7 +62,16 @@ export class FoodStalls {
   }
 
   async visit(st) {
-    const { ui, player } = this.ctx;
+    const { player } = this.ctx;
+    const goods = st.def.goods;
+    track('stall', { stall: goods, name: st.def.name, action: 'open' });
+    // every menu pick (or a walk-away) is tracked too
+    const ui = Object.create(this.ctx.ui);
+    ui.menu = async (title, sub, items) => {
+      const i = await this.ctx.ui.menu(title, sub, items);
+      track('stall', { stall: goods, action: i === null ? 'cancel' : 'pick', item: i === null ? '' : items[i].label });
+      return i;
+    };
     player.setBusy(true);
     player.faceTowards(st.center.x, st.center.z);
     try {
@@ -73,6 +83,7 @@ export class FoodStalls {
           break;
         }
         case 'jalebi':
+          track('stall', { stall: goods, action: 'pick', item: 'jalebi' });
           await this.serveAndEat(st, foodMesh('jalebi'), 'jalebi', 4, 'jalebi', pick(REACTIONS.jalebi));
           player.buff('sugar', 20, { icon: '⚡', label: 'Sugar rush · you run faster' });
           break;
@@ -174,6 +185,7 @@ export class FoodStalls {
     ui.bubble(keeperHead, teekha ? slot('shout.golgappa') : 'Ek ke baad ek! 😄', 2);
     await tasks.wait(0.8);
 
+    track('game_play', { game: 'golgappa', action: 'start', flavour });
     let reason = 'bas';
     for (;;) {
       const puri = foodMesh('puri');
@@ -243,6 +255,7 @@ export class FoodStalls {
       player.char.clearAction();
     }
     ui.gameHud.hide();
+    track('game_score', { game: 'golgappa', score: count, flavour, reason, win: count >= 10 });
     const newBest = count > best;
     if (newBest) {
       try {

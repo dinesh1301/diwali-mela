@@ -194,6 +194,7 @@ export class Striker {
       win: this.rang,
       prize: 'gift',
       stamp: 'striker',
+      score: +this.best.toFixed(3),
     });
   }
 

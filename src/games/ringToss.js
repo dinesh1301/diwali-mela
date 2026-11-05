@@ -121,6 +121,7 @@ export class RingToss {
           win,
           prize: 'gift',
           stamp: 'rings',
+          score: this.ringed,
         });
       }, 700);
     }

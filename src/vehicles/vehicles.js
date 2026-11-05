@@ -7,6 +7,7 @@ import { settings } from '../settings.js';
 import { tk } from '../touch.js';
 import { carModel, heliModel, planeModel } from './models.js';
 import { buildAirfield, buildCarGround } from './spots.js';
+import { track } from '../track.js';
 
 /*
   Drivable and flyable vehicles in the spirit of Sketchbook 0.4: walk up, press E, the character
@@ -846,9 +847,11 @@ export class Vehicles {
       else if (ev === 'lap') {
         audio.lapBeep();
         ui.toast(`🏁 Lap ${this.laps.laps}: ${fmt(this.laps.last)}`);
+        track('game_score', { game: 'kart_lap', score: Math.round(this.laps.last), lap: this.laps.laps });
       } else if (ev === 'best') {
         audio.lapBeep(true);
         this.ctx.net?.submitScore('lap', Math.round(this.laps.best));
+        track('game_score', { game: 'kart_lap', score: Math.round(this.laps.best), lap: this.laps.laps, best: true });
         ui.toast(`🏆 New best lap: ${fmt(this.laps.best)}!`, 3500);
       }
       ui.gameHud.stats(this.laps.hud(now));

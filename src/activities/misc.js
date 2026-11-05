@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { thaliMesh, forgetFlames } from '../items.js';
 import { SITES } from '../world.js';
+import { track } from '../track.js';
 
 const _v = new THREE.Vector3();
 
@@ -57,6 +58,7 @@ export class Rituals {
     player.char.clearAction();
     player.setBusy(false);
     passport.stamp('aarti');
+    track('activity', { what: 'aarti' });
   }
 
   async wishLantern() {
@@ -64,7 +66,7 @@ export class Rituals {
     player.setBusy(true);
     const text = await ui.askWish();
     player.setBusy(false);
-    if (!text) return;
+    if (!text) return track('lantern', { action: 'cancel' });
     lanterns.releaseFrom(player, text);
     passport.stamp('lantern');
     ui.toast('🏮 Your wish is rising into the sky');

@@ -3,6 +3,7 @@ import { Character, randomLook, setViewer } from './character.js';
 import { balloonMesh } from './items.js';
 import { pick, rand, setLayer } from './utils.js';
 import { slot, slotSet } from './personalSlots.js';
+import { track } from './track.js';
 
 /*
   Mela-goers wander a hand-made path graph. Some nodes are places to linger: in front of stalls,
@@ -166,6 +167,7 @@ export class Crowd {
     player.char.clearAction();
     player.setBusy(false);
     passport.stamp('greet');
+    track('activity', { what: 'greet' });
     await tasks.wait(0.8);
     npc.char.clearAction();
     npc.greeting = false;

@@ -147,6 +147,7 @@ export class Cans {
             win,
             prize: 'teddy',
             stamp: 'cans',
+            score: down,
           }),
         500
       );

@@ -9,6 +9,7 @@ import { slot } from './personalSlots.js';
 import { SITES } from './world.js';
 import { profile } from './profile.js';
 import { STAMPS } from './passport.js';
+import { track } from './track.js';
 
 export const MELA_URL = location.origin + location.pathname.replace(/index\.html$/, '');
 const YEAR = new Date().getFullYear();
@@ -411,6 +412,7 @@ export class Poster {
     this.flash();
     audio.shutter();
     this.shot = this.capture();
+    track('selfie', { mode: 'point', pose: POSES[choice].label ?? choice });
     await tasks.wait(0.5);
     player.char.clearAction();
     player.setBusy(false);
@@ -524,6 +526,7 @@ export class Poster {
     audio.shutter();
     this.flash();
     this.shot = this.captureCurrent();
+    track('selfie', { mode: 'snap', ride: this.ctx.player.mode });
     passport.stamp('poster');
     this.open();
   }
@@ -605,7 +608,8 @@ export class Poster {
     return this.posterBlob ?? new Promise((r) => this.canvas.toBlob(r, 'image/jpeg', 0.92));
   }
 
-  async download() {
+  async download(via = 'download') {
+    if (via === 'download') track('share', { target: 'download', format: this.format, photo: this.photoMode });
     const blob = await this.blob();
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -619,15 +623,21 @@ export class Poster {
     const blob = await this.blob();
     const file = new File([blob], 'topmate-diwali-mela.jpg', { type: 'image/jpeg' });
     try {
-      if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], text: this.caption(), title: 'Topmate Diwali Mela' });
-      else await this.download();
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], text: this.caption(), title: 'Topmate Diwali Mela' });
+        track('share', { target: 'native', format: this.format, photo: this.photoMode });
+      } else {
+        track('share', { target: 'native_fallback', format: this.format, photo: this.photoMode });
+        await this.download('share');
+      }
     } catch {
-      // the share sheet was dismissed
+      track('share', { target: 'native', dismissed: true, format: this.format });
     }
   }
 
   async copyCaption() {
     try {
+      track('share', { target: 'caption' });
       await navigator.clipboard.writeText(this.caption());
       this.ctx.ui.toast('📋 Caption copied. Paste it with your poster!');
     } catch {

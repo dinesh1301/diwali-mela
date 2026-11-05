@@ -8,6 +8,7 @@ import { RingToss } from './ringToss.js';
 import { Cans } from './cans.js';
 import { Striker } from './striker.js';
 import { slot, slotSet } from '../personalSlots.js';
+import { track } from '../track.js';
 
 // sign title, sub line and prize name are personal slots: game.<id>.title / .sub / .prize
 const BOOTHS = [
@@ -46,6 +47,7 @@ export class Games {
       mergeStatic(booth.group, { skip: (o) => live.has(o) });
       freezeStatic(booth.group, (o) => live.has(o));
       game.finish = (r) => this.finish(game, r);
+      game.id = d.id;
       ctx.interactions.add({
         pos: new THREE.Vector3(24.3, 0, d.z),
         radius: 2.8,
@@ -76,11 +78,14 @@ export class Games {
     ui.gameHud.show({ title: game.title, help: tk(game.help, game.tapHelp ?? game.help) });
     ui.setHelp({ key: game.helpLines, tap: game.tapLines ?? [] });
     game.start();
+    this.playAt = performance.now();
+    track('game_play', { game: game.id, action: 'start' });
   }
 
   async finish(game, r) {
     const { ui, audio, passport, player, debris } = this.ctx;
     passport.stamp(r.stamp);
+    track('game_score', { game: game.id, score: r.score, win: !!r.win });
     if (r.win) {
       audio.cheer();
       this.prize = r.prize;
@@ -103,6 +108,7 @@ export class Games {
     if (choice === 'again') {
       game.stop();
       game.start();
+      track('game_play', { game: game.id, action: 'again' });
     } else {
       this.leave();
     }
@@ -113,6 +119,7 @@ export class Games {
     if (!game) return;
     const { player, input, ui, shops } = this.ctx;
     game.stop();
+    track('game_play', { game: game.id, action: 'leave', secs: Math.round((performance.now() - this.playAt) / 1000), prize: this.prize ?? '' });
     this.active = null;
     input.lookEnabled = true;
     player.mode = 'walk';

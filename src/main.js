@@ -34,7 +34,8 @@ import { settings } from './settings.js';
 import { Smoke } from './smoke.js';
 import { DayNight } from './daynight.js';
 import { Ambience } from './ambience.js';
-import { Net } from './net.js';
+import { Net, melaRoom } from './net.js';
+import { initTrack, track, sinceLoad, onTrackEnd, onTrackHide } from './track.js';
 import { buildDecor } from './decor.js';
 import { Walls } from './wall.js';
 import { Train } from './train.js';
@@ -236,6 +237,8 @@ async function init() {
   const viewW0 = () => director?.width ?? innerWidth;
   const viewH0 = () => director?.height ?? innerHeight;
   const creatorCfg = loadCreatorConfig(params); // ?c=<slug> / ?cfg=: a creator's own mela
+  const room = melaRoom(params);
+  initTrack({ room, slug: room === 'public' ? '' : room }); // off in director / ?nonet pages
   settings.load();
   profile.load();
   const look = { ...randomPlayerLook(), ...(profile.look || {}) };
@@ -343,6 +346,7 @@ async function init() {
   // ---------- UI + activities ----------
 
   let started = false;
+  let zone = null; // the zone the visitor is in (read by the analytics in the handlers below)
   let muted = false;
   let musicOn = true;
   try {
@@ -382,6 +386,7 @@ async function init() {
     ramayan.start();
     net.connect();
     if (profile.handle) profile.fetchTopmate();
+    track('enter', { name: profile.name, handle: profile.handle, at_ms: sinceLoad() });
     const welcome = () =>
       ui.toast(
         tk(`🪔 Welcome, ${profile.name}! Walk up to anything glowing and press ${settings.keys.interact.replace('Key', '')}`, `🪔 Welcome, ${profile.name}! Use the joystick to walk up to anything glowing, then tap the button`),
@@ -408,13 +413,16 @@ async function init() {
     onMic() {
       if (!started) return;
       voice.toggle();
+      track('activity', { what: 'voice', on: voice.live });
     },
     onAvatar() {
       if (!started || ui.modalOpen) return;
       if (player.mode !== 'walk') return ui.toast('Finish what you’re doing first 🙂');
       customizer.open('edit');
+      track('customize', { action: 'open' });
     },
     onSettings(key) {
+      track('activity', { what: 'setting', key, value: typeof settings[key] === 'object' ? undefined : settings[key] });
       if (key === 'music') {
         audio.setMode(settings.music);
         ambience.setBand(settings.music === 'band' && musicOn);
@@ -429,6 +437,7 @@ async function init() {
     wishes: () => net.wishes,
     online: () => net.online,
     onAction(action) {
+      if (started) track('activity', { what: action, zone, mode: player.mode });
       switch (action) {
         case 'rocket':
           fireworks.launchRocket();
@@ -476,6 +485,7 @@ async function init() {
       train.abort();
       if (player.mode === 'ride') rides.getOff();
       if (player.mode === 'busy' || player.mode === 'anim') return;
+      track('activity', { what: 'place', place: id });
       player.teleport(...PLACES[id]);
       frameMelaScreen();
       if (TOUCH && id === 'ramleela' && rlBoard.mesh) frameSign(rlBoard.mesh.localToWorld(new THREE.Vector3(0, rlBoard.mesh.geometry.parameters.height / 2, 0)));
@@ -688,6 +698,7 @@ async function init() {
   lanterns.releaseFrom = (p, text) => {
     const r = releaseFrom(p, text);
     net.sendLantern(text, r.pos, r.dir);
+    track('lantern', { len: String(text).length, boat: boat.riding, zone }); // the wish itself goes through realtime
     return r;
   };
   // buffs show as chips
@@ -822,6 +833,17 @@ async function init() {
   composer.render();
   await nextFrame();
   document.getElementById('loader').classList.add('done');
+  {
+    const utm = {};
+    for (const [k, v] of params) if (/^utm_/.test(k)) utm[k] = v.slice(0, 100);
+    const nav = navigator;
+    track('session_start', {
+      load_ms: sinceLoad(), tier, gpu: String(settings.gpu || '').slice(0, 120), midGpu: settings.midGpu, touch: TOUCH,
+      w: innerWidth, h: innerHeight, dpr, pr: renderer.getPixelRatio(), mem: nav.deviceMemory, cores: nav.hardwareConcurrency, lang: nav.language,
+      ref: document.referrer.slice(0, 300), utm, invite: profile.ref || '', returning: !!profile.name, name: profile.name || '', handle: profile.handle || '',
+      play: params.has('play'), creator: cfg?.name || '', standalone: matchMedia('(display-mode: standalone)').matches,
+    });
+  }
   setTimeout(() => document.getElementById('loader').classList.add('hidden'), 500);
   if (params.has('play')) {
     customizer.close();
@@ -886,8 +908,14 @@ async function init() {
 
   const timer = new THREE.Timer();
   timer.connect(document);
-  let zone = null;
+  let zoneAt = 0;
+  let atWall = false;
+  const zonesSeen = new Set();
   let zoneTimer = 0;
+  let ride = null; // what we are riding now (for ride_start / ride_end)
+  let rideAt = 0;
+  let rides_n = 0;
+  const rideName = () => (tambola.active || ramayan.seated ? null : vehicles.active ? vehicles.active.kind : boat.riding ? 'boat' : train.riding ? 'train' : rides.active);
   let helpKey = '';
   let tagBase = false;
   let vehKind = null;
@@ -953,6 +981,14 @@ async function init() {
       nameTag.setVisible(tagBase && !tagOverBoard());
       ui.setPrompt(null);
       ui.setPrompt2(null);
+      // a ride starts or ends with a change of seat owner: tracked here, not per frame
+      const nowRide = mode === 'ride' ? rideName() ?? null : null;
+      if (nowRide !== ride) {
+        if (ride) track('ride_end', { ride, secs: Math.round((performance.now() - rideAt) / 1000) });
+        if (nowRide) track('ride_start', { ride: nowRide, zone }), rides_n++;
+        ride = nowRide;
+        rideAt = performance.now();
+      }
       if (mode === 'ride') ui.setHelp(owner === vehicles ? vehicles.active.help : owner ? owner.help : HELP.ride);
       else if (mode !== 'game') ui.setHelp(HELP[mode] ?? HELP.walk);
     }
@@ -987,8 +1023,21 @@ async function init() {
       const p = player.pos;
       const z = ZONES.find((zz) => (p.x - zz.x) ** 2 + (p.z - zz.z) ** 2 < zz.r * zz.r);
       if ((z?.id ?? null) !== zone) {
+        if (zone) track('zone', { zone: zone, action: 'leave', secs: Math.round((performance.now() - zoneAt) / 1000) });
         zone = z?.id ?? null;
-        if (z) ui.toast(zoneToast(z), 3200);
+        zoneAt = performance.now();
+        if (z) {
+          ui.toast(zoneToast(z), 3200);
+          zonesSeen.add(z.id);
+          track('zone', { zone: z.id, action: 'enter' });
+        }
+      }
+      // the creator's Wall of Fame (painted posts beside their stall): a look counts once per approach
+      const wc = creator.wall?.center;
+      if (wc) {
+        const near = (p.x - wc.x) ** 2 + (p.z - wc.z) ** 2 < 36;
+        if (near && !atWall) track('wall_post', { action: 'view', posts: creator.postsLoaded ?? 0 });
+        atWall = near;
       }
     }
 
@@ -1050,6 +1099,37 @@ async function init() {
     return;
   }
   renderer.setAnimationLoop(loop);
+
+  // analytics: frame rate from the frame counter every 5 s (no per-frame work), a heartbeat every 30 s
+  const fps = { lt20: 0, lt30: 0, lt45: 0, lt55: 0, ok: 0 };
+  let fpsFrame = frameNo;
+  let fpsAt = performance.now();
+  let visibleMs = 0;
+  let lastBeat = performance.now();
+  setInterval(() => {
+    const now = performance.now();
+    if (!document.hidden && !throttled) {
+      const f = ((frameNo - fpsFrame) * 1000) / (now - fpsAt);
+      fps[f < 20 ? 'lt20' : f < 30 ? 'lt30' : f < 45 ? 'lt45' : f < 55 ? 'lt55' : 'ok']++;
+    }
+    fpsFrame = frameNo;
+    fpsAt = now;
+  }, 5000);
+  const beat = (extra) => {
+    const now = performance.now();
+    visibleMs += now - lastBeat; // only called while visible (or on the way to hidden)
+    lastBeat = now;
+    track('heartbeat', { started, mode: games.active ? 'game' : player.mode, zone, ride, online: net.online, connected: net.connected, pr: renderer.getPixelRatio(), gov_ms: governor.last.mean, fps: { ...fps }, active_s: Math.round(visibleMs / 1000), ...extra });
+    for (const k in fps) fps[k] = 0;
+  };
+  setInterval(() => !document.hidden && beat(), 30000);
+  onTrackHide(() => beat({ hidden: true }));
+  document.addEventListener('visibilitychange', () => !document.hidden && (lastBeat = performance.now()));
+  onTrackEnd(() => {
+    if (ride) track('ride_end', { ride, secs: Math.round((performance.now() - rideAt) / 1000) });
+    const tail = document.hidden ? 0 : performance.now() - lastBeat;
+    track('session_end', { duration_ms: sinceLoad(), active_s: Math.round((visibleMs + tail) / 1000), started, zones: [...zonesSeen], rides: rides_n, stamps: passport.done.size });
+  });
 
   // a hidden tab draws nothing at all (some browsers keep firing rAF for a while)
   document.addEventListener('visibilitychange', () => {
