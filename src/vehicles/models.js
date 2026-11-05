@@ -195,7 +195,9 @@ export function heliModel(color = 0xd9a21b, stripe = 0xb3122e) {
   g.add(tailRotor);
 
   g.add(ball(0xff2020, 3, 0.06, -1.0, 1.52, -0.1), ball(0x20ff40, 3, 0.06, 1.0, 1.52, -0.1), ball(0xffffff, 4, 0.05, 0, 1.4, -4.5));
-  const search = new THREE.SpotLight(0xfff0c8, 0, 60, 0.42, 0.45, 1.0);
+  // searchlight: warm, wide and soft-edged (penumbra near 1) so it reads as a gentle pool on the
+  // ground; its strength is set in vehicles.js (SEARCH_ON)
+  const search = new THREE.SpotLight(0xffe4b8, 0, 45, 0.5, 0.9, 1.3);
   search.position.set(0, 0.5, 0.9);
   search.target.position.set(0, -12, 12);
   g.add(search, search.target);
