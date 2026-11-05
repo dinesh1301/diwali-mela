@@ -79,6 +79,9 @@ export function track(type, props) {
   if (q.length >= MAX_BATCH) flush(false);
 }
 
+/** Ids for the realtime URL (?vid=&sid=) so the server's rt.* rows join this session; null when off. */
+export const trackIds = () => (on ? { vid: base.visitor, sid: session } : null);
+
 /** fn runs once when the page goes away (pagehide), before the last send: for 'session_end'. */
 export const onTrackEnd = (fn) => endHooks.push(fn);
 /** fn runs whenever the tab is hidden, before the send. */

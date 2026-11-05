@@ -3,7 +3,7 @@ import { Character, randomLook } from './character.js';
 import { NameTag } from './nametag.js';
 import { profile } from './profile.js';
 import { settings } from './settings.js';
-import { track } from './track.js';
+import { track, trackIds } from './track.js';
 
 /*
   Multiplayer client. Sends where our avatar is (world position of the character root, heading,
@@ -51,6 +51,9 @@ function defaultUrl() {
   const base = ENV.VITE_WS_URL || `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
   const u = new URL(base, location.href);
   u.searchParams.set('room', melaRoom());
+  const ids = trackIds(); // analytics: realtime rows carry the tracker's visitor + session
+  if (ids?.vid) u.searchParams.set('vid', ids.vid);
+  if (ids) u.searchParams.set('sid', ids.sid);
   return u.href;
 }
 
