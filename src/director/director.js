@@ -62,11 +62,20 @@ export function directorParams(params) {
   return { shot, width: w || 1080, height: h || 1920, cfgGiven: params.has('cfg') };
 }
 
+/**
+ * Virtual performance.now() at install. Fixed, not the real time: timers fire when
+ * `at <= now`, and with 1/30 s steps (33.33.. ms, inexact in binary) whether a 600 ms timer lands
+ * on frame +18 or +19 depends on the rounding of base + k * step. With the real load time as the
+ * base that flipped from run to run (a ring-toss ring handed over a frame late, a missed toss, a
+ * different games shot). 60 s is past any real timestamp taken during load, so deltas against
+ * one (lightpool's first frame) are positive and capped as on a normal frame.
+ */
+const CLOCK_BASE_MS = 60_000;
+
 /** Freezes the page's clocks and timers; they advance only through advance(ms). */
 function installClock() {
-  const realNow = performance.now();
-  let now = realNow;
-  const dateBase = Date.UTC(2026, 10, 8, 14, 30) - realNow; // Diwali evening, IST
+  let now = CLOCK_BASE_MS;
+  const dateBase = Date.UTC(2026, 10, 8, 14, 30) - now; // Diwali evening, IST
   let nextId = 1e6;
   let timers = [];
   let rafs = [];
