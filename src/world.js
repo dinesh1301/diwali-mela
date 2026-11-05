@@ -52,6 +52,25 @@ function groundHeight(x, z) {
   return -0.3 * step;
 }
 
+/** The river's surface (createWater's default y; boat.js rides it too). */
+export const WATER_Y = -1.35;
+
+/**
+ * Open water under (x, z): south of the waterline along the ghat steps (the fifth step, top -1.5,
+ * is under water), south of the quay face past their ends, and north of the far bank. The jetty is
+ * counted as water too: a 2.6 m plank walk is no helipad.
+ */
+export function overWater(x, z) {
+  if (z < -160) return false; // the far bank
+  return Math.abs(x) <= 42 ? z < -50.5 : z < -49.4;
+}
+
+/** What a flying vehicle settles on: the river's surface over water, the bank and steps elsewhere. */
+function flyFloor(x, z) {
+  if (z < -160) return 0;
+  return overWater(x, z) ? WATER_Y : groundHeight(x, z);
+}
+
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const std = (color, roughness = 0.7, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness, ...extra });
 
@@ -116,6 +135,8 @@ export function buildWorld(scene, { reflectionScale = 0.5 } = {}) {
     bounds: BOUNDS,
     tall: TALL,
     groundHeight,
+    flyFloor,
+    overWater,
     collide: (p, r) => collide(ctx.colliders, BOUNDS, p, r),
     collideFlying: (p, r, y) => collideFlying(ctx.colliders, TALL, p, r, y),
     update(dt, t) {

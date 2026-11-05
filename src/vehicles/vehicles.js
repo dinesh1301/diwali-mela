@@ -8,6 +8,7 @@ import { tk } from '../touch.js';
 import { carModel, heliModel, planeModel } from './models.js';
 import { buildAirfield, buildCarGround } from './spots.js';
 import { track } from '../track.js';
+import { WATER_Y } from '../world.js';
 
 /*
   Drivable and flyable vehicles in the spirit of Sketchbook 0.4: walk up, press E, the character
@@ -17,6 +18,7 @@ import { track } from '../track.js';
 
 const CAR_BOUNDS = { minX: -69, maxX: 69, minZ: -43, maxZ: 77 }; // stops at the top of the ghat
 const FLY_BOUNDS = { minX: -250, maxX: 250, minZ: -230, maxZ: 260, maxY: 140 };
+const SEARCH_ON = 110; // heli searchlight: a soft warm pool on the ground, not a stage spot
 const ZERO = new THREE.Vector3();
 const _v = new THREE.Vector3();
 const _f = new THREE.Vector3();
@@ -55,6 +57,8 @@ class Vehicle {
     this.occupied = false;
     this.thud = 0;
     this.crashed = false;
+    this.ditched = false; // the crash was into the river (the manager plays the splash-down and respawn)
+    this.sinking = false; // the splash-down animation owns the transform; physics is paused
     this.abandonedAt = null; // when the player last left it away from its spawn
     setLayer(this.group, 1);
     ctx.scene.add(this.group);
@@ -74,8 +78,18 @@ class Vehicle {
     return out.set(Math.sin(this.heading), 0, Math.cos(this.heading));
   }
 
+  /** What's under the vehicle: aircraft settle on the river's surface, cars only ever see land. */
+  floor(x = this.pos.x, z = this.pos.z) {
+    const w = this.ctx.world;
+    return this.kind === 'car' || !w.flyFloor ? w.groundHeight(x, z) : w.flyFloor(x, z);
+  }
+
+  overWater() {
+    return !!this.ctx.world.overWater?.(this.pos.x, this.pos.z);
+  }
+
   altitude() {
-    return this.pos.y - this.ctx.world.groundHeight(this.pos.x, this.pos.z);
+    return this.pos.y - this.floor();
   }
 
   speed() {
@@ -121,9 +135,18 @@ class Vehicle {
     this.onCrash?.();
   }
 
+  /** The skids or wheels touched the river: the manager plays the splash-down and respawns it. */
+  ditch() {
+    if (this.crashed || !this.occupied) return;
+    this.ditched = true;
+    this.pos.y = WATER_Y;
+    this.crash();
+  }
+
   /** Called every frame; subclasses implement step(dt, t). */
   update(dt, t) {
     this.thud = Math.max(0, this.thud - dt);
+    if (this.sinking) return;
     this.step(dt, t);
     if (this.occupied && this.speed() > 0.5) this.ctx.crowd?.pushAway(this.pos.x, this.pos.z, this.radius + 0.6);
   }
@@ -286,11 +309,11 @@ class Heli extends Vehicle {
   }
 
   canExit() {
-    return this.altitude() < 1.2 && this.speed() < 2;
+    return this.altitude() < 1.2 && this.speed() < 2 && !this.overWater();
   }
 
   exitHint() {
-    return 'Land to get out';
+    return this.overWater() ? 'Fly back over land to get out' : 'Land to get out';
   }
 
   step(dt) {
@@ -326,7 +349,9 @@ class Heli extends Vehicle {
     }
     this.pos.x = clamp(this.pos.x, FLY_BOUNDS.minX, FLY_BOUNDS.maxX);
     this.pos.z = clamp(this.pos.z, FLY_BOUNDS.minZ, FLY_BOUNDS.maxZ);
-    const g = world.groundHeight(this.pos.x, this.pos.z);
+    const g = this.floor();
+    // skids on the river (the hover hold settles within 2 cm of a surface, so that counts): no landing on water
+    if (this.pos.y - g < 0.03 && this.overWater()) return this.ditch();
     if (this.pos.y <= g) {
       if (this.vel.y < -8) return this.crash();
       if (this.vel.y < -4) this.bump(5);
@@ -346,7 +371,11 @@ class Heli extends Vehicle {
     this.parts.rotor.rotation.y += this.rotor * 26 * dt;
     this.parts.tailRotor.rotation.x += this.rotor * 55 * dt;
     this.parts.blur.material.opacity = clamp((this.rotor - 0.5) * 0.7, 0, 0.3);
-    this.parts.search.intensity = this.occupied && this.rotor > 0.5 ? 400 : 0;
+    // the searchlight eases on and off rather than snapping (a hard 0 when idle keeps it out of the LightPool)
+    const search = this.parts.search;
+    const want = this.occupied && this.rotor > 0.5 ? SEARCH_ON : 0;
+    search.intensity += (want - search.intensity) * (1 - Math.exp(-dt * 4));
+    if (search.intensity < 0.5 && want === 0) search.intensity = 0;
     if (this.occupied) audio.setEngine(this.rotor * (0.75 + 0.25 * up), this.speed() / 20);
   }
 }
@@ -463,8 +492,9 @@ class Plane extends Vehicle {
         ui.toast('🧭 The mela is back that way!');
       }
     }
-    const g = world.groundHeight(this.pos.x, this.pos.z);
+    const g = this.floor();
     if (this.pos.y <= g) {
+      if (this.overWater()) return this.ditch(); // wheels in the river: it can't land on water either
       const sink = (prevY - this.pos.y) / Math.max(dt, 1e-3);
       this.pos.y = g;
       if (!this.onGround) {
@@ -589,6 +619,7 @@ export class Vehicles {
     this.stash = null;
     this.idle = 0;
     this.camTarget = new THREE.Vector3();
+    this.shake = 0; // seconds of camera shake left
 
     const { interactions, player } = ctx;
     for (const v of this.list) {
@@ -699,6 +730,57 @@ export class Vehicles {
     }
     v.reset();
     v.crashed = false;
+    this.busy = false;
+  }
+
+  /**
+   * Into the river: the aircraft lurches over and spins as it settles into the water with a splash,
+   * a spray of droplets and a short camera jolt; then it is back on its pad (or the runway) with the
+   * pilot still aboard and the controls live again.
+   */
+  async splashdown(v) {
+    const { audio, debris, smoke, ui, tasks, player } = this.ctx;
+    this.busy = true;
+    v.sinking = true;
+    audio.stopEngine();
+    audio.splash();
+    audio.thud();
+    this.shake = 0.6;
+    const at = v.pos.clone();
+    at.y = WATER_Y + 0.1;
+    const low = settings.tier === 'low';
+    debris.burst(at, { count: low ? 36 : 60, colors: [0xffffff, 0xdff3ff, 0x9fd3e6, 0x5fa8c0], speed: 4.5, up: 6.5, size: 0.11, life: 1.6, gravity: 9.8, floor: WATER_Y });
+    smoke?.puff(at.x, WATER_Y + 0.3, at.z, { kind: 'steam', count: low ? 6 : 12, size: 1.1, grow: 1.4, rise: 0.8, drift: 0.4, life: 1.6, peak: 0.28, spread: 2.2 });
+    ui.toast(`\u{1F4A6} Crashed into the river! Respawning\u2026`, 2600, { important: true });
+
+    const g = v.group;
+    const r0 = g.rotation.clone();
+    const h0 = v.heading;
+    const roll = (Math.random() < 0.5 ? -1 : 1) * 1.05;
+    const blur = v.parts.blur?.material;
+    const blur0 = blur?.opacity ?? 0;
+    if (v.parts.search) v.parts.search.intensity = 0;
+    await tasks.tween(1.5, (k) => {
+      const e = 1 - (1 - k) * (1 - k); // eases out: the lurch is quick, the settle slow
+      g.rotation.set(r0.x + 0.35 * e, h0 + 2.4 * e, r0.z + roll * e);
+      v.pos.y = WATER_Y - 1.1 * k * k; // floats a beat, then goes under
+      if (v.parts.rotor) v.parts.rotor.rotation.y += (1 - k) * 0.35;
+      if (blur) blur.opacity = blur0 * (1 - k);
+    }, linear);
+    debris.burst(at, { count: low ? 10 : 18, colors: [0xffffff, 0x9fd3e6], speed: 1.2, up: 2.2, size: 0.09, life: 1.0, gravity: 9.8, floor: WATER_Y });
+    await tasks.wait(0.45);
+
+    v.reset();
+    v.sinking = false;
+    v.crashed = false;
+    v.ditched = false;
+    if (v.kind === 'heli') v.rotor = 0.6; // already spooling: lift comes back in about a second
+    this.idle = 0;
+    this.camTarget.copy(v.pos);
+    player.cam.yaw = v.heading + Math.PI;
+    player.cam.pitch = 0.3;
+    player.cam.targetDist = v.camDist;
+    audio.startEngine(v.kind);
     this.busy = false;
   }
 
@@ -817,6 +899,7 @@ export class Vehicles {
 
   promptLabel() {
     const v = this.active;
+    if (v.sinking) return 'Respawning\u2026';
     return v.canExit() ? `Get out of the ${v.name}` : v.exitHint();
   }
 
@@ -841,7 +924,7 @@ export class Vehicles {
 
     const v = this.active;
     if (!v || this.busy) return;
-    if (v.crashed) return this.crash(v);
+    if (v.crashed) return v.ditched ? this.splashdown(v) : this.crash(v);
     if (v.kind === 'car') {
       const now = performance.now();
       const ev = this.laps.update(v.pos, now);
@@ -894,7 +977,17 @@ export class Vehicles {
     c.target.copy(this.camTarget);
     const cp = camera.position;
     cp.set(Math.sin(c.yaw) * Math.cos(c.pitch), Math.sin(c.pitch), Math.cos(c.yaw) * Math.cos(c.pitch)).multiplyScalar(c.dist).add(c.target);
-    cp.y = Math.max(cp.y, world.groundHeight(cp.x, cp.z) + 0.5);
+    cp.y = Math.max(cp.y, (v.kind === 'car' ? world.groundHeight(cp.x, cp.z) : (world.flyFloor ?? world.groundHeight)(cp.x, cp.z)) + 0.5);
     camera.lookAt(c.target);
+    if (this.shake > 0) {
+      // a short, small jolt (crash into the river); none with reduced motion
+      this.shake = Math.max(0, this.shake - dt);
+      if (!settings.reduceMotion) {
+        const a = this.shake * this.shake * 0.5;
+        camera.position.x += (Math.random() - 0.5) * a;
+        camera.position.y += (Math.random() - 0.5) * a;
+        camera.position.z += (Math.random() - 0.5) * a;
+      }
+    }
   }
 }
