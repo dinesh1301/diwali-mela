@@ -238,14 +238,14 @@ export class Tambola {
   say(n) {
     const { audio } = this.ctx;
     audio.beep(n % 2 === 0);
-    if (audio.muted || !('speechSynthesis' in window)) return;
+    if (audio.muted || !settings.voiceVolume || !('speechSynthesis' in window)) return;
     try {
       speechSynthesis.cancel();
       const call = CALLS[n] ? `${CALLS[n]}, ${n}` : `${Math.floor(n / 10) ? `${Math.floor(n / 10)} and ${n % 10}, ` : ''}${n}`;
       const u = new SpeechSynthesisUtterance(call);
       u.rate = 1.0;
       u.pitch = 1.05;
-      u.volume = 0.8;
+      u.volume = 0.8 * settings.voiceVolume; // the Voices slider
       const voice = speechSynthesis.getVoices().find((v) => /en-IN/i.test(v.lang)) ?? speechSynthesis.getVoices().find((v) => /^en/i.test(v.lang));
       if (voice) u.voice = voice;
       speechSynthesis.speak(u);
