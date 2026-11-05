@@ -131,7 +131,7 @@ export class Train {
       plat.receiveShadow = plat.castShadow = true;
       scene.add(plat);
       const signPos = centre.clone().add(right.clone().multiplyScalar(st.side * 1.0));
-      const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.75), new THREE.MeshBasicMaterial({ map: signTexture(slot(st.slot), tk('Toy train · press E when it stops', 'Toy train · tap the button when it stops'), '#13306b', '#ffe7a3', 1024, 288), color: new THREE.Color(1.2, 1.2, 1.2), side: THREE.DoubleSide }));
+      const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.75), new THREE.MeshBasicMaterial({ map: signTexture(slot(st.slot), tk('Toy train · press E when it stops', 'Toy train · tap the button when it stops'), '#13306b', '#ffe7a3', 1024, 288), color: new THREE.Color(1, 1, 1), side: THREE.DoubleSide }));
       sign.position.set(signPos.x, 2.4, signPos.z);
       sign.rotation.y = Math.atan2(t.x, t.z) + Math.PI / 2;
       scene.add(sign);

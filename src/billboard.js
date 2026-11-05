@@ -535,14 +535,14 @@ export class Billboard {
     const htex = headerTexture(title, sub);
     const hf = new THREE.PlaneGeometry(hw, hh).translate(0, 0, 0.1);
     const hb = new THREE.PlaneGeometry(hw, hh).translate(0, 0, 0.1).rotateY(Math.PI);
-    this.header = new THREE.Mesh(mergeGeometries([hf, hb]).translate(x, hy, z), new THREE.MeshBasicMaterial({ map: htex, color: new THREE.Color(1.25, 1.25, 1.25) }));
+    this.header = new THREE.Mesh(mergeGeometries([hf, hb]).translate(x, hy, z), new THREE.MeshBasicMaterial({ map: htex, color: new THREE.Color(1, 1, 1) }));
     this.scene.add(this.header);
 
     // caption strip under the screen (only when some item has a caption)
     this.caption = captionCanvas();
     const cf = new THREE.PlaneGeometry(sw + fw * 2, 0.42).translate(0, 0, 0.13);
     const cb = new THREE.PlaneGeometry(sw + fw * 2, 0.42).translate(0, 0, 0.13).rotateY(Math.PI);
-    this.caption.mesh = new THREE.Mesh(mergeGeometries([cf, cb]).translate(x, y0 - fw - 0.23, z), new THREE.MeshBasicMaterial({ map: this.caption.tex, color: new THREE.Color(1.1, 1.1, 1.1) }));
+    this.caption.mesh = new THREE.Mesh(mergeGeometries([cf, cb]).translate(x, y0 - fw - 0.23, z), new THREE.MeshBasicMaterial({ map: this.caption.tex, color: new THREE.Color(1, 1, 1) }));
     this.scene.add(this.caption.mesh);
 
     // marigold garlands: round the frame, swagged along the beam, wound up the posts

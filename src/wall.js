@@ -34,10 +34,10 @@ function board(scene, world, { x, z, ry, w, h, draw, title, sub, bg }) {
   g.rotation.y = ry;
   const frame = new THREE.Mesh(new THREE.BoxGeometry(w + 0.3, h + 0.3, 0.14), std(0x3d2a1c, 0.8));
   frame.position.y = 0.9 + h / 2;
-  const face = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex, color: new THREE.Color(1.15, 1.15, 1.15) }));
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex, color: new THREE.Color(1, 1, 1) }));
   face.position.set(0, 0.9 + h / 2, 0.08);
   for (const s of [-1, 1]) g.add(beam(V(s * (w / 2 + 0.05), 0, 0), V(s * (w / 2 + 0.05), 0.95, 0), 0.07, std(0x3d2a1c)));
-  const cap = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.7, h * 0.22), new THREE.MeshBasicMaterial({ map: signTexture(title, sub, bg), color: new THREE.Color(1.2, 1.2, 1.2) }));
+  const cap = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.7, h * 0.22), new THREE.MeshBasicMaterial({ map: signTexture(title, sub, bg), color: new THREE.Color(1, 1, 1) }));
   cap.position.set(0, 0.9 + h + 0.15 + h * 0.11, 0.08);
   g.add(frame, face, cap); // the face and caption are unlit (basic), so a board needs no lamp of its own
   mergeStatic(g); // frame and legs share a look
@@ -96,7 +96,7 @@ export class Walls {
     world.colliders.push({ type: 'box', minX: wx - 0.3, maxX: wx + 0.65, minZ: z0, maxZ: z0 + len });
     const sign = new THREE.Mesh(
       new THREE.PlaneGeometry(3.2, 0.9),
-      new THREE.MeshBasicMaterial({ map: signTexture(slot('sign.deepmala'), tk('Bring a diya or kandeel and press Q here', 'Bring a diya or kandeel and tap the button here'), '#5c0a10', '#ffe7a3', 1024, 288), color: new THREE.Color(1.2, 1.2, 1.2) })
+      new THREE.MeshBasicMaterial({ map: signTexture(slot('sign.deepmala'), tk('Bring a diya or kandeel and press Q here', 'Bring a diya or kandeel and tap the button here'), '#5c0a10', '#ffe7a3', 1024, 288), color: new THREE.Color(1, 1, 1) })
     );
     sign.position.set(wx + 0.3, 2.6, z0 + len / 2);
     sign.rotation.y = Math.PI / 2;

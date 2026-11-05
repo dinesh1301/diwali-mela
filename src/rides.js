@@ -145,7 +145,7 @@ export class Carousel {
     // a sign out front
     const sign = new THREE.Mesh(
       new THREE.PlaneGeometry(3, 0.85),
-      new THREE.MeshBasicMaterial({ map: signTexture(slot('ride.carousel.sign'), tk('Press E to ride', 'Tap the button to ride'), '#6a0d2b'), color: new THREE.Color(1.2, 1.2, 1.2) })
+      new THREE.MeshBasicMaterial({ map: signTexture(slot('ride.carousel.sign'), tk('Press E to ride', 'Tap the button to ride'), '#6a0d2b'), color: new THREE.Color(1, 1, 1) })
     );
     sign.position.set(7.6, 2.2, 2.6);
     sign.rotation.y = Math.PI / 2;

@@ -281,10 +281,10 @@ function buildGate(ctx) {
       fit(title, 72, (n) => `${n}px "Yatra One", serif`, h * 0.36);
       fit(sub, 46, (n) => `600 ${n}px Poppins, sans-serif`, h * 0.76);
     });
-  const front = new THREE.Mesh(new THREE.PlaneGeometry(13, 2.1), new THREE.MeshBasicMaterial({ map: gateSign(slot('gate.title'), `✦  ${slot('gate.subtitle')}  ✦`), color: new THREE.Color(1.25, 1.25, 1.25) }));
+  const front = new THREE.Mesh(new THREE.PlaneGeometry(13, 2.1), new THREE.MeshBasicMaterial({ map: gateSign(slot('gate.title'), `✦  ${slot('gate.subtitle')}  ✦`), color: new THREE.Color(1, 1, 1) }));
   front.position.set(0, 8.6, z + 0.66);
   scene.add(front);
-  const back = new THREE.Mesh(new THREE.PlaneGeometry(13, 2.1), new THREE.MeshBasicMaterial({ map: gateSign('फिर मिलेंगे!', slot('gate.back')), color: new THREE.Color(1.25, 1.25, 1.25) }));
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(13, 2.1), new THREE.MeshBasicMaterial({ map: gateSign('फिर मिलेंगे!', slot('gate.back')), color: new THREE.Color(1, 1, 1) }));
   back.position.set(0, 8.6, z - 0.66);
   back.rotation.y = Math.PI;
   scene.add(back);
@@ -517,7 +517,7 @@ function buildFireworksField(ctx) {
 
   const sign = new THREE.Mesh(
     new THREE.PlaneGeometry(3.8, 1.05),
-    new THREE.MeshBasicMaterial({ map: signTexture(slot('sign.fireworks'), slot('sign.fireworks.sub'), '#4a0d0d'), color: new THREE.Color(1.2, 1.2, 1.2) })
+    new THREE.MeshBasicMaterial({ map: signTexture(slot('sign.fireworks'), slot('sign.fireworks.sub'), '#4a0d0d'), color: new THREE.Color(1, 1, 1) })
   );
   sign.position.set(c.x, 1.9, c.z + half + 0.4);
   scene.add(sign);
@@ -601,7 +601,7 @@ function buildGhat(ctx) {
   for (let i = 0; i < 160; i++) floating.add(rand(-50, 50), -1.33, rand(-53, -95));
 
   // the ghat's own signboard at the top of the steps, west of the walkway (the boat jetty's is east)
-  const gs = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 0.9), new THREE.MeshBasicMaterial({ map: signTexture(slot('sign.ghat'), slot('sign.ghat.sub'), '#13306b'), color: new THREE.Color(1.2, 1.2, 1.2), side: THREE.DoubleSide }));
+  const gs = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 0.9), new THREE.MeshBasicMaterial({ map: signTexture(slot('sign.ghat'), slot('sign.ghat.sub'), '#13306b'), color: new THREE.Color(1, 1, 1), side: THREE.DoubleSide }));
   gs.position.set(-10, 2.3, -43.3);
   scene.add(gs);
   for (const dx of [-1.45, 1.45]) {

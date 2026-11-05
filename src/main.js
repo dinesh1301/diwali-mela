@@ -276,7 +276,7 @@ async function init() {
   renderer.setSize(viewW0(), viewH0());
   renderer.setClearColor(0x000000, 0);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.18; // a bright festival night (the bloom threshold is set before this)
+  renderer.toneMappingExposure = 1.08; // a warm festival night that keeps signs, posters and faces readable (bloom is thresholded before this)
   renderer.shadowMap.enabled = !low;
   renderer.shadowMap.type = THREE.PCFShadowMap;
   document.getElementById('app').appendChild(renderer.domElement);
@@ -331,7 +331,9 @@ async function init() {
 
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(viewW0(), viewH0()), 0.85, 0.55, 0.82); // sized in resize()
+  // threshold just above 1.0: lamps, bulbs and fireworks (hdr() > 1) glow, while signs, posters and
+  // faces (drawn at <= 1.0) stay crisp instead of blooming to milk; sized in resize()
+  const bloom = new UnrealBloomPass(new THREE.Vector2(viewW0(), viewH0()), 0.7, 0.45, 1.05);
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
 

@@ -137,14 +137,14 @@ function boatModel() {
   lantern.scale.setScalar(0.55);
   lantern.position.set(0, 1.58, 1.0);
   g.add(lantern);
-  const glow = new THREE.PointLight(0xffb060, 10, 7, 2);
+  const glow = new THREE.PointLight(0xffb060, 6, 7, 2); // soft: the rower's face and shirt must not blow out
   glow.position.set(0, 1.1, 0.9);
   g.add(glow);
   const bowDiya = diyaMesh();
   bowDiya.scale.setScalar(1.4);
   bowDiya.position.set(0, 0.02, 2.3);
   g.add(bowDiya);
-  const bulbMat = new THREE.MeshBasicMaterial({ color: hdr(0xffd08a, 3) });
+  const bulbMat = new THREE.MeshBasicMaterial({ color: hdr(0xffd08a, 2) });
   for (let i = 0; i < 10; i++) {
     const b = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6), bulbMat);
     b.position.set(-0.9 + i * 0.2, 1.52, 1.12);
@@ -170,7 +170,7 @@ function boatModel() {
   seat.position.set(0, -0.55, 1.6);
   seat.rotation.y = Math.PI;
   g.add(seat);
-  const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.24), new THREE.MeshBasicMaterial({ map: signTexture(slot('ride.boat.name'), null, '#13306b'), transparent: true, color: new THREE.Color(1.2, 1.2, 1.2) }));
+  const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.24), new THREE.MeshBasicMaterial({ map: signTexture(slot('ride.boat.name'), null, '#13306b'), transparent: true, color: new THREE.Color(1, 1, 1) }));
   plate.position.set(0.97, -0.12, -1.2);
   plate.rotation.y = Math.PI / 2;
   g.add(plate);
@@ -320,7 +320,7 @@ export class BoatRide {
     }
     const sign = new THREE.Mesh(
       new THREE.PlaneGeometry(2.6, 0.73),
-      new THREE.MeshBasicMaterial({ map: signTexture(slot('ride.boat.sign'), tk('Row a boat · press E at the jetty', 'Row a boat · tap the button at the jetty'), '#13306b'), color: new THREE.Color(1.2, 1.2, 1.2), side: THREE.DoubleSide })
+      new THREE.MeshBasicMaterial({ map: signTexture(slot('ride.boat.sign'), tk('Row a boat · press E at the jetty', 'Row a boat · tap the button at the jetty'), '#13306b'), color: new THREE.Color(1, 1, 1), side: THREE.DoubleSide })
     );
     sign.position.set(x + 2.6, 2.2, -43.4);
     scene.add(sign);

@@ -41,7 +41,7 @@ function decal(text, sub, bg) {
 }
 
 function decalPlane(tex, w, h) {
-  return new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex, transparent: true, color: new THREE.Color(1.15, 1.15, 1.15) }));
+  return new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex, transparent: true, color: new THREE.Color(1, 1, 1) }));
 }
 
 // ---------- Chakri Racer (car) ----------

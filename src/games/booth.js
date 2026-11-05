@@ -42,7 +42,7 @@ export function buildBooth(ctx, lights, { z, title, sub, c1, c2, sign, rail = tr
   // an open-top booth (the strongman tower) keeps its sign off to one side so the tower stays in view
   const signMesh = new THREE.Mesh(
     new THREE.PlaneGeometry(roof ? 4.4 : 3.0, roof ? 1.15 : 0.8),
-    new THREE.MeshBasicMaterial({ map: signTexture(title, sub, sign), color: new THREE.Color(1.2, 1.2, 1.2) })
+    new THREE.MeshBasicMaterial({ map: signTexture(title, sub, sign), color: new THREE.Color(1, 1, 1) })
   );
   add(signMesh, roof ? 0 : -W / 2 + 1.75, roof ? H + 0.62 : H + 0.45, D / 2 + 0.32);
   if (!roof) {

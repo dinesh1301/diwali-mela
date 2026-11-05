@@ -90,7 +90,7 @@ export class FerrisWheel {
       ctx.fill();
     });
     for (const s of [-1, 1]) {
-      const disc = new THREE.Mesh(new THREE.CircleGeometry(1.35, 32), new THREE.MeshBasicMaterial({ map: sunTex, color: new THREE.Color(1.6, 1.6, 1.6) }));
+      const disc = new THREE.Mesh(new THREE.CircleGeometry(1.35, 32), new THREE.MeshBasicMaterial({ map: sunTex, color: new THREE.Color(1.15, 1.15, 1.15) }));
       disc.position.z = s * (HALF + 0.16);
       if (s < 0) disc.rotation.y = Math.PI;
       this.wheel.add(disc);
@@ -193,7 +193,7 @@ export class FerrisWheel {
     this.group.add(booth);
     const sign = new THREE.Mesh(
       new THREE.PlaneGeometry(3.4, 0.95),
-      new THREE.MeshBasicMaterial({ map: signTexture(slot('ride.wheel.sign'), tk('Press R or tap Ride Wheel', 'Walk to the steps and tap the button'), '#6a0d2b'), color: new THREE.Color(1.2, 1.2, 1.2) })
+      new THREE.MeshBasicMaterial({ map: signTexture(slot('ride.wheel.sign'), tk('Press R or tap Ride Wheel', 'Walk to the steps and tap the button'), '#6a0d2b'), color: new THREE.Color(1, 1, 1) })
     );
     sign.position.set(5.5, 2.95, 5.92);
     this.group.add(sign);

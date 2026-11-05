@@ -333,7 +333,7 @@ export function createStall(def, goodsFn = null) {
 
   const sign = new THREE.Mesh(
     new THREE.PlaneGeometry(3.6, 1.0),
-    new THREE.MeshBasicMaterial({ map: signTexture(def.name, def.sub, def.sign), color: new THREE.Color(1.2, 1.2, 1.2) })
+    new THREE.MeshBasicMaterial({ map: signTexture(def.name, def.sub, def.sign), color: new THREE.Color(1, 1, 1) })
   );
   sign.position.set(0, H + 0.55, D / 2 + 0.3);
   g.add(sign);

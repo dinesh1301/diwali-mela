@@ -11,7 +11,7 @@ const V = (x, y, z) => new THREE.Vector3(x, y, z);
 function sign(scene, title, sub, bg, x, y, z, ry, w = 4.2) {
   const wide = sub && sub.length > 34;
   const tex = signTexture(title, sub, bg, '#ffe7a3', wide ? 1024 : 512, wide ? 288 : 144);
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, w * 0.28), new THREE.MeshBasicMaterial({ map: tex, color: new THREE.Color(1.2, 1.2, 1.2), side: THREE.DoubleSide }));
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, w * 0.28), new THREE.MeshBasicMaterial({ map: tex, color: new THREE.Color(1, 1, 1), side: THREE.DoubleSide }));
   m.position.set(x, y, z);
   m.rotation.y = ry;
   scene.add(m);

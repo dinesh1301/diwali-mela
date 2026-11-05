@@ -440,7 +440,7 @@ export const SHOTS = {
         return { f: 0.85, s: Math.max(-1, Math.min(1, -off * 2.5)) };
       };
       state.b = b;
-      fill(b.group, [0, 2.4, 0], 9, 7);
+      fill(b.group, [0, 2.4, 0], 3, 7);
       // a few wish lanterns already drifting up over the water
       for (let i = 0; i < 6; i++) {
         const p = new THREE.Vector3(10 + i * 4 - 6, 1, -64 - (i % 3) * 3);
