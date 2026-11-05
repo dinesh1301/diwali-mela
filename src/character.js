@@ -579,7 +579,7 @@ export class Character {
       gz.t = 1.8 + Math.random() * 3.5;
       const look = Math.random() < 0.65;
       gz.y = look ? (Math.random() - 0.5) * 1.1 : 0;
-      gz.x = look ? (Math.random() - 0.6) * 0.25 : 0;
+      gz.x = look ? (Math.random() - 0.55) * 0.2 : 0; // mostly level, now and then up at the lights
     }
 
     const T = Object.assign(this._T, DEFAULTS);

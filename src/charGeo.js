@@ -693,9 +693,10 @@ export function buildPerson(L, { low = false, split = false } = {}) {
       seg: S(10, 6),
       color: (x, y) => (style === 'salwar' && y < ly - 0.84 ? accent : legC),
       weight: (x, y) => {
-        const w = legBones(y, side);
+        // all three leg bones: the hem ring sits below the ankle, so dropping the ankle's share left
+        // it with no weight at all, and it collapsed to the root (a web to the ground between the feet)
         const tt = 0.45 * smooth(ly - 0.02, ly + 0.08, y);
-        return [[w[0][0], w[0][1] * (1 - tt)], [w[1][0], w[1][1] * (1 - tt)], [BONE.hips, tt]].filter((p) => p[1] > 1e-4);
+        return [...legBones(y, side).map(([b, v]) => [b, v * (1 - tt)]), [BONE.hips, tt]].filter((p) => p[1] > 1e-4);
       },
     });
     // shoes: mojari / juttis with a curled toe for festive wear, rounder trainers for casual
