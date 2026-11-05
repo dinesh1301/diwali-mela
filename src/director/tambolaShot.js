@@ -18,7 +18,7 @@ const CALLS = [0.35, 1.45, 2.55];
 const CLAIM = 3.0;
 const NAMES = ['Priya', 'Aarav', 'Meera', 'Kabir', 'Riya', 'Ishaan', 'Sana'];
 /** [from, to] seconds of each chat bubble. */
-const HELLO = [0.45, 2.1];
+const HELLO = [0.4, 1.75]; // gone before the push-in carries the greeter off the left edge
 const FULL = [CLAIM + 0.1, 4.2];
 /** Screen-relative sizes (sizeAttenuation off: about a fraction of the frame height). */
 const TAG_H = 0.046;
