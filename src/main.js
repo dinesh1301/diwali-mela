@@ -52,6 +52,7 @@ import { startDirector, directorParams } from './director/director.js';
 import { loadCreatorConfig, applyCreator, personaliseIntro, stallIndexFor, ramleelaBoard } from './creatorStage.js';
 import { setMelaSlots, slot, melaReport } from './personalSlots.js';
 import { Billboard } from './billboard.js';
+import { createShare } from './share.js';
 
 // zone toasts: the line itself is a personal slot (zone.<id>); a controls hint, when there is one, is added after it
 const ZONES = [
@@ -387,6 +388,7 @@ async function init() {
     ramayan.start();
     net.connect();
     if (profile.handle) profile.fetchTopmate();
+    share?.entered();
     track('enter', { name: profile.name, handle: profile.handle, at_ms: sinceLoad() });
     const welcome = () =>
       ui.toast(
@@ -512,6 +514,8 @@ async function init() {
     },
   };
   const ui = createUI(handlers);
+  // a creator's mela gets the Share pill (not trailer captures); the trailer's sound hushes the mela's
+  const share = director ? null : createShare({ cfg, ui, onTrailerSound: (on) => audio.setMuted(on || muted) });
   ui.setMusic(musicOn);
   const passport = new Passport(ui, audio);
   Object.assign(ctx, { ui, passport });
@@ -867,7 +871,8 @@ async function init() {
     if (!params.has('noyt')) ramayan.start();
     if (!params.has('nonet')) net.connect();
     if (!director) ui.showCoach();
-    window.__mela = { ...ctx, creator, mela: melaReport(), billboard, games, rides, crowd, vehicles, ramayan, poster, customizer, nameTag, boat, train, ravan, tambola, walls, dayNight, scenes, decor, voice, lightPool, governor, get gov() { return { ...governor.state, gpu: settings.gpu, midGpu: settings.midGpu }; } }; // for automated checks
+    share?.entered();
+    window.__mela = { share, ...ctx, creator, mela: melaReport(), billboard, games, rides, crowd, vehicles, ramayan, poster, customizer, nameTag, boat, train, ravan, tambola, walls, dayNight, scenes, decor, voice, lightPool, governor, get gov() { return { ...governor.state, gpu: settings.gpu, midGpu: settings.midGpu }; } }; // for automated checks
   } else {
     customizer.open('intro');
   }

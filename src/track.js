@@ -81,8 +81,13 @@ export function initTrack({ room, slug }) {
   addEventListener('unhandledrejection', (e) => trackError(String(e.reason?.message ?? e.reason), 'promise', e.reason?.stack));
 }
 
+const typeHooks = [];
+/** fn() runs whenever track(<one of types>) is called, even with tracking off (UI nudges, not analytics). */
+export const onTrackType = (types, fn) => typeHooks.push([types, fn]);
+
 /** Queues 'mela.<type>' with props (small, JSON-safe). */
 export function track(type, props) {
+  for (let i = 0; i < typeHooks.length; i++) if (typeHooks[i][0].includes(type)) typeHooks[i][1]();
   if (!on) return;
   q.push({ type: `mela.${type}`, ts: Date.now(), ...base, props: props ?? {} });
   if (q.length > MAX_QUEUE) q.splice(0, q.length - MAX_QUEUE);

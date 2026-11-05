@@ -2586,3 +2586,560 @@ body.touch #toast {
   color: rgba(255, 242, 214, 0.72);
   text-align: center;
 }
+
+/* ---------- Share: the pill in the header and its popup (src/share.js) ---------- */
+
+/* desktop and phone landscape: under the header's icons, top right */
+.share-pill {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 46px;
+  padding: 0 18px 0 14px;
+  border: 0;
+  border-radius: 999px;
+  color: #3a1410;
+  background: linear-gradient(180deg, #ffd25a 0%, #f6a21e 55%, #e48a10 100%);
+  box-shadow: 0 3px 0 #b4470a, 0 6px 16px rgba(238, 122, 27, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  font: 700 15px 'Poppins', sans-serif;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.share-pill svg {
+  width: 20px;
+  height: 20px;
+}
+
+.share-pill:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #b4470a, 0 3px 8px rgba(238, 122, 27, 0.4);
+}
+
+.share-pill:focus-visible {
+  outline: 3px solid #fff3c4;
+  outline-offset: 2px;
+}
+
+.share-pill::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border: 3px solid #ffd25a;
+  border-radius: inherit;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* the nudge: three beats, then still (only transform/opacity: no layout) */
+.share-pill.nudge {
+  animation: shareNudge 0.9s ease-in-out 3;
+}
+
+.share-pill.nudge::after {
+  animation: shareRing 0.9s ease-out 3;
+}
+
+@keyframes shareNudge {
+  0%, 100% { transform: scale(1); }
+  30% { transform: scale(1.12) rotate(-3deg); }
+  60% { transform: scale(0.97); }
+}
+
+@keyframes shareRing {
+  from { opacity: 0.9; transform: scale(1); }
+  to { opacity: 0; transform: scale(1.35, 1.6); }
+}
+
+body.has-share #stampToast {
+  top: calc(124px + env(safe-area-inset-top));
+}
+
+body.touch.in-booth .share-pill {
+  display: none;
+}
+
+/* phone portrait: in the header, at the end of the places strip (which scrolls anyway) */
+@media (max-width: 760px) {
+  body.has-share #places {
+    flex: 1 1 calc(100% - 124px);
+    width: auto;
+    min-width: 0;
+  }
+
+  .share-pill {
+    position: relative;
+    top: auto;
+    right: auto;
+    order: 4;
+    flex: none;
+    height: 50px;
+    padding: 0 16px 0 13px;
+  }
+
+  body.has-share #stampToast {
+    top: calc(122px + env(safe-area-inset-top));
+  }
+}
+
+/* phone landscape: one header row, so back to the top-right corner under the icons */
+@media (max-height: 500px) and (orientation: landscape) {
+  body.has-share #places {
+    flex: 1 1 auto;
+  }
+
+  .share-pill {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    order: 0;
+    height: 44px;
+  }
+
+  body.has-share #stampToast {
+    top: calc(110px + env(safe-area-inset-top));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .share-pill.nudge,
+  .share-pill.nudge::after {
+    animation: none;
+  }
+}
+
+/* the popup: the trailer page's painted signboard (same paper, frame, fonts and colours) */
+.share-pop {
+  --sp-paper: #f4e4c1;
+  --sp-ink: #3a1410;
+  --sp-ink-soft: #6b3a2a;
+  --sp-maroon: #5a1218;
+  --sp-sindoor: #c2301f;
+  --sp-marigold: #f6a21e;
+  --sp-diya: #ffe3a1;
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  display: grid;
+  place-items: center;
+  padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+  background: rgba(10, 3, 8, 0.74);
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.share-pop [hidden] {
+  display: none !important;
+}
+
+.sp-card {
+  position: relative;
+  width: min(430px, 100%);
+  max-height: calc(100vh - 20px);
+  max-height: calc(100dvh - 20px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 18px 16px 16px;
+  border: 6px solid var(--sp-sindoor);
+  border-radius: 12px;
+  background: var(--sp-paper) url('/web/paper.webp') center / cover no-repeat;
+  box-shadow: inset 0 0 0 2px var(--sp-marigold), inset 0 0 0 7px var(--sp-paper), inset 0 0 0 8.5px rgba(194, 48, 31, 0.55), 0 24px 50px rgba(0, 0, 0, 0.55);
+  color: var(--sp-ink);
+  font: 400 15px/1.45 'Poppins', sans-serif;
+  animation: spHang 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+@keyframes spHang {
+  from { opacity: 0; transform: translateY(14px) rotate(-1deg); }
+}
+
+.share-pop.loading .sp-main {
+  visibility: hidden;
+}
+
+.share-pop.loading .sp-card {
+  min-height: 220px;
+}
+
+.sp-close {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  float: right;
+  width: 44px;
+  height: 44px;
+  margin: -10px -8px 0 6px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--sp-maroon);
+  color: var(--sp-diya);
+  font-size: 18px;
+  box-shadow: 0 2px 0 #2a0d14;
+}
+
+.sp-kicker {
+  margin: 4px 0 4px;
+  font: 600 11.5px/1.2 'Poppins', sans-serif;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--sp-sindoor);
+  text-align: center;
+}
+
+.sp-sign {
+  margin: 0 0 6px;
+  font: 400 clamp(26px, 7.4vw, 34px)/1.12 'Yatra One', serif;
+  color: var(--sp-maroon);
+  text-align: center;
+  text-shadow: 2px 2px 0 rgba(246, 162, 30, 0.55);
+  text-wrap: balance;
+}
+
+.sp-lede {
+  margin: 0 0 4px;
+  color: var(--sp-ink-soft);
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: center;
+  text-wrap: balance;
+}
+
+.sp-player {
+  position: relative;
+  height: min(30vh, 300px);
+  height: min(30dvh, 300px);
+  aspect-ratio: 9 / 16;
+  margin: 10px auto 12px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #000;
+  box-shadow: 0 0 0 3px var(--sp-sindoor), 0 0 0 6px var(--sp-marigold), 0 12px 26px rgba(58, 20, 16, 0.45);
+}
+
+.share-pop:not(.owner) .sp-player {
+  height: min(25vh, 250px);
+  height: min(25dvh, 250px);
+}
+
+.sp-player video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #000;
+}
+
+.sp-sound {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  min-height: 34px;
+  padding: 4px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(20, 7, 10, 0.72);
+  color: #fff;
+  font: 600 12px 'Poppins', sans-serif;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+.sp-sound.on {
+  opacity: 0.75;
+}
+
+.sp-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 56px;
+  padding: 10px 18px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  font: 700 17px 'Poppins', sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sp-btn > :not(.sp-prog) {
+  position: relative;
+  z-index: 1;
+}
+
+.sp-btn svg {
+  width: 22px;
+  height: 22px;
+}
+
+.sp-btn:active {
+  transform: translateY(2px);
+}
+
+.sp-native {
+  color: var(--sp-ink);
+  background: linear-gradient(180deg, #ffd25a 0%, var(--sp-marigold) 55%, #e48a10 100%);
+  box-shadow: 0 3px 0 #b4470a, 0 10px 22px rgba(238, 122, 27, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.sp-native[disabled] {
+  filter: saturate(0.8);
+}
+
+.sp-prog {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.5));
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  transition: transform 0.2s linear;
+}
+
+.sp-ch {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.sp-ch button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 52px;
+  padding: 5px 2px;
+  border: 0;
+  border-radius: 14px;
+  color: #fff;
+  font: 600 11.5px/1.1 'Poppins', sans-serif;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.25);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sp-ch button:active {
+  transform: translateY(2px);
+}
+
+.sp-ch svg {
+  width: 22px;
+  height: 22px;
+}
+
+.sp-ch .c-wa { background: #1fa855; }
+.sp-ch .c-ig { background: linear-gradient(45deg, #f9a43a, #e1306c 50%, #833ab4); }
+.sp-ch .c-li { background: #0a66c2; }
+.sp-ch .c-x { background: #111; }
+.sp-ch .c-copy { background: var(--sp-maroon); }
+.sp-ch .c-dl { background: var(--sp-sindoor); }
+
+.sp-link {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.sp-url {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  padding: 10px 12px;
+  border: 1.5px dashed rgba(194, 48, 31, 0.45);
+  border-radius: 10px;
+  background: #fffaf0;
+  color: var(--sp-sindoor);
+  font: 600 14px 'Poppins', sans-serif;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sp-link button {
+  min-height: 44px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--sp-maroon);
+  color: var(--sp-diya);
+  font: 600 14px 'Poppins', sans-serif;
+  box-shadow: 0 2px 0 #2a0d14;
+}
+
+.sp-toast {
+  min-height: 0;
+  margin: 8px 2px 0;
+  color: #2f6b2a;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.sp-toast:empty {
+  margin: 0;
+}
+
+.sp-own {
+  margin-top: 14px;
+  padding: 14px;
+  border: 2px solid var(--sp-marigold);
+  border-radius: 14px;
+  background: rgba(255, 250, 240, 0.8);
+  box-shadow: 0 0 0 3px rgba(194, 48, 31, 0.18);
+}
+
+.sp-own-txt b {
+  display: block;
+  font: 400 21px/1.15 'Yatra One', serif;
+  color: var(--sp-maroon);
+}
+
+.sp-own-txt span {
+  display: block;
+  margin: 3px 0 10px;
+  color: var(--sp-ink-soft);
+  font-size: 13.5px;
+}
+
+.sp-own-btn {
+  min-height: 52px;
+  color: var(--sp-diya);
+  background: linear-gradient(180deg, var(--sp-sindoor), #9e2412);
+  box-shadow: 0 3px 0 #6e1508, 0 8px 18px rgba(194, 48, 31, 0.3);
+  font-size: 16px;
+}
+
+/* the generator inside the popup */
+.share-pop.gen .sp-card {
+  display: flex;
+  flex-direction: column;
+  width: min(500px, 100%);
+  height: calc(100vh - 20px);
+  height: calc(100dvh - 20px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  max-height: none;
+  padding: 0;
+  overflow: hidden;
+}
+
+.share-pop.gen .sp-close {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  float: none;
+  margin: 0;
+}
+
+.sp-gen {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.sp-genbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 4px 56px 4px 6px;
+  background: var(--sp-maroon);
+  color: var(--sp-diya);
+  font: 400 18px 'Yatra One', serif;
+}
+
+.sp-back {
+  min-height: 44px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 227, 161, 0.14);
+  color: var(--sp-diya);
+  font: 600 14px 'Poppins', sans-serif;
+}
+
+.sp-frame {
+  flex: 1;
+  min-height: 0;
+  background: #14070a;
+}
+
+.sp-frame iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+/* phones on their side: the trailer stands on the left, everything else beside it */
+@media (max-height: 500px) and (orientation: landscape) {
+  .sp-card {
+    width: min(720px, 100%);
+    padding: 12px 16px 12px;
+  }
+
+  .sp-main {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 18px;
+  }
+
+  .sp-main > *,
+  .sp-body > * {
+    grid-column: 2;
+  }
+
+  .sp-body {
+    display: contents;
+  }
+
+  .sp-main > .sp-kicker {
+    margin-top: 2px;
+  }
+
+  .sp-sign {
+    font-size: 26px;
+  }
+
+  .sp-player,
+  .share-pop:not(.owner) .sp-player {
+    grid-column: 1;
+    grid-row: 1 / span 6;
+    align-self: start;
+    height: min(calc(100vh - 60px), 330px);
+    height: min(calc(100dvh - 60px), 330px);
+    margin: 4px 0;
+  }
+
+  /* three a row, icon beside the label: six labels never fit one row of a 568px-wide phone */
+  .sp-ch button {
+    flex-direction: row;
+    gap: 6px;
+    min-height: 44px;
+    font-size: 12px;
+  }
+
+  .sp-ch svg {
+    width: 19px;
+    height: 19px;
+    flex: none;
+  }
+
+  .sp-ch {
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .sp-btn {
+    min-height: 50px;
+  }
+
+  .share-pop.gen .sp-card {
+    width: min(760px, 100%);
+  }
+}
