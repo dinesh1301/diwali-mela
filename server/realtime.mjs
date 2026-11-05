@@ -14,6 +14,11 @@
   token-bucket rate limit per socket (plus cooldowns on lanterns/bubbles/looks/scores) and
   sanitised names, wishes and looks.
 
+  Analytics: an optional onEvent(type, data) hook hears connects, joins, names, waves, bubbles,
+  lanterns, scores, rejections and disconnects (with how long and how many messages were dropped);
+  metaOf(req) is called once per upgrade and its result is handed back as data.meta. Both are
+  wrapped so a throwing hook never breaks the hub, and nothing is called per position update.
+
   Each room's scores and wishes persist as <dataDir>/<room>.json (debounced, atomic writes); empty
   rooms are flushed and dropped from memory after a minute.
 
@@ -135,6 +140,8 @@ function defaultIpOf(req) {
  *   roomFile    (room) => path, to override the file layout (e.g. a legacy data.json for 'public')
  *   allowRoom   (room) => boolean; a room it refuses falls back to 'public' (e.g. unknown slugs)
  *   ipOf        (req) => client address for the per-IP cap
+ *   onEvent     (type, data) => void, analytics hook (see the header)
+ *   metaOf      (req) => any, per-connection context passed back as data.meta
  */
 export function createRealtime(opts = {}) {
   const o = { ...DEFAULTS, ...opts };
@@ -142,6 +149,23 @@ export function createRealtime(opts = {}) {
   const allowRoom = o.allowRoom ?? (() => true);
   const ipOf = o.ipOf ?? defaultIpOf;
   const log = o.log ?? ((m) => console.log(`[mela] ${m}`));
+  const onEvent = o.onEvent ?? null;
+  const emit = (type, data) => {
+    if (!onEvent) return;
+    try {
+      onEvent(type, data);
+    } catch (e) {
+      log(`onEvent ${type} threw: ${e?.message ?? e}`);
+    }
+  };
+  const metaOf = (req) => {
+    if (!onEvent || !o.metaOf) return null;
+    try {
+      return o.metaOf(req) ?? null;
+    } catch {
+      return null;
+    }
+  };
   const rooms = new Map(); // name -> room
   const perIp = new Map(); // ip -> open sockets
   let nextId = 1;
@@ -263,7 +287,10 @@ export function createRealtime(opts = {}) {
     }
     if (!m || typeof m !== 'object') return;
     const kind = Array.isArray(m) ? m[0] : m.t;
-    if (!cooled(c, kind, now)) return;
+    if (!cooled(c, kind, now)) {
+      c.cooled++;
+      return;
+    }
     switch (kind) {
       case 'hello':
         if (c.greeted) return; // one hello per socket
@@ -271,6 +298,8 @@ export function createRealtime(opts = {}) {
         c.name = clean(m.name, 24) || 'Visitor';
         c.handle = cleanHandle(m.handle);
         c.look = cleanLook(m.look);
+        emit('join', { room: room.name, id, meta: c.meta, name: c.name, handle: c.handle, online: room.clients.size });
+        if (c.name !== 'Visitor') emit('name', { room: room.name, id, meta: c.meta, name: c.name, handle: c.handle });
         send(c.ws, {
           t: 'welcome',
           id,
@@ -293,8 +322,10 @@ export function createRealtime(opts = {}) {
       }
       case 'look': {
         c.look = cleanLook(m.look) ?? c.look;
+        const was = c.name;
         c.name = clean(m.name, 24) || c.name;
         c.handle = cleanHandle(m.handle);
+        if (c.name !== was) emit('name', { room: room.name, id, meta: c.meta, name: c.name, handle: c.handle });
         const out = () => {
           c.lookTimer = null;
           c.last.look = Date.now();
@@ -307,12 +338,18 @@ export function createRealtime(opts = {}) {
       }
       case 'wave': {
         const to = room.clients.get(+m.to);
-        if (to && +m.to !== id && cooled(c, `wave${m.to}`, now)) send(to.ws, { t: 'wave', from: id, n: c.name });
+        if (to && +m.to !== id && cooled(c, `wave${m.to}`, now)) {
+          send(to.ws, { t: 'wave', from: id, n: c.name });
+          emit('wave', { room: room.name, id, meta: c.meta, to: +m.to, toMeta: to.meta });
+        }
         break;
       }
       case 'bubble': {
         const text = clean(m.text, 60);
-        if (text) broadcast(room, { t: 'bubble', id, text }, id);
+        if (text) {
+          broadcast(room, { t: 'bubble', id, text }, id);
+          emit('bubble', { room: room.name, id, meta: c.meta, name: c.name, handle: c.handle, text });
+        }
         break;
       }
       case 'lantern': {
@@ -323,6 +360,7 @@ export function createRealtime(opts = {}) {
         if (room.store.wishes.length > MAX_WISHES) room.store.wishes.splice(0, room.store.wishes.length - MAX_WISHES);
         saveSoon(room);
         broadcast(room, { t: 'wish', w });
+        emit('lantern', { room: room.name, id, meta: c.meta, name: c.name, handle: c.handle, text });
         break;
       }
       case 'rtc': {
@@ -336,9 +374,14 @@ export function createRealtime(opts = {}) {
         c.mic = !!m.on;
         broadcast(room, { t: 'mic', id, on: c.mic }, id);
         break;
-      case 'score':
-        if (recordScore(room, clean(m.kind, 16), num(m.value, 0, 1e9), c.name, c.handle)) broadcast(room, { t: 'boards', boards: room.store.boards });
+      case 'score': {
+        const k = clean(m.kind, 16);
+        const value = num(m.value, 0, 1e9);
+        const best = recordScore(room, k, value, c.name, c.handle);
+        if (best) broadcast(room, { t: 'boards', boards: room.store.boards });
+        if (k in BOARDS) emit('score', { room: room.name, id, meta: c.meta, name: c.name, handle: c.handle, kind: k, value, best });
         break;
+      }
     }
   }
 
@@ -360,10 +403,15 @@ export function createRealtime(opts = {}) {
     let name = roomName(url.searchParams.get('room'));
     if (name !== PUBLIC_ROOM && !allowRoom(name)) name = PUBLIC_ROOM;
     const ip = ipOf(req);
-    if ((perIp.get(ip) || 0) >= o.maxPerIp) return refuse(socket, 429, 'Too many connections');
-    if (clientCount >= o.maxClients) return refuse(socket, 503, 'Mela is full');
+    const meta = metaOf(req);
+    const reject = (reason, status, text) => {
+      emit('reject', { room: name, meta, reason });
+      refuse(socket, status, text);
+    };
+    if ((perIp.get(ip) || 0) >= o.maxPerIp) return reject('ip_limit', 429, 'Too many connections');
+    if (clientCount >= o.maxClients) return reject('server_full', 503, 'Mela is full');
     const room = getRoom(name);
-    if (!room) return refuse(socket, 503, 'Mela is full');
+    if (!room) return reject('rooms_full', 503, 'Mela is full');
     perIp.set(ip, (perIp.get(ip) || 0) + 1);
     clientCount++;
     let released = false;
@@ -381,20 +429,22 @@ export function createRealtime(opts = {}) {
         // the client opened, so it backs off and retries; it gets in once someone leaves
         send(ws, { t: 'full', room: name });
         ws.close(4001, 'room full');
+        emit('reject', { room: name, meta, reason: 'room_full' });
         return;
       }
       // the room may have been evicted (or re-created) while the handshake ran
       let r = rooms.get(name);
       if (!r) rooms.set(name, (r = room));
-      admit(r, ws);
+      admit(r, ws, meta);
     });
   }
 
-  function admit(room, ws) {
+  function admit(room, ws, meta = null) {
     const id = nextId++;
     const now = Date.now();
-    const c = { ws, state: null, dirty: false, sentAt: 0, behind: false, name: 'Visitor', handle: '', look: null, mic: false, seenAt: now, alive: true, greeted: false, tokens: RATE_BURST, tokenAt: now, drops: 0, last: {} };
+    const c = { ws, meta, joinedAt: now, state: null, dirty: false, sentAt: 0, behind: false, name: 'Visitor', handle: '', look: null, mic: false, seenAt: now, alive: true, greeted: false, tokens: RATE_BURST, tokenAt: now, drops: 0, cooled: 0, last: {} };
     room.clients.set(id, c);
+    emit('connect', { room: room.name, id, meta, online: room.clients.size });
     ws.on('pong', () => (c.alive = true));
     ws.on('message', (raw) => handleMessage(room, id, c, raw));
     ws.on('close', () => {
@@ -402,6 +452,7 @@ export function createRealtime(opts = {}) {
       if (!room.clients.delete(id)) return;
       if (!room.clients.size) room.emptySince = Date.now();
       broadcast(room, { t: 'leave', id });
+      emit('disconnect', { room: room.name, id, meta: c.meta, name: c.name, ms: Date.now() - c.joinedAt, online: room.clients.size, drops: c.drops, cooled: c.cooled, flood: c.drops > MAX_DROPS });
     });
     ws.on('error', () => {});
   }
