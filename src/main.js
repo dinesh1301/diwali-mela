@@ -552,14 +552,19 @@ async function init() {
   const decor = buildDecor(ctx);
   await loading();
   const vehicles = new Vehicles(ctx);
-  net.vehicleCode = (e) => vehicles.netCode(e); // at the wheel: tell the others which vehicle, and its tilt
-  net.makeVehicle = (key) => vehicles.remoteModel(key); // and draw theirs around them
+  net.makeVehicle = (key) => vehicles.remoteModel(key); // draw other visitors' cars, helis and planes around them
+  net.ownVehicle = () => vehicles.active;
   const poster = new Poster(ctx);
   const extraLights = new StringLights(scene);
   const walls = new Walls(ctx);
   ctx.walls = walls;
   walls.claimFrom(shops.placed);
   const train = new Train(ctx, extraLights);
+  // seated in a vehicle or on a ride: tell the others which one (vehicles: and its tilt; rides: which
+  // seat, since every visitor's wheel, carousel and train run on their own clock), and seat theirs here
+  net.vehicleCode = (e) => vehicles.netCode(e) ?? rides.netCode() ?? (train.riding && player.char.root.parent === train.seat ? 't' : null);
+  const trainSeat = { obj: train.seat, local: new THREE.Vector3() };
+  net.rideSeat = (code) => (code === 't' ? trainSeat : rides.remoteSeat(code));
   const ravan = new Ravan(ctx);
   const tambola = new Tambola(ctx, extraLights, { low });
   const scenes = low ? null : new CrowdScenes(ctx);

@@ -706,7 +706,7 @@ export class Vehicles {
     }
     setLayer(group, 1);
     group.visible = false;
-    return { group, seat: spec.seat, spin, axis: spec.spin?.axis ?? null, key };
+    return { group, seat: spec.seat, spin, axis: spec.spin?.axis ?? null, key, twin: spec.twin, twinKids: spec.twinKids };
   }
 
   buildRemote(key) {
@@ -742,6 +742,11 @@ export class Vehicles {
     const blades = spinPart?.children.find((c) => c.isMesh && c.material === vehicleMaterial);
     return {
       body,
+      // our own copy of this vehicle: while theirs sits on top of it (they just got in where it is
+      // parked), net.js hides ours so the two do not z-fight. Lights stay put (a light that comes
+      // and goes recompiles every shader).
+      twin: v,
+      twinKids: v.group.children.filter((c) => !c.isLight && c !== v.seat),
       seat: v.seat.position.clone(),
       spin: blades ? { geo: blades.geometry, pos: spinPart.position.clone(), axis: kind === 'heli' ? 'y' : 'z' } : null,
     };

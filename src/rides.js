@@ -257,6 +257,36 @@ export class Rides {
     this.active = null;
   }
 
+  // ---------- other visitors on the rides (see net.js) ----------
+
+  /**
+   * The ride code net.js sends while we sit on the wheel or the carousel: 'w' + gondola index or
+   * 'k' + animal index. Each visitor's wheel and carousel turn on their own clock, so a receiver
+   * seats the rider in its own gondola or on its own animal instead of at our world position.
+   */
+  netCode() {
+    const seat = this.ctx.player.char.root.parent;
+    if (this.active === 'wheel') {
+      const i = this.wheel.gondolas.indexOf(seat);
+      return i >= 0 ? `w${i}` : null;
+    }
+    if (this.active === 'carousel') {
+      const a = this.carousel.animals;
+      for (let i = 0; i < a.length; i++) if (a[i].seat === seat) return `k${i}`;
+    }
+    return null;
+  }
+
+  /** Where a remote rider with that code sits here: { obj, local } (made once per seat), or null. */
+  remoteSeat(code) {
+    const cache = (this.remoteSeats ??= {});
+    if (code in cache) return cache[code];
+    const i = +code.slice(1);
+    const obj = code[0] === 'w' ? this.wheel.gondolas[i] : code[0] === 'k' ? this.carousel.animals[i]?.seat : null;
+    // the same offsets boardWheel() and boardCarousel() seat us at
+    return (cache[code] = obj ? { obj, local: code[0] === 'w' ? new THREE.Vector3(0, -2.09, -0.4) : new THREE.Vector3(0, -0.5, 0) } : null);
+  }
+
   update(dt, t) {
     this.carousel.update(dt, t);
     if (!this.active) return;

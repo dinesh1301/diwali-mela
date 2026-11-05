@@ -12,10 +12,11 @@ import { track, trackIds } from './track.js';
   ['s', x, y, z, heading, speed, action, held, vehicle] and the server's snapshot is
   ['S', online, id, x, y, z, heading, speed, action, held, vehicle, id, ...] holding only the
   visitors who moved (and each one at least every 2 s).
-  The vehicle field is 'ride' on a fixed ride (wheel, carousel, train, boat) or, at the wheel of a
-  car, heli or plane, a short code from vehicles.js netCode() ('c1+0-2', 'h+5-12', 'p-30+45': kind,
-  car index, pitch and roll in degrees). Position and heading stay the seated character's, so an
-  older client still draws the rider where they are; a newer one draws the vehicle around them.
+  The vehicle field is 'ride' in the boat, at the wheel of a car, heli or plane a short code from
+  vehicles.js netCode() ('c1+0-2', 'h+5-12', 'p-30+45': kind, car index, pitch and roll in degrees),
+  and on a fixed ride the seat ('w3' gondola, 'k7' carousel animal, 't' train; rides.js netCode()).
+  Position and heading stay the seated character's, so an older client still draws the rider where
+  they are; a newer one draws the vehicle around them, or seats them on its own copy of the ride.
   Also carries waves, shared wish lanterns, scores for the leaderboards and the wish wall.
   Without a server it degrades to a local-only mode (own bests and wishes kept in the browser).
 */
@@ -31,6 +32,9 @@ const SHOW_R2 = 70 * 70;
 const AIR_R2 = 4 * SHOW_R2; // a heli or plane overhead stays drawn out to 140 m
 const CULL_S = 0.25;
 const VEH_RE = /^(c\d?|h|p)([+-]\d{1,2})([+-]\d{1,2})$/;
+const RIDE_RE = /^(?:[wk]\d{1,2}|t)$/; // a seat on the wheel, the carousel or the train (see main.js)
+const TWIN_R2 = 2 * 2;
+const _q = new THREE.Quaternion();
 const RAD = Math.PI / 180;
 const _vp = new THREE.Vector3();
 
@@ -387,7 +391,7 @@ export class Net {
     char.root.rotation.order = 'YXZ'; // heading, then a vehicle's pitch and roll
     this.ctx.scene.add(char.root);
     const tag = new NameTag(char.headTop, { name: p.n || 'Visitor', handle: p.h || '' });
-    const r = { id: p.id, char, tag, name: p.n || 'Visitor', cur: new THREE.Vector3(), target: new THREE.Vector3(), heading: 0, action: null, speed: 0, holdR: null, ready: false, seenAt: performance.now(), veh: null, vkey: null, pitch: 0, roll: 0, pitchT: 0, rollT: 0, vehicle: null };
+    const r = { id: p.id, char, tag, name: p.n || 'Visitor', cur: new THREE.Vector3(), target: new THREE.Vector3(), heading: 0, action: null, speed: 0, holdR: null, ready: false, seenAt: performance.now(), veh: null, vkey: null, pitch: 0, roll: 0, pitchT: 0, rollT: 0, vehicle: null, seat: null };
     if (p.x !== undefined) {
       r.target.set(p.x, p.y, p.z);
       r.cur.copy(r.target);
@@ -425,6 +429,9 @@ export class Net {
     code = typeof code === 'string' ? code : null;
     if (code === r.veh) return;
     r.veh = code;
+    const seat = code && RIDE_RE.test(code) ? (this.rideSeat?.(code) ?? null) : null;
+    if (r.seat && !seat) r.cur.copy(r.target); // off the ride: straight to where they stepped down
+    r.seat = seat;
     const m = code && VEH_RE.exec(code);
     const key = m ? m[1] : null;
     if (m) {
@@ -530,6 +537,10 @@ export class Net {
   }
 
   update(dt, now) {
+    // our own parked vehicles hidden last frame under someone's copy: shown again unless still covered
+    const twins = (this._twins ??= []);
+    for (let i = 0; i < twins.length; i++) twins[i].visible = true;
+    twins.length = 0;
     if (this.connected && now - this.lastSend > SEND_MS) {
       this.lastSend = now;
       this.sendState(now);
@@ -567,7 +578,24 @@ export class Net {
           veh.group.rotation.copy(root.rotation);
           veh.group.position.copy(root.position).sub(_vp.copy(veh.seat).applyEuler(root.rotation));
           if (veh.spin) veh.spin.rotation[veh.axis] += dt * (veh.axis === 'y' ? 24 : 40);
+          // they are sitting in it where ours is parked: draw theirs only
+          const tw = veh.twin;
+          if (tw && tw !== this.ownVehicle?.() && tw.group.position.distanceToSquared(veh.group.position) < TWIN_R2) {
+            const kids = veh.twinKids;
+            for (let i = 0; i < kids.length; i++) {
+              if (!kids[i].visible) continue;
+              kids[i].visible = false;
+              twins.push(kids[i]);
+            }
+          }
         }
+      }
+      // on the wheel, the carousel or the train: in our own gondola / animal / carriage seat
+      const seat = r.seat;
+      if (seat) {
+        root.position.copy(seat.local).applyMatrix4(seat.obj.matrixWorld);
+        r.cur.copy(root.position);
+        root.quaternion.copy(seat.obj.getWorldQuaternion(_q));
       }
       // a visitor at the oars is sent as a rower on the seat: draw a boat under them
       const rowing = r.action === 'row' && !!this.makeBoat;

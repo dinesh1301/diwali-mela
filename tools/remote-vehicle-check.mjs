@@ -1,6 +1,8 @@
 // Remote vehicles check: two phone-sized visitors in one room. A drives a car, flies the heli and the
 // plane and gets out; B must see the right vehicle with A seated in it, where A's vehicle really is
-// (and tilted like it), and nothing left over once A is walking again. Saves B's view of each step.
+// (and tilted like it), and nothing left over once A is walking again. Then A rides the Giant Wheel
+// and the carousel: B must seat A in one of its own gondolas / on one of its own animals. Saves B's
+// view of the vehicle steps.
 //
 //   node tools/remote-vehicle-check.mjs [outDir]     # exits 1 if anything is off
 import { chromium } from 'playwright';
@@ -189,6 +191,31 @@ await A.waitForTimeout(1200);
 s = await compare();
 check(!s.b.vkey && !s.b.visible && !s.b.v, 'out of the plane: B sees A walking, no leftover plane');
 await B.screenshot({ path: `${out}/5-plane-out.png` });
+
+// ---------- fixed rides: seated on B's own wheel gondola / carousel animal ----------
+for (const [ride, board, seat] of [
+  ['wheel', 'boardWheel', 'w'],
+  ['carousel', 'boardCarousel', 'k'],
+]) {
+  await A.evaluate((board) => window.__mela.rides[board](), board);
+  await A.waitForTimeout(2500);
+  const gap = await B.evaluate(() => {
+    const m = window.__mela;
+    const r = [...m.net.remote.values()][0];
+    const p = r.char.root.position;
+    const v = new m.player.pos.constructor();
+    let best = Infinity;
+    for (const g of m.rides.wheel.gondolas) best = Math.min(best, g.localToWorld(v.set(0, -2.09, -0.4)).distanceTo(p));
+    for (const a of m.rides.carousel.animals) best = Math.min(best, a.seat.localToWorld(v.set(0, -0.5, 0)).distanceTo(p));
+    return { best, veh: r.veh };
+  });
+  console.log(`  ${ride}:`, JSON.stringify(gap.veh), `B seats A ${gap.best.toFixed(2)} m from one of B's own seats`);
+  check(gap.veh?.[0] === seat && gap.best < 0.1, `B seats A on its own ${ride}`);
+  await A.evaluate(() => window.__mela.rides.getOff());
+  await A.waitForTimeout(1200);
+  s = await compare();
+  check(dist(s.b.root, s.a.root) < 0.5, `off the ${ride}: B sees A where A stepped down`);
+}
 
 // ---------- leaving ----------
 await A.close();
