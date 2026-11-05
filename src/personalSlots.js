@@ -67,6 +67,7 @@ const BOOTHS = [
 const ZONE_TEXT = [
   ['gate', '🪔 Welcome to the Topmate Diwali Mela!', 'walking in under the entrance gate', { creatorDefault: '🪔 Welcome to {first}’s Diwali Mela!' }],
   ['selfie', '📸 Selfie Point: get your mela poster to share', 'the Selfie Point east of the gate'],
+  ['tambola', '🎟️ Tambola Tent: housie with prizes', 'the Tambola (housie) tent east of the Selfie Point (followed by “: press E at the entrance to join a round”)'],
   ['deepmala', '🪔 The Deepmala wall', 'the Deepmala wall west of the gate (followed by “: bring a diya or kandeel and press Q to add yours”)'],
   ['ramleela', '📽️ Ramleela Maidan: take a seat for the Ramayan show', 'the open-air Ramayan screen west of the gate'],
   ['ravan', '🔥 Ravan Dahan: the effigy burns on the countdown, or light the fuse yourself', 'the Ravan effigy (the creator’s banner stands in its crowd)'],

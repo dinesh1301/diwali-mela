@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Character, randomLook } from '../character.js';
 import { stallIndexFor } from '../creatorStage.js';
+import { TAMBOLA_SHOT } from './tambolaShot.js';
 
 /*
   Trailer shots. Each: { duration (s), warm (s simulated before frame 0), night | dayT,
@@ -365,6 +366,9 @@ export const SHOTS = {
       cam.fov = 64;
     },
   },
+
+  // ---------- 6b · Tambola Tent (shared; replaces karts in the trailer) ----------
+  tambola: TAMBOLA_SHOT,
 
   // ---------- 7 · quick cuts: giant wheel, toy train, boat ----------
   wheel: {
