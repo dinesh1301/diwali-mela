@@ -164,7 +164,7 @@ export class Ramayan {
     // ---- sign, lights ----
     const sign = new THREE.Mesh(
       new THREE.PlaneGeometry(5.6, 1.55),
-      new THREE.MeshBasicMaterial({ map: signTexture(slot('sign.ramleela'), 'Ramayan show · take a seat on any bench', '#4a0d0d'), color: new THREE.Color(1.2, 1.2, 1.2), side: THREE.DoubleSide })
+      new THREE.MeshBasicMaterial({ map: signTexture(slot('sign.ramleela'), 'Ramayan show · take a seat on any bench', '#4a0d0d'), color: new THREE.Color(1.0, 1.0, 1.0), side: THREE.DoubleSide })
     );
     sign.position.set(R.x + 10, 3.2, 56);
     sign.rotation.y = Math.PI / 2;
