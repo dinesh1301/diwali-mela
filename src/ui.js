@@ -447,7 +447,10 @@ export function createUI(h) {
     openBoards() {
       renderBoards();
       const n = h.online?.() ?? 1;
-      boardsEl.querySelector('.online').textContent = n > 1 ? `👥 ${n} at the mela right now` : 'Scores and wishes are shared with everyone when the mela server is running.';
+      const room = h.roomLabel?.() ?? '';
+      boardsEl.querySelector('.online').textContent = room
+        ? `👥 ${room} · ${n > 1 ? `${n} here right now` : 'just you right now'}. Scores and wishes are shared with this mela's visitors.`
+        : 'Scores and wishes stay on this device. Open a creator’s mela link to meet their other visitors.';
       openModal(boardsEl);
     },
 

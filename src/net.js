@@ -33,24 +33,35 @@ const SAME_ORIGIN_TRIES = 3;
 const ROOM_RE = /^(?!\.+$)[a-z0-9._-]{1,40}$/;
 
 /**
- * The room this page belongs to: everyone on the same creator link (mela.topmate.io/<slug>, or
- * ?c=<slug>) meets in that creator's room; the plain mela is 'public'. Same lookup order as
- * creatorStage.js (?c=, window.__MELA_CREATOR__, <meta name="mela-creator">).
+ * The creator room this page belongs to, or '' for the plain mela. Everyone on the same creator
+ * link (mela.topmate.io/<slug>, or ?c=<slug>) meets in that creator's room and only there; the
+ * plain mela is single-player (it never opens a socket). Same lookup order as creatorStage.js
+ * (?c=, window.__MELA_CREATOR__, <meta name="mela-creator">).
  */
-export function melaRoom(params = new URLSearchParams(location.search)) {
+export function creatorRoom(params = new URLSearchParams(location.search)) {
   let slug = params.get('c') || '';
   if (!slug && typeof window.__MELA_CREATOR__ === 'string') slug = window.__MELA_CREATOR__;
   if (!slug) slug = document.querySelector('meta[name="mela-creator"]')?.getAttribute('content') || '';
   slug = slug.trim().toLowerCase();
-  return ROOM_RE.test(slug) ? slug : 'public';
+  return slug !== 'public' && ROOM_RE.test(slug) ? slug : '';
 }
 
-/** VITE_WS_URL names a realtime server; a static build (VITE_STATIC=1) without one stays offline. */
+/** The analytics label for this page: the creator room, or 'public' for the plain (offline) mela. */
+export function melaRoom(params = new URLSearchParams(location.search)) {
+  return creatorRoom(params) || 'public';
+}
+
+/**
+ * VITE_WS_URL names a realtime server; a static build (VITE_STATIC=1) without one stays offline,
+ * and so does every page that is not a creator's mela.
+ */
 function defaultUrl() {
   if (ENV.VITE_STATIC && !ENV.VITE_WS_URL) return null;
+  const room = creatorRoom();
+  if (!room) return null;
   const base = ENV.VITE_WS_URL || `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
   const u = new URL(base, location.href);
-  u.searchParams.set('room', melaRoom());
+  u.searchParams.set('room', room);
   const ids = trackIds(); // analytics: realtime rows carry the tracker's visitor + session
   if (ids?.vid) u.searchParams.set('vid', ids.vid);
   if (ids) u.searchParams.set('sid', ids.sid);
@@ -67,6 +78,7 @@ export class Net {
   constructor(ctx, { url = defaultUrl() } = {}) {
     this.ctx = ctx;
     this.url = url;
+    this.room = url ? new URL(url).searchParams.get('room') || '' : ''; // the creator room we join
     this.ws = null;
     this.id = null;
     this.connected = false;
@@ -243,13 +255,22 @@ export class Net {
     const { ui, lanterns } = this.ctx;
     switch (Array.isArray(m) ? m[0] : m.t) {
       case 'welcome':
+        // a hub that put us anywhere but our creator's room (an old server's 'public' fallback):
+        // leave and play alone rather than mix with other creators' visitors
+        if (m.room && this.room && m.room !== this.room) {
+          this.enabled = false;
+          this.ws?.close(4003, 'wrong room');
+          break;
+        }
         this.id = m.id;
         for (const p of m.players) this.addRemote(p);
         for (const p of m.players) this.voice?.peerJoined(p.id, !!p.mic);
         this.boards = this.mergeBoards(m.boards);
         this.wishes = m.wishes || [];
+        this.online = (m.players?.length ?? 0) + 1;
         this.emit('boards');
         this.emit('wishes');
+        this.emit('online', this.online);
         break;
       case 'join':
         this.addRemote(m.p);

@@ -1,8 +1,10 @@
 /*
   The mela's little realtime server: who is where (positions relayed at 10 Hz), waves, shared
   wish lanterns, the leaderboards and the wish wall. JSON over WebSocket, one ROOM per creator
-  link: a visitor connects to /ws?room=<creator slug> (no room, or an unknown one: 'public', the
-  plain mela) and only ever sees, hears and scores against the people in the same room.
+  link: a visitor connects to /ws?room=<creator slug> and only ever sees, hears and scores against
+  the people in the same room. There is no shared 'public' room: an upgrade with no room, room
+  'public', a malformed one or one allowRoom() refuses (an unknown creator) is answered 404 and
+  never becomes a socket, so the plain mela is single-player.
 
   Positions use compact arrays (see net.js): clients send ['s', x, y, z, r, s, a, hr, v] when they
   change (plus a 1 s keepalive) and each tick's snapshot ['S', online, id, ...8 fields, id, ...]
@@ -40,7 +42,7 @@ const KEEP_MS = 2000; // resend an unchanged visitor this often (clients drop si
 const PING_MS = 25000; // Cloudflare closes a socket idle for 100 s; a ping every 25 s keeps it busy
 const MAX_BUFFERED = 64 * 1024; // a client this far behind skips snapshots until it catches up
 export const ROOM_RE = /^(?!\.+$)[a-z0-9._-]{1,40}$/; // the service's creator slug
-export const PUBLIC_ROOM = 'public';
+export const PUBLIC_ROOM = 'public'; // reserved: never a room (the plain mela is single-player)
 
 // per-socket rate limit: a token bucket (10 Hz state + WebRTC candidate bursts fit easily)
 const RATE_PER_S = 25;
@@ -123,10 +125,10 @@ function parseStore(text) {
   return { boards, wishes: Array.isArray(s?.wishes) ? s.wishes.slice(-MAX_WISHES) : [] };
 }
 
-/** Turns ?room= into a room name: lower-cased creator slug, else the public mela. */
+/** Turns ?room= into a room name: the lower-cased creator slug, or null (no room, 'public', malformed). */
 export function roomName(raw) {
   const r = String(raw ?? '').trim().toLowerCase();
-  return ROOM_RE.test(r) ? r : PUBLIC_ROOM;
+  return r !== PUBLIC_ROOM && ROOM_RE.test(r) ? r : null;
 }
 
 /** The address a socket came from: Cloudflare's header when trusted, else the TCP peer. */
@@ -137,8 +139,8 @@ function defaultIpOf(req) {
 /**
  * One realtime hub with many rooms.
  *   dataDir     where <room>.json files live (null: memory only)
- *   roomFile    (room) => path, to override the file layout (e.g. a legacy data.json for 'public')
- *   allowRoom   (room) => boolean; a room it refuses falls back to 'public' (e.g. unknown slugs)
+ *   roomFile    (room) => path, to override the file layout
+ *   allowRoom   (room) => boolean; a room it refuses is refused outright (404), e.g. unknown slugs
  *   ipOf        (req) => client address for the per-IP cap
  *   onEvent     (type, data) => void, analytics hook (see the header)
  *   metaOf      (req) => any, per-connection context passed back as data.meta
@@ -400,14 +402,21 @@ export function createRealtime(opts = {}) {
   /** Handles one HTTP upgrade request (call it from your server's 'upgrade' event). */
   function handleUpgrade(req, socket, head) {
     const url = new URL(req.url || '/', 'http://localhost');
-    let name = roomName(url.searchParams.get('room'));
-    if (name !== PUBLIC_ROOM && !allowRoom(name)) name = PUBLIC_ROOM;
+    const name = roomName(url.searchParams.get('room'));
     const ip = ipOf(req);
     const meta = metaOf(req);
     const reject = (reason, status, text) => {
-      emit('reject', { room: name, meta, reason });
+      emit('reject', { room: name ?? '', meta, reason });
       refuse(socket, status, text);
     };
+    // no shared fallback room: a page that is not a known creator's mela plays alone
+    let allowed = false;
+    try {
+      allowed = !!name && !!allowRoom(name);
+    } catch (e) {
+      log(`allowRoom ${name} threw: ${e?.message ?? e}`);
+    }
+    if (!allowed) return reject('no_room', 404, 'No such mela');
     if ((perIp.get(ip) || 0) >= o.maxPerIp) return reject('ip_limit', 429, 'Too many connections');
     if (clientCount >= o.maxClients) return reject('server_full', 503, 'Mela is full');
     const room = getRoom(name);
@@ -565,11 +574,9 @@ export function createRealtime(opts = {}) {
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 let devHub = null;
-/** The dev hub: the public mela keeps the old server/data.json, creator rooms go to server/rooms/. */
+/** The dev hub: any well-formed ?room= (try /?c=alice), each kept in server/rooms/<room>.json. */
 function hub() {
-  return (devHub ??= createRealtime({
-    roomFile: (room) => (room === PUBLIC_ROOM ? join(HERE, 'data.json') : join(HERE, 'rooms', `${room}.json`)),
-  }));
+  return (devHub ??= createRealtime({ roomFile: (room) => join(HERE, 'rooms', `${room}.json`) }));
 }
 
 /** Shares one http server with Vite (or anything else) and answers WebSocket upgrades on /ws. */
