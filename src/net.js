@@ -29,11 +29,34 @@ const ENV = import.meta.env ?? {};
 // Same-origin attempts that never open before we give up (a static host has no socket to retry).
 const SAME_ORIGIN_TRIES = 3;
 
+const ROOM_RE = /^(?!\.+$)[a-z0-9._-]{1,40}$/;
+
+/**
+ * The room this page belongs to: everyone on the same creator link (mela.topmate.io/<slug>, or
+ * ?c=<slug>) meets in that creator's room; the plain mela is 'public'. Same lookup order as
+ * creatorStage.js (?c=, window.__MELA_CREATOR__, <meta name="mela-creator">).
+ */
+export function melaRoom(params = new URLSearchParams(location.search)) {
+  let slug = params.get('c') || '';
+  if (!slug && typeof window.__MELA_CREATOR__ === 'string') slug = window.__MELA_CREATOR__;
+  if (!slug) slug = document.querySelector('meta[name="mela-creator"]')?.getAttribute('content') || '';
+  slug = slug.trim().toLowerCase();
+  return ROOM_RE.test(slug) ? slug : 'public';
+}
+
 /** VITE_WS_URL names a realtime server; a static build (VITE_STATIC=1) without one stays offline. */
 function defaultUrl() {
-  if (ENV.VITE_WS_URL) return ENV.VITE_WS_URL;
-  if (ENV.VITE_STATIC) return null;
-  return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
+  if (ENV.VITE_STATIC && !ENV.VITE_WS_URL) return null;
+  const base = ENV.VITE_WS_URL || `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
+  const u = new URL(base, location.href);
+  u.searchParams.set('room', melaRoom());
+  return u.href;
+}
+
+/** Director / trailer capture never joins a room: no remote visitors in shots, nothing random. */
+function offlinePage() {
+  const p = new URLSearchParams(location.search);
+  return p.has('director') || p.has('nonet') || typeof window.__director !== 'undefined';
 }
 
 export class Net {
@@ -90,7 +113,7 @@ export class Net {
   // ---------- connection ----------
 
   connect() {
-    if (!this.enabled || this.ws) return;
+    if (!this.enabled || this.ws || offlinePage()) return;
     let ws;
     try {
       ws = new WebSocket(this.url);

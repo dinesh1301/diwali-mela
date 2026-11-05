@@ -1,6 +1,7 @@
 node_modules/
 dist/
 server/data.json
+server/rooms/
 .env
 .env.*
 .DS_Store
