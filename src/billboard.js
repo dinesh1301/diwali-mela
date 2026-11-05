@@ -333,12 +333,28 @@ function loadImage(url) {
   });
 }
 
+// three gives every texture a uuid drawn from Math.random. A still is made whenever its image
+// happens to arrive, in the middle of the scene build, so in director mode (seeded Math.random)
+// those draws would shift every later number by load timing: a slow load and the crowd, the
+// confetti, the ring toss came out different. Its uuid takes numbers from a side stream instead.
+let sideSeed = 0x5eed;
+const sideRandom = () => {
+  sideSeed = (sideSeed * 16807) % 2147483647;
+  return (sideSeed - 1) / 2147483646;
+};
+
 function imageTexture(img) {
-  const t = new THREE.Texture(img);
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 4;
-  t.needsUpdate = true;
-  return t;
+  const random = Math.random;
+  Math.random = sideRandom;
+  try {
+    const t = new THREE.Texture(img);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 4;
+    t.needsUpdate = true;
+    return t;
+  } finally {
+    Math.random = random;
+  }
 }
 
 // the real timer: director mode swaps window.setTimeout for a virtual clock that only moves on step()
