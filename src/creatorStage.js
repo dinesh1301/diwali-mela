@@ -25,6 +25,8 @@ import { normaliseBillboard } from './billboard.js';
                                           // (catalog: node tools/export-slots.mjs > slots.json)
     billboard?: { kind: 'reels' | 'posts', items: Array<{ type: 'video' | 'image', src, poster?, caption? }> },
                            // 1-6 reels / posts for the Mela Screen over the entrance (see billboard.js)
+    handle?: string,       // their social handle without the @ ("priyanka.codes"), or a LinkedIn name
+    platform?: 'instagram' | 'linkedin',  // where the handle lives (its icon on the Ramleela board)
   }
 */
 
@@ -81,9 +83,29 @@ function normalise(raw) {
   // validated slot by slot by setMelaSlots() (personalSlots.js); here only its shape
   const mela = raw.mela && typeof raw.mela === 'object' && !Array.isArray(raw.mela) ? raw.mela : null;
   const out = { slug, name, first, photoUrl, stallNo, stallTitle, stallTheme, knownFor, wallPosts, mela };
+  const handle = cleanHandle(raw.handle);
+  if (handle) {
+    out.handle = handle;
+    if (raw.platform === 'instagram' || raw.platform === 'linkedin') out.platform = raw.platform;
+  }
   const billboard = normaliseBillboard(raw.billboard);
   if (billboard) out.billboard = billboard;
   return out;
+}
+
+/** '@Priyanka.Codes', 'instagram.com/x/', 'linkedin.com/in/ravi-k' -> 'Priyanka.Codes' / 'x' / 'ravi-k'; '' if unusable. */
+function cleanHandle(v) {
+  if (typeof v !== 'string') return '';
+  const t = v
+    .trim()
+    .replace(/^https?:\/\//i, '')
+    .replace(/^(www\.)?(instagram\.com|linkedin\.com\/(in|company))\//i, '')
+    .replace(/[/?#].*$/, '')
+    .replace(/^@+/, '')
+    .replace(/[^\p{L}\p{N}._ -]/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return t.slice(0, 30).trim();
 }
 
 function slugFromPage(params) {
@@ -996,4 +1018,198 @@ export function personaliseIntro(cfg) {
   const who = cfg.first || cfg.name;
   if (h1) h1.textContent = `Welcome to ${who}'s Mela`;
   document.title = `${who}'s Diwali Mela · Topmate`;
+}
+
+// ---------- the Ramleela board ----------
+
+/** How the handle reads on a sign: '@priyanka.codes', or a LinkedIn name as it is ('Ravi Kumar'). */
+export function handleLabel(cfg) {
+  const h = cfg?.handle;
+  if (!h) return '';
+  return /\s/.test(h) ? h : `@${h}`;
+}
+
+/** A small Instagram / LinkedIn glyph, `s` px square, top-left at x, y. */
+function platformIcon(c, platform, x, y, s) {
+  const rr = (x0, y0, w, h, r) => {
+    c.beginPath();
+    c.roundRect(x0, y0, w, h, r);
+  };
+  c.save();
+  if (platform === 'linkedin') {
+    rr(x, y, s, s, s * 0.18);
+    c.fillStyle = '#0a66c2';
+    c.fill();
+    c.fillStyle = '#fff';
+    c.font = `700 ${Math.round(s * 0.66)}px ${POP}`;
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.fillText('in', x + s * 0.5, y + s * 0.56);
+  } else {
+    const g = c.createLinearGradient(x, y + s, x + s, y);
+    g.addColorStop(0, '#feda75');
+    g.addColorStop(0.3, '#fa7e1e');
+    g.addColorStop(0.6, '#d62976');
+    g.addColorStop(1, '#4f5bd5');
+    rr(x, y, s, s, s * 0.26);
+    c.fillStyle = g;
+    c.fill();
+    c.strokeStyle = '#fff';
+    c.lineWidth = s * 0.08;
+    rr(x + s * 0.2, y + s * 0.2, s * 0.6, s * 0.6, s * 0.17);
+    c.stroke();
+    c.beginPath();
+    c.arc(x + s * 0.5, y + s * 0.5, s * 0.14, 0, Math.PI * 2);
+    c.stroke();
+    c.beginPath();
+    c.arc(x + s * 0.67, y + s * 0.33, s * 0.035, 0, Math.PI * 2);
+    c.fillStyle = '#fff';
+    c.fill();
+  }
+  c.restore();
+}
+
+/**
+ * The board over the Ramleela screen: "<Name> presents · Ramleela" with their photo, @handle and a
+ * "Starting soon" badge; the plain mela gets a "Topmate Diwali Mela presents" board instead.
+ */
+function paintRamleelaBoard(c, w, h, cfg, img) {
+  const rnd = prng(hash(cfg?.slug ?? 'mela') ^ 0x7a3e11);
+  c.clearRect(0, 0, w, h);
+  const bg = c.createLinearGradient(0, 0, 0, h);
+  bg.addColorStop(0, '#7a0f1c');
+  bg.addColorStop(0.6, '#5a0913');
+  bg.addColorStop(1, '#3e0610');
+  c.fillStyle = bg;
+  c.fillRect(0, 0, w, h);
+  // gold border with an inner fillet
+  const b = 26;
+  c.strokeStyle = '#e8b33a';
+  c.lineWidth = b;
+  c.strokeRect(b / 2, b / 2, w - b, h - b);
+  c.strokeStyle = '#ffe7a3';
+  c.lineWidth = 4;
+  c.strokeRect(b + 12, b + 12, w - 2 * b - 24, h - 2 * b - 24);
+  // a marigold toran along the top
+  const pts = [];
+  for (let i = 0; i < 8; i++) for (let k = 0; k < 9; k++) pts.push([b + ((i + k / 9) * (w - 2 * b)) / 8, b + 6 + Math.sin((k / 9) * Math.PI) * 30]);
+  marigoldLine(c, pts, 11, rnd);
+
+  c.textBaseline = 'alphabetic';
+  const badge = (text, cx, cy, fs) => {
+    c.font = `700 ${fs}px ${POP}`;
+    const tw = c.measureText(text).width;
+    const bw = tw + fs * 1.3;
+    const bh = fs * 1.55;
+    c.beginPath();
+    c.roundRect(cx - bw / 2, cy - bh / 2, bw, bh, bh / 2);
+    c.fillStyle = '#ffb000';
+    c.fill();
+    c.lineWidth = 5;
+    c.strokeStyle = '#fff1c4';
+    c.stroke();
+    c.fillStyle = '#4a0610';
+    c.textAlign = 'center';
+    c.fillText(text, cx, cy + fs * 0.36);
+    return bw;
+  };
+
+  if (!cfg) {
+    c.textAlign = 'center';
+    fitFont(c, 'TOPMATE DIWALI MELA PRESENTS', POP, '700 ', Math.round(h * 0.11), w * 0.8, 20);
+    c.fillStyle = '#ffd166';
+    c.fillText('TOPMATE DIWALI MELA PRESENTS', w / 2, h * 0.3);
+    fitFont(c, 'Ramleela', YATRA, '', Math.round(h * 0.4), w * 0.8, 40);
+    paintText(c, 'Ramleela', w / 2, h * 0.68, { fill: '#ffe7a3', stroke: '#2a0306', lw: 12, off: 6 });
+    badge('RAMAYAN SHOW · AAJ RAAT', w / 2, h * 0.84, Math.round(h * 0.07));
+    grain(c, w, h, rnd, 0.04, 6000);
+    return;
+  }
+
+  // portrait on the left
+  const r = h * 0.33;
+  const pcx = b + 60 + r * 1.1;
+  const pcy = h * 0.54;
+  drawPortrait(c, img, cfg, pcx, pcy, r);
+
+  const tx0 = pcx + r * 1.3 + 30;
+  const tx1 = w - b - 50;
+  const maxW = tx1 - tx0;
+  c.textAlign = 'left';
+  const presents = `${cfg.name.toUpperCase()} PRESENTS`;
+  fitFont(c, presents, POP, '700 ', Math.round(h * 0.12), maxW, 22);
+  c.fillStyle = '#ffd166';
+  c.fillText(presents, tx0, h * 0.28);
+  fitFont(c, 'Ramleela', YATRA, '', Math.round(h * 0.36), maxW, 40);
+  paintText(c, 'Ramleela', tx0, h * 0.62, { fill: '#ffe7a3', stroke: '#2a0306', lw: 12, off: 6 });
+
+  // bottom row: [icon] @handle  ...  STARTING SOON
+  const fs = Math.round(h * 0.11);
+  const label = handleLabel(cfg);
+  const rowY = h * 0.83;
+  c.font = `700 ${fs}px ${POP}`;
+  const badgeW = c.measureText('STARTING SOON').width + fs * 1.3;
+  if (label) {
+    const icon = fs * 1.2;
+    const room = maxW - badgeW - 40 - (cfg.platform ? icon + 18 : 0);
+    const hs = fitFont(c, label, POP, '600 ', fs, room, 24);
+    if (cfg.platform) platformIcon(c, cfg.platform, tx0, rowY - icon / 2, icon);
+    const lx = cfg.platform ? tx0 + icon + 18 : tx0;
+    c.font = `600 ${hs}px ${POP}`;
+    c.textAlign = 'left';
+    c.fillStyle = '#fff1c4';
+    c.fillText(label, lx, rowY + hs * 0.36);
+    badge('STARTING SOON', tx1 - badgeW / 2, rowY, fs);
+  } else {
+    badge('STARTING SOON', tx0 + badgeW / 2, rowY, fs);
+  }
+  grain(c, w, h, rnd, 0.04, 6000);
+}
+
+/**
+ * Hangs the Ramleela board over the screen (cx, z: the screen's middle; top: its frame's top) on two
+ * bamboo poles. Works for the plain mela too (cfg null). Returns { mesh, group, ready }.
+ */
+export function ramleelaBoard(scene, cfg, { cx, z, top, colliders }) {
+  const W = 9.2;
+  const H = 2.88;
+  const y = top + 0.3 + H / 2;
+  const tex = makeCanvasTex(2048, 640);
+  const grp = new THREE.Group();
+  grp.position.set(cx, 0, z - 0.25);
+  grp.rotation.y = Math.PI; // faces the benches (-z)
+  // slightly under 1 so the bloom leaves the lettering crisp
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshBasicMaterial({ map: tex.tex, color: new THREE.Color(0.92, 0.92, 0.92), side: THREE.DoubleSide }));
+  mesh.position.set(0, y, 0);
+  mesh.name = 'ramleelaBoard';
+  grp.add(mesh);
+  const bamboo = new THREE.MeshStandardMaterial({ color: 0xc9a46a, roughness: 0.8 });
+  const V = (x, yy, zz) => new THREE.Vector3(x, yy, zz);
+  for (const s of [-1, 1]) grp.add(beam(V(s * (W / 2 + 0.12), 0, 0.06), V(s * (W / 2 + 0.12), y + H / 2 + 0.5, 0.06), 0.09, bamboo, 8));
+  grp.add(beam(V(-W / 2 - 0.25, y + H / 2 + 0.05, 0.05), V(W / 2 + 0.25, y + H / 2 + 0.05, 0.05), 0.06, bamboo, 8));
+  // one instanced row of warm bulbs along the top
+  const n = 18;
+  const bulbs = new THREE.InstancedMesh(new THREE.SphereGeometry(0.07, 8, 6), new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 2.1, 1.1) }), n);
+  const d = new THREE.Object3D();
+  for (let i = 0; i < n; i++) {
+    d.position.set(-W / 2 + (W * i) / (n - 1), y + H / 2 + 0.18, -0.06);
+    d.updateMatrix();
+    bulbs.setMatrixAt(i, d.matrix);
+  }
+  bulbs.computeBoundingSphere();
+  grp.add(bulbs);
+  mergeStatic(grp, { skip: (o) => o === mesh }); // the three bamboo poles: one draw
+  grp.traverse((o) => o.layers.set(1));
+  scene.add(grp);
+  if (colliders) for (const s of [-1, 1]) colliders.push({ type: 'circle', x: cx + s * (W / 2 + 0.12), z: z - 0.31, r: 0.2 });
+  paintRamleelaBoard(tex.ctx, tex.canvas.width, tex.canvas.height, cfg, null);
+  tex.tex.needsUpdate = true;
+  const ready = cfg
+    ? loadPhoto(cfg.photoUrl).then((img) => {
+        if (!img) return;
+        paintRamleelaBoard(tex.ctx, tex.canvas.width, tex.canvas.height, cfg, img);
+        tex.tex.needsUpdate = true;
+      })
+    : Promise.resolve();
+  return { mesh, group: grp, ready };
 }

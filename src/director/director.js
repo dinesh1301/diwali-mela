@@ -145,8 +145,11 @@ const easeInOut = (u) => (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) 
 const lerp = (a, b, k) => a + (b - a) * k;
 const H = { V, path, smooth, easeInOut, lerp, FPS };
 
-/** A painted Ramayan title card for the Ramleela screen (the live YouTube embed can't be captured). */
-function ramleelaStill() {
+/**
+ * A painted Ramayan title card for the Ramleela screen (the live YouTube embed can't be captured).
+ * In a creator's mela it is their show: "<FIRST> KI RAMLEELA" over the title and "STARTING SOON" under it.
+ */
+function ramleelaStill(cfg) {
   const canvas = document.createElement('canvas');
   canvas.width = 1280;
   canvas.height = 720;
@@ -210,9 +213,26 @@ function ramleelaStill() {
   c.strokeText('रामायण', w / 2, h * 0.86);
   c.fillStyle = '#ffe7a3';
   c.fillText('रामायण', w / 2, h * 0.86);
-  c.font = '600 30px Poppins, sans-serif';
-  c.fillStyle = 'rgba(255,231,163,0.85)';
-  c.fillText('RAMLEELA MAIDAN · AAJ RAAT', w / 2, h * 0.95);
+  if (cfg) {
+    const top = `${cfg.first.toUpperCase()} KI RAMLEELA`;
+    let fs = 64;
+    c.font = `700 ${fs}px Poppins, sans-serif`;
+    while (c.measureText(top).width > w * 0.86 && fs > 30) c.font = `700 ${(fs -= 2)}px Poppins, sans-serif`;
+    c.lineWidth = 10;
+    c.strokeStyle = '#3a0a04';
+    c.strokeText(top, w / 2, h * 0.13);
+    c.fillStyle = '#ffe7a3';
+    c.fillText(top, w / 2, h * 0.13);
+    c.font = '700 40px Poppins, sans-serif';
+    c.lineWidth = 8;
+    c.strokeText('STARTING SOON', w / 2, h * 0.955);
+    c.fillStyle = '#ffd166';
+    c.fillText('STARTING SOON', w / 2, h * 0.955);
+  } else {
+    c.font = '600 30px Poppins, sans-serif';
+    c.fillStyle = 'rgba(255,231,163,0.85)';
+    c.fillText('RAMLEELA MAIDAN · AAJ RAAT', w / 2, h * 0.95);
+  }
   // old projector look: grain + vignette
   for (let i = 0; i < 9000; i++) {
     c.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.07)';
@@ -261,7 +281,7 @@ export function startDirector(opts, m) {
   const { camera, dayNight, ramayan, renderer } = m;
   // the Ramleela screen shows a painted still instead of the (uncapturable) YouTube embed
   if (ramayan?.hole) {
-    ramayan.hole.material = new THREE.MeshBasicMaterial({ map: ramleelaStill(), color: new THREE.Color(0.9, 0.9, 0.9) });
+    ramayan.hole.material = new THREE.MeshBasicMaterial({ map: ramleelaStill(m.creator?.cfg), color: new THREE.Color(0.9, 0.9, 0.9) });
   }
   renderer.setAnimationLoop(null);
   const clock = installClock();

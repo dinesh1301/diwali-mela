@@ -7,7 +7,7 @@ import { stallIndexFor } from '../creatorStage.js';
   setup({ m, H, state }), update({ sec, u, dt, m, H, state }) before each step, and
   camera({ sec, u, t, cam, m, H, state }) which fills cam.pos / cam.look / cam.fov (/ cam.roll).
   `m` is window.__mela; `H` has V, path (Catmull-Rom), smooth, easeInOut, lerp.
-  Personal shots (stall, ravan) read the creator from m.creator.
+  Personal shots (stall, ramleela, ravan; gate with a billboard) read the creator from m.creator.
 */
 
 const _a = new THREE.Vector3();
@@ -456,23 +456,25 @@ export const SHOTS = {
     },
   },
 
-  // ---------- 8 · Ramleela at dusk ----------
+  // ---------- 8 · the creator's Ramleela (personal) ----------
+  // Opens on the board over the screen (whole board in frame) ("<Name> presents · Ramleela", photo, @handle,
+  // "Starting soon"), then pulls back and down over the audience to reveal the screen and benches,
+  // and holds that wide for the last ~4 s (the trailer's end card sits over it, board in the top third).
   ramleela: {
-    duration: 6,
+    duration: 13,
     warm: 1,
     night: false,
     dayT: 26,
     setup({ m }) {
-      const benches = m.ramayan.benches ?? [];
-      void benches;
       m.player.teleport(-20, 50, 0);
-      for (let i = 0; i < 4; i++) m.lanterns.releaseAt(-36 + i * 4, 1, 60 + (i % 2) * 4, 0.1, -0.2, 'Diwali');
+      for (let i = 0; i < 4; i++) m.lanterns.releaseAt(-36 + i * 4, 1, 66 + (i % 2) * 3, 0.1, -0.2, 'Diwali'); // well clear of the lens
     },
     camera({ u, cam, H }) {
-      const k = H.easeInOut(u);
-      cam.pos.set(H.lerp(-31.2, -30.6, k), H.lerp(1.15, 2.1, k), H.lerp(53.5, 59.5, k));
-      cam.look.set(-30, H.lerp(3.4, 4.6, k), 74);
-      cam.fov = 56;
+      const k = H.easeInOut(Math.min(1, u / 0.62)); // the pull-back
+      const d = H.smooth(Math.max(0, (u - 0.62) / 0.38)); // then a slow settle under the end card
+      cam.pos.set(H.lerp(-30, -30.5, k) + d * 0.15, H.lerp(4.4, 1.75, k), H.lerp(57.2, 54.6, k) - d * 0.5);
+      cam.look.set(-30, H.lerp(10.6, 7.7, k) + d * 0.15, 74);
+      cam.fov = H.lerp(54, 56, k);
     },
   },
 

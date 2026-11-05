@@ -19,6 +19,7 @@ const opt = (n, d) => (argv.includes(`--${n}`) ? argv[argv.indexOf(`--${n}`) + 1
 const port = Number(opt('port', 4305));
 const out = opt('out', 'bench/shots-director');
 const ALL = ['gate', 'stall', 'games', 'viman', 'karts', 'wheel', 'train', 'boat', 'ramleela', 'ravan', 'fireworks'];
+// --handle x --platform instagram|linkedin: the creator's social handle on the Ramleela board
 const shots = opt('shots', ALL.join(',')).split(',');
 const full = flag('full');
 const at = opt('at', null)?.split(',').map(Number);
@@ -37,6 +38,7 @@ const cfg = opt(
       stallTitle: opt('title', 'Dinesh ki Startup Dukaan'),
       stallTheme: theme,
       knownFor: 'Founder, Topmate',
+      ...(opt('handle', null) ? { handle: opt('handle'), platform: opt('platform', 'instagram') } : {}),
       wallPosts: ['/__posts/p1.jpg', '/__posts/p2.jpg', '/__posts/p4.jpg', '/__posts/p3.jpg'].slice(0, Number(opt('posts', 4))),
       // --mela sample: every personal slot from tools/personal-sample.mjs (gate arch, stalls, ...)
       ...(opt('mela', null) === 'sample' ? { mela: (await import('./personal-sample.mjs')).SAMPLE.mela } : {}),
@@ -68,7 +70,7 @@ for (const shot of shots) {
     return existsSync(f) ? route.fulfill({ body: readFileSync(f), contentType: 'image/jpeg' }) : route.fulfill({ status: 404, body: '' });
   });
   const t0 = Date.now();
-  await page.goto(`http://localhost:${port}/?director=${shot}&cfg=${cfg}&size=${size}`);
+  await page.goto(`http://localhost:${port}/?director=${shot}${cfg === 'none' ? '' : `&cfg=${cfg}`}&size=${size}`); // --cfg none: the plain mela
   await page.waitForFunction(() => window.__director, null, { timeout: 180000 });
   let info;
   try {
