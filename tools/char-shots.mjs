@@ -1,6 +1,7 @@
 // Character review shots in the real game (serve with `npm run dev` or preview first):
-//   node tools/char-shots.mjs --url http://localhost:4392 --out dir
-// Saves: crowd at the bazaar at night (desktop 1440x900 and Pixel 7) and the customiser preview.
+//   node tools/char-shots.mjs --url http://localhost:4392 --out dir [--places bazaar,games,ghat,ravan]
+// Saves: the crowd at night at each place (desktop 1440x900 and Pixel 7) and the customiser preview
+// once per outfit (desktop and phone).
 import { chromium, devices } from 'playwright';
 import { mkdirSync } from 'node:fs';
 
@@ -8,18 +9,21 @@ const argv = process.argv.slice(2);
 const opt = (n, d) => (argv.includes(`--${n}`) ? argv[argv.indexOf(`--${n}`) + 1] : d);
 const base = opt('url', 'http://localhost:4392');
 const out = opt('out', 'bench/characters');
+const places = opt('places', 'bazaar,games,ghat,ravan').split(',').filter(Boolean);
 mkdirSync(out, { recursive: true });
 const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] });
 
-async function crowd(name, ctxOpts, tier) {
+async function crowd(name, ctxOpts, tier, place) {
   const ctx = await browser.newContext(ctxOpts);
   const page = await ctx.newPage();
   await page.addInitScript(() => localStorage.setItem('melaCoach', '1'));
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
-  await page.goto(`${base}/?play&noyt&nonet&night&tier=${tier}&place=bazaar&gov=0`);
+  await page.goto(`${base}/?play&noyt&nonet&night&tier=${tier}&place=${place}&gov=0`);
   await page.waitForFunction(() => window.__mela && document.getElementById('loader')?.classList.contains('done'), null, { timeout: 180000 });
   await page.waitForTimeout(1500);
+  const ground = await page.evaluate(() => window.__mela.player.pos.y);
+  void ground;
   // gather the wandering crowd into the lane ahead of the visitor, as a busy evening would
   await page.evaluate(() => {
     const { crowd, player } = window.__mela;
@@ -42,33 +46,35 @@ async function crowd(name, ctxOpts, tier) {
     player.cam.pitch = 0.16;
   });
   await page.waitForTimeout(900);
-  await page.screenshot({ path: `${out}/crowd-bazaar-night-${name}.png` });
+  await page.screenshot({ path: `${out}/crowd-${place}-night-${name}.png` });
   if (errors.length) console.log(name, 'errors', errors.slice(0, 3));
   await ctx.close();
 }
 
-await crowd('desktop', { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 }, 'high');
-await crowd('pixel7', { ...devices['Pixel 7'] }, 'low');
+for (const place of places) {
+  await crowd('desktop', { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 }, 'high', place);
+  await crowd('pixel7', { ...devices['Pixel 7'] }, 'low', place);
+}
 
 // the avatar editor (opened from the HUD), facing the camera, once per outfit
-{
-  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+for (const [dev, ctxOpts] of [['', { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 }], ['-phone', { ...devices['Pixel 7'] }]]) {
+  const ctx = await browser.newContext(ctxOpts);
   const page = await ctx.newPage();
   await page.addInitScript(() => localStorage.setItem('melaCoach', '1'));
   await page.goto(`${base}/?play&noyt&nonet&night&tier=high&place=bazaar&gov=0`);
   await page.waitForFunction(() => window.__mela && document.getElementById('loader')?.classList.contains('done'), null, { timeout: 180000 });
-  for (const [style, hairStyle] of [['saree', 'bun'], ['kurta', 'turban'], ['lehenga', 'braid'], ['sherwani', 'short']]) {
-    await page.evaluate(([style, hairStyle]) => {
+  for (const [style, hairStyle, extra] of [['saree', 'bun'], ['kurta', 'turban', { body: 'm', beard: 'grey', moustache: true }], ['lehenga', 'braid'], ['sherwani', 'short', { beard: 'dark' }], ['casual', 'curly', { body: 'm', beard: false }]]) {
+    await page.evaluate(([style, hairStyle, extra]) => {
       const c = window.__mela.customizer;
       c.open('edit');
-      c.apply({ style, hairStyle });
+      c.apply({ style, hairStyle, ...(extra ?? {}) });
       c.char.clearAction();
       c.idleTimer = 99;
       c.spin = 0.25;
       c.dragging = { x: 0, id: -1 }; // hold the spin
-    }, [style, hairStyle]);
+    }, [style, hairStyle, extra]);
     await page.waitForTimeout(800);
-    await page.screenshot({ path: `${out}/customizer-${style}.png` });
+    await page.screenshot({ path: `${out}/customizer-${style}${dev}.png` });
   }
   await ctx.close();
 }

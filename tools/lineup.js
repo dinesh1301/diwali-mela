@@ -10,11 +10,14 @@ const LOOKS = [
   { name: 'man in kurta', skin: 0xc68642, top: 0xfff1d0, bottom: 0xf5ebe0, accent: 0xff7a00, hair: 0x140c08, shoes: 0x5c2a12, style: 'kurta', hairStyle: 'short', dupatta: 0xff7a00, moustache: true, body: 'm', age: 'adult', scale: 1.02 },
   { name: 'woman in saree', skin: 0xa8754a, top: 0xc1121f, bottom: 0xffd166, accent: 0xffd166, hair: 0x140c08, shoes: 0xd4a017, style: 'saree', hairStyle: 'bun', bindi: true, bangles: 0xd4a017, body: 'f', age: 'adult', scale: 0.96 },
   { name: 'woman in lehenga', skin: 0xe0ac69, top: 0xe0218a, bottom: 0x1f9d55, accent: 0xe0218a, hair: 0x2b1a10, shoes: 0xd4a017, style: 'lehenga', hairStyle: 'braid', dupatta: 0xffd166, bindi: true, bangles: 0xe63946, body: 'f', age: 'adult', scale: 0.95 },
-  { name: 'older man, pagdi', skin: 0x8d5524, top: 0xf5ebe0, bottom: 0xf5ebe0, accent: 0xff7a00, turban: 0xff7a00, hair: 0xb9b2a8, shoes: 0x3b2a1a, style: 'kurta', hairStyle: 'turban', moustache: true, glasses: true, body: 'm', age: 'elder', scale: 0.98 },
+  { name: 'older man, pagdi', skin: 0x8d5524, top: 0xf5ebe0, bottom: 0xf5ebe0, accent: 0xff7a00, turban: 0xff7a00, hair: 0xb9b2a8, shoes: 0x3b2a1a, style: 'kurta', hairStyle: 'turban', moustache: true, beard: true, glasses: true, body: 'm', age: 'elder', scale: 0.98 },
   { name: 'child', skin: 0xd99a6c, top: 0xffb703, bottom: 0xe63946, accent: 0x3a86ff, hair: 0x140c08, shoes: 0xe63946, style: 'lehenga', hairStyle: 'pony', body: 'f', age: 'kid', scale: 0.64 },
   { name: 'teen casual', skin: 0xb07a52, top: 0x219ebc, bottom: 0x2f4a7a, accent: 0xe63946, hair: 0x2b1a10, shoes: 0xf2f2f2, style: 'casual', hairStyle: 'curly', body: 'm', age: 'teen', scale: 0.93 },
   { name: 'groom, sherwani', skin: 0xe0ac69, top: 0x7a1f3d, bottom: 0xf1e3c6, accent: 0xffd166, hair: 0x140c08, shoes: 0xd4a017, style: 'sherwani', hairStyle: 'short', body: 'm', age: 'adult', scale: 1.0 },
   { name: 'salwar + dupatta', skin: 0x6f4422, top: 0x2a9d8f, bottom: 0xfff1d0, accent: 0xffd166, hair: 0x140c08, shoes: 0x8b1e3f, style: 'salwar', hairStyle: 'open', dupatta: 0xffd166, bindi: true, body: 'f', age: 'adult', scale: 0.95 },
+  { name: 'girl in a frock', skin: 0x8d5524, top: 0x3a86ff, bottom: 0xfff1d0, accent: 0xffd166, hair: 0x140c08, shoes: 0x8b1e3f, style: 'frock', hairStyle: 'braid', body: 'f', age: 'kid', scale: 0.63 },
+  { name: 'bearded man, darkest skin', skin: 0x5a3820, top: 0x2a9d8f, bottom: 0xf5ebe0, accent: 0xffd166, hair: 0x140c08, shoes: 0x5c2a12, style: 'kurta', hairStyle: 'short', beard: true, body: 'm', age: 'adult', scale: 1.0 },
+  { name: 'woman, B darkest skin', skin: 0x6f4422, top: 0xe0218a, bottom: 0xffd166, accent: 0xffd166, hair: 0x140c08, shoes: 0xd4a017, style: 'saree', hairStyle: 'bun', bindi: true, bangles: 0xffd166, body: 'f', age: 'adult', scale: 0.96 },
   { name: 'boy', skin: 0xc68642, top: 0x06d6a0, bottom: 0xfff1d0, accent: 0xff7a00, hair: 0x140c08, shoes: 0x5c2a12, style: 'kurta', hairStyle: 'short', body: 'm', age: 'kid', scale: 0.62 },
 ];
 
@@ -31,6 +34,9 @@ scene.add(new THREE.HemisphereLight(night ? 0x8a7aa8 : 0xfff0d0, 0x3a2030, night
 const key = new THREE.DirectionalLight(0xffe0b0, night ? 0.8 : 2.4);
 key.position.set(2, 4, 5);
 key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+key.shadow.bias = -0.0005;
+key.shadow.normalBias = 0.02;
 Object.assign(key.shadow.camera, { left: -6, right: 6, top: 4, bottom: -1 });
 scene.add(key);
 if (night) {

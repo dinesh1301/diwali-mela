@@ -2,8 +2,10 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { pick, rand, clamp } from './utils.js';
 import { lowDetail } from './lod.js';
-import { charAtlas } from './charAtlas.js';
-import { buildPerson, BONE_COUNT } from './charGeo.js';
+import { charAtlas, ROWS } from './charAtlas.js';
+import { buildPerson, BONE_COUNT, resolveLook, isGrey } from './charGeo.js';
+
+export { resolveLook };
 
 /*
   A procedural person (charGeo.js): one smooth SkinnedMesh with real blended weights, so elbows,
@@ -15,28 +17,29 @@ import { buildPerson, BONE_COUNT } from './charGeo.js';
 */
 
 /*
-  The shared material. Props elsewhere (rides, stalls, vehicles) also merge into it through
-  shape()/merged(); they carry no `cuv` attribute, which reads as zero and leaves them plain.
-  People set cuv.z >= 1: a soft warm rim (the stylised film look), and from 2 up an atlas cell
-  blended over the vertex colour by the painted alpha.
+  The people's material. People set cuv.z >= 1: a soft warm rim (the stylised film look), and from
+  2 up an atlas cell blended over the vertex colour by the painted alpha. Skin carries `glow`, a
+  small light of its own, so under the night lights a dark face keeps its eyes and brows. Props
+  (rides, stalls, vehicles) built with shape()/merged() use propMaterial instead, so nothing done
+  to the people's shader can leak into them.
 */
 function patchCharacter(mat) {
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.charAtlas = { value: charAtlas() };
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute vec4 cuv;\nvarying vec4 vCuv;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCuv = cuv;');
+      .replace('#include <common>', '#include <common>\nattribute vec4 cuv;\nattribute float glow;\nvarying vec4 vCuv;\nvarying float vGlow;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCuv = cuv;\nvGlow = glow;');
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform sampler2D charAtlas;\nvarying vec4 vCuv;')
+      .replace('#include <common>', `#include <common>\nuniform sampler2D charAtlas;\nvarying vec4 vCuv;\nvarying float vGlow;\nconst vec2 CELL_SIZE = vec2(0.25, ${(1 / ROWS).toFixed(6)});`)
       .replace(
         '#include <color_fragment>',
         `#include <color_fragment>
 if (vCuv.z > 1.5) {
   float cell = floor(vCuv.z - 1.5);
-  vec2 org = vec2(mod(cell, 4.0), floor(cell / 4.0)) * 0.25;
+  vec2 org = vec2(mod(cell, 4.0), floor(cell / 4.0)) * CELL_SIZE;
   vec2 l = vec2(fract(vCuv.x), clamp(vCuv.y, 0.0, 1.0));
-  vec2 g = vCuv.xy * 0.244;
-  vec4 tx = textureGrad(charAtlas, org + (0.012 + l * 0.976) * 0.25, dFdx(g), dFdy(g));
+  vec2 g = vCuv.xy * 0.976 * CELL_SIZE;
+  vec4 tx = textureGrad(charAtlas, org + (0.012 + l * 0.976) * CELL_SIZE, dFdx(g), dFdy(g));
   float m = clamp((vCuv.w - 0.15) / 0.3, 0.0, 1.0);
   diffuseColor.rgb = diffuseColor.rgb * (1.0 - tx.a * m) + tx.rgb * m;
 }`
@@ -47,15 +50,18 @@ if (vCuv.z > 1.5) {
 if (vCuv.z > 0.5) {
   float rim = 1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);
   totalEmissiveRadiance += diffuseColor.rgb * vec3(1.0, 0.85, 0.7) * (rim * rim * rim) * 0.22;
+  totalEmissiveRadiance += diffuseColor.rgb * vec3(1.0, 0.9, 0.82) * vGlow * 0.06;
 }`
       );
   };
-  mat.customProgramCacheKey = () => 'mela-char-1';
+  mat.customProgramCacheKey = () => 'mela-char-2';
   return mat;
 }
 
 const makeMaterial = () => patchCharacter(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.72 }));
 export const charMaterial = makeMaterial();
+/** Props built with shape()/merged() (stalls, rides, vehicles, held items): plain vertex colours. */
+export const propMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.72 });
 
 export function paint(geo, hex) {
   const c = new THREE.Color(hex);
@@ -100,7 +106,7 @@ export function shape(geo, hex, [px = 0, py = 0, pz = 0] = [], [rx = 0, ry = 0, 
   return paint(geo, hex);
 }
 
-export function merged(parts, material = charMaterial) {
+export function merged(parts, material = propMaterial) {
   return new THREE.Mesh(mergeGeometries(parts), material);
 }
 
@@ -124,6 +130,10 @@ export const LOOK_OPTIONS = {
   bottom: [...BOTTOMS, 0xffd166, 0xe0218a, 0x1f9d55, 0x3a4fd8],
   accent: ACCENTS,
   hair: HAIR,
+  body: [
+    { id: 'm', label: 'Him', icon: '🙋‍♂️' },
+    { id: 'f', label: 'Her', icon: '🙋‍♀️' },
+  ],
   shoes: SHOES,
   style: [
     { id: 'kurta', label: 'Kurta', icon: '👕' },
@@ -151,6 +161,7 @@ export const LOOK_OPTIONS = {
     { id: 'bangles', label: 'Bangles', icon: '💍' },
     { id: 'bindi', label: 'Bindi', icon: '🔴' },
     { id: 'moustache', label: 'Moustache', icon: '👨' },
+    { id: 'beard', label: 'Beard', icon: '🧔' },
     { id: 'glasses', label: 'Glasses', icon: '👓' },
   ],
 };
@@ -164,7 +175,7 @@ export function randomLook({ kid = false } = {}) {
   const elder = age === 'elder';
   const teen = age === 'teen';
   let style;
-  if (fem) style = kid ? pick(['lehenga', 'lehenga', 'long', 'salwar']) : teen ? pick(['casual', 'salwar', 'lehenga', 'long']) : elder ? pick(['saree', 'saree', 'salwar']) : pick(['saree', 'saree', 'lehenga', 'salwar', 'long']);
+  if (fem) style = kid ? pick(['frock', 'frock', 'lehenga', 'long', 'salwar']) : teen ? pick(['casual', 'salwar', 'lehenga', 'long']) : elder ? pick(['saree', 'saree', 'salwar']) : pick(['saree', 'saree', 'lehenga', 'salwar', 'long']);
   else style = kid ? pick(['kurta', 'kurta', 'casual']) : teen ? pick(['casual', 'casual', 'kurta']) : elder ? 'kurta' : pick(['kurta', 'kurta', 'kurta', 'sherwani', 'casual']);
   let hairStyle;
   if (fem) hairStyle = elder ? pick(['bun', 'bun', 'veil']) : kid ? pick(['braid', 'pony', 'open', 'bun']) : pick(['bun', 'braid', 'braid', 'open', 'pony', 'veil']);
@@ -187,10 +198,11 @@ export function randomLook({ kid = false } = {}) {
     hairStyle,
     accent,
     turban: accent,
-    dupatta: fem && style !== 'saree' && style !== 'casual' && (style === 'lehenga' || chance(0.7)) ? pick([...TOPS, 0xffd166]) : hairStyle === 'veil' ? pick(TOPS) : null,
+    dupatta: fem && style !== 'saree' && style !== 'casual' && style !== 'frock' && (style === 'lehenga' || chance(0.7)) ? pick([...TOPS, 0xffd166]) : hairStyle === 'veil' ? pick(TOPS) : null,
     bindi: fem && !kid && chance(0.7),
     bangles: fem && chance(0.6) ? pick([0xe63946, 0xffd166, 0x2a9d8f, 0xd4a017]) : null,
     moustache: !fem && !kid && !teen && chance(elder ? 0.8 : 0.35),
+    beard: !fem && !kid && !teen && chance(elder ? 0.3 : 0.15),
     glasses: !kid && chance(elder ? 0.5 : 0.1),
     scale: kid ? rand(0.6, 0.7) : teen ? rand(0.9, 0.95) : fem ? rand(0.92, 0.98) : rand(0.97, 1.05),
   };
@@ -220,7 +232,7 @@ const DEFAULTS = {
   hipsY: 0.95, hipsX: 0, hipsRY: 0, hipsRZ: 0, torsoX: 0, torsoY: 0, torsoZ: 0, headX: 0, headY: 0,
   armRX: 0, armRZ: -0.07, elbowR: -0.15, elbowRZ: 0,
   armLX: 0, armLZ: 0.07, elbowL: -0.15, elbowLZ: 0,
-  legRX: 0, legRZ: 0, kneeR: 0.05, legLX: 0, legLZ: 0, kneeL: 0.05,
+  legRX: 0, legRZ: 0, kneeR: 0.05, legLX: 0, legLZ: 0, kneeL: 0.05, footR: 0, footL: 0,
 };
 
 // Arm sign notes: the right arm hangs on -x, so a negative z rotation swings it outwards.
@@ -404,7 +416,9 @@ export class Character {
       this.hips.add(hip);
       const knee = new THREE.Group();
       hip.add(knee);
-      return { hip, knee };
+      const ankle = new THREE.Group();
+      knee.add(ankle);
+      return { hip, knee, ankle };
     });
     this.handR = this.arms[0].hand;
     this.handL = this.arms[1].hand;
@@ -451,6 +465,7 @@ export class Character {
       const s = i === 0 ? -1 : 1;
       g.hip.position.set(s * G.legX, -0.02, 0);
       g.knee.position.set(0, -G.thigh, 0);
+      g.ankle.position.set(0, -G.shin, 0);
     });
     // bones are translations at rest, so each inverse is the negated rest position (body space)
     const rest = [
@@ -459,9 +474,10 @@ export class Character {
       [G.shX, G.hy + G.shY, 0], [G.shX, G.hy + G.shY - G.upper, 0],
       [-G.legX, G.hy - 0.02, 0], [-G.legX, G.hy - 0.02 - G.thigh, 0],
       [G.legX, G.hy - 0.02, 0], [G.legX, G.hy - 0.02 - G.thigh, 0],
+      [-G.legX, G.hy - 0.02 - G.thigh - G.shin, 0], [G.legX, G.hy - 0.02 - G.thigh - G.shin, 0],
     ];
     const inverses = rest.map(([x, y, z]) => new THREE.Matrix4().makeTranslation(-x, -y, -z));
-    const bones = [this.hips, this.torso, this.head, this.arms[0].shoulder, this.arms[0].elbow, this.arms[1].shoulder, this.arms[1].elbow, this.legs[0].hip, this.legs[0].knee, this.legs[1].hip, this.legs[1].knee];
+    const bones = [this.hips, this.torso, this.head, this.arms[0].shoulder, this.arms[0].elbow, this.arms[1].shoulder, this.arms[1].elbow, this.legs[0].hip, this.legs[0].knee, this.legs[1].hip, this.legs[1].knee, this.legs[0].ankle, this.legs[1].ankle];
     if (bones.length !== BONE_COUNT) throw new Error('rig mismatch');
 
     const mesh = new THREE.SkinnedMesh(geometry, split ? [this.material, this.headMaterial] : this.material);
@@ -619,6 +635,10 @@ export class Character {
       T.hipsRY *= 0.3;
       T.hipsRZ *= 0.3;
     }
+    // feet stay level with the ground (against the thigh and knee), and the back foot rolls onto
+    // its toes as it leaves the ground (the toe-off)
+    T.footR = -(T.legRX + T.kneeR) * 0.9 + Math.max(0, T.legRX) * 0.75 * walk;
+    T.footL = -(T.legLX + T.kneeL) * 0.9 + Math.max(0, T.legLX) * 0.75 * walk;
 
     const k = 1 - Math.exp(-dt * (this.snappy ? 30 : 14));
     const C = this.cur;
@@ -635,7 +655,9 @@ export class Character {
     // the legs stay planted against the pelvis yaw so the feet keep pointing ahead
     this.legs[0].hip.rotation.set(C.legRX, -C.hipsRY, C.legRZ - C.hipsRZ);
     this.legs[0].knee.rotation.x = C.kneeR;
+    this.legs[0].ankle.rotation.x = C.footR;
     this.legs[1].hip.rotation.set(C.legLX, -C.hipsRY, C.legLZ - C.hipsRZ);
     this.legs[1].knee.rotation.x = C.kneeL;
+    this.legs[1].ankle.rotation.x = C.footL;
   }
 }

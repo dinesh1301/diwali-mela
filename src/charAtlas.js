@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 
 /*
-  One painted texture for every person in the mela: a 4x4 atlas of 256 px cells, drawn once on a
-  canvas at startup. Eight cells are faces (painted in head units, mapped by a front projection of
-  the head), eight are fabric details (zari borders, butis, plackets) that tile round a garment.
+  One painted texture for every person in the mela: a 4x6 atlas of 256 px cells, drawn once on a
+  canvas at startup. Twelve cells are faces (painted in head units, mapped by a front projection of
+  the head: man, woman, kids, teens, elders, and bearded men dark or grey), the rest are fabric and
+  hair details (zari borders, butis, plackets, saree pleats, hair strands) that tile round a part.
   Every cell is transparent where the vertex colour (skin, cloth) should show through, so one
   texture serves every skin tone and every fabric colour, and a whole person stays one draw call.
 */
@@ -11,7 +12,10 @@ import * as THREE from 'three';
 export const CELL = {
   man: 0, woman: 1, boy: 2, girl: 3, elderM: 4, elderF: 5, teenM: 6, teenF: 7,
   buti: 8, skirt: 9, pallu: 10, kurta: 11, sherwani: 12, tee: 13, lehenga: 14, floral: 15,
+  pleats: 16, frock: 17, hair: 18, curls: 19, manBeard: 20, manBeardGrey: 21, elderMBeard: 22, elderMBeardDark: 23,
 };
+/** Rows of cells in the atlas (four columns each); the shader needs it to find a cell. */
+export const ROWS = 6;
 // the face projection: head-local x in [-FACE_W, FACE_W] and y in [-FACE_H, FACE_H] fill a cell
 export const FACE_W = 0.125;
 export const FACE_H = 0.14;
@@ -22,21 +26,26 @@ export const FRONT_H = 1.2;
 
 const SIZE = 1024;
 const C = 256;
+const H = C * ROWS;
 let texture = null;
 
 const GOLD = '#e8b84a';
+// the painted hairline's colour: the crowd's dark hair, or an elder's grey
+const INK = '#1a100a';
+const INK_GREY = '#aaa399';
 const GOLD_DK = '#b07a1e';
 
 /** The shared character texture (created on first use). */
 export function charAtlas() {
   if (texture) return texture;
   const cv = document.createElement('canvas');
-  cv.width = cv.height = SIZE;
+  cv.width = SIZE;
+  cv.height = H;
   const g = cv.getContext('2d');
   // cell c sits at column c % 4, row floor(c / 4) counted from the bottom (the texture is flipped)
   const cell = (c, draw, { face = false, front = false } = {}) => {
     const x0 = (c % 4) * C;
-    const y0 = SIZE - (Math.floor(c / 4) + 1) * C;
+    const y0 = H - (Math.floor(c / 4) + 1) * C;
     g.save();
     g.beginPath();
     g.rect(x0, y0, C, C);
@@ -50,15 +59,22 @@ export function charAtlas() {
   };
 
   const faces = {
-    man: { eye: 1, lash: 0, brow: 0.0085, browC: '#24160d', lip: null, blush: 0.12, smile: 0.9 },
-    woman: { eye: 1.08, lash: 1, brow: 0.0062, browC: '#24160d', lip: '#b8434e', blush: 0.2, smile: 1 },
-    boy: { eye: 1.22, lash: 0, brow: 0.006, browC: '#2b1a10', lip: null, blush: 0.26, smile: 1.15, open: true, kid: true },
-    girl: { eye: 1.25, lash: 1, brow: 0.0055, browC: '#2b1a10', lip: '#c9555e', blush: 0.3, smile: 1.1, open: true, kid: true },
-    elderM: { eye: 0.92, lash: 0, brow: 0.009, browC: '#9a948c', lip: null, blush: 0.08, smile: 0.95, lines: true },
-    elderF: { eye: 0.95, lash: 1, brow: 0.0058, browC: '#8f8880', lip: '#a4505a', blush: 0.14, smile: 1, lines: true },
-    teenM: { eye: 1.08, lash: 0, brow: 0.0075, browC: '#24160d', lip: null, blush: 0.14, smile: 0.85 },
-    teenF: { eye: 1.15, lash: 1, brow: 0.006, browC: '#24160d', lip: '#c24a58', blush: 0.24, smile: 1 },
+    // adults' eyes sit about 10% smaller than the kids' so close-ups never read as bobbleheads
+    man: { hl: 'm', eye: 0.9, lash: 0, brow: 0.0085, browC: '#24160d', lip: null, blush: 0.12, smile: 0.9 },
+    woman: { hl: 'f', eye: 0.97, lash: 1, brow: 0.0062, browC: '#24160d', lip: '#b8434e', blush: 0.2, smile: 1 },
+    boy: { hl: 'm', eye: 1.22, lash: 0, brow: 0.006, browC: '#2b1a10', lip: null, blush: 0.26, smile: 1.15, open: true, kid: true },
+    girl: { hl: 'f', eye: 1.25, lash: 1, brow: 0.0055, browC: '#2b1a10', lip: '#c9555e', blush: 0.3, smile: 1.1, open: true, kid: true },
+    elderM: { hl: 'm', ink: INK_GREY, eye: 0.83, lash: 0, brow: 0.009, browC: '#9a948c', lip: null, blush: 0.08, smile: 0.95, lines: true },
+    elderF: { hl: 'f', ink: INK_GREY, eye: 0.86, lash: 1, brow: 0.0058, browC: '#8f8880', lip: '#a4505a', blush: 0.14, smile: 1, lines: true },
+    teenM: { hl: 'm', eye: 0.97, lash: 0, brow: 0.0075, browC: '#24160d', lip: null, blush: 0.14, smile: 0.85 },
+    teenF: { hl: 'f', eye: 1.04, lash: 1, brow: 0.006, browC: '#24160d', lip: '#c24a58', blush: 0.24, smile: 1 },
   };
+  const DARK = 'rgba(28,17,10,0.93)';
+  const GREYB = 'rgba(214,208,198,0.96)';
+  faces.manBeard = { ...faces.man, beard: DARK };
+  faces.manBeardGrey = { ...faces.man, beard: GREYB, browC: '#8f8a82' };
+  faces.elderMBeard = { ...faces.elderM, beard: GREYB };
+  faces.elderMBeardDark = { ...faces.elderM, beard: DARK, browC: '#24160d', ink: INK };
   for (const [k, f] of Object.entries(faces)) cell(CELL[k], (g) => paintFace(g, f), { face: true });
 
   cell(CELL.buti, (g) => butis(g, 0.12, 0.92, 7, 0.022));
@@ -81,6 +97,85 @@ export function charAtlas() {
     butis(g, 0.64, 0.96, 3, 0.022);
   });
   cell(CELL.floral, (g) => flowers(g));
+  // saree pleats: one wrap of the skirt (u = 0 and 1 at the front), folds fanned at the front
+  cell(CELL.pleats, (g) => {
+    zari(g, 0.0, 0.13);
+    band(g, 0.16, 0.172, GOLD);
+    for (let i = 0; i < 28; i++) {
+      const k = (i + 0.5) / 28;
+      const u = k < 0.5 ? k * 0.3 : 1 - (1 - k) * 0.3; // within ~55 degrees either side of the front
+      const w = 0.0045 + 0.004 * Math.abs(Math.sin(i * 1.7));
+      g.fillStyle = i % 2 ? 'rgba(0,0,0,0.22)' : 'rgba(255,255,255,0.13)';
+      g.fillRect(u - w / 2, 0.0, w, 1.0);
+    }
+    // the fold shadow where the pleats tuck in at the waist
+    const gr = g.createLinearGradient(0, 1, 0, 0.82);
+    gr.addColorStop(0, 'rgba(0,0,0,0.18)');
+    gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr;
+    g.fillRect(-0.01, 0.82, 1.02, 0.18);
+    for (let row = 0; row < 6; row++) {
+      for (let c = 0; c < 14; c++) {
+        const u = (c + (row % 2 ? 0.5 : 0) + 0.5) / 14;
+        const v = 0.26 + row * 0.13;
+        g.fillStyle = 'rgba(232,184,74,0.9)';
+        g.beginPath();
+        g.ellipse(u, v, 0.007, 0.012, 0, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+  });
+  // a frock: a smocked yoke below the waist, little flowers and a ribbon at the hem
+  cell(CELL.frock, (g) => {
+    g.fillStyle = 'rgba(255,255,255,0.55)';
+    g.fillRect(-0.01, 0.06, 1.02, 0.05);
+    g.fillStyle = 'rgba(255,255,255,0.85)';
+    g.fillRect(-0.01, 0.0, 1.02, 0.035);
+    for (let i = 0; i < 24; i++) {
+      g.fillStyle = 'rgba(0,0,0,0.12)';
+      g.fillRect(i / 24, 0.86, 0.008, 0.14);
+    }
+    flowers(g, 0.25, 0.75, 3);
+  });
+  // hair strands: fine streaks running from the crown, a sheen band, darker roots at the parting
+  cell(CELL.hair, (g) => {
+    let seed = 7;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    for (let i = 0; i < 90; i++) {
+      const u = rnd();
+      const w = 0.003 + rnd() * 0.006;
+      const dark = rnd() < 0.55;
+      g.fillStyle = dark ? `rgba(0,0,0,${0.16 + rnd() * 0.18})` : `rgba(255,236,210,${0.05 + rnd() * 0.07})`;
+      g.fillRect(u, 0, w, 1);
+    }
+    // the sheen: a soft band of light across the crown, broken by the strands
+    const gr = g.createLinearGradient(0, 0.58, 0, 0.82);
+    gr.addColorStop(0, 'rgba(255,230,200,0)');
+    gr.addColorStop(0.5, 'rgba(255,230,200,0.16)');
+    gr.addColorStop(1, 'rgba(255,230,200,0)');
+    g.fillStyle = gr;
+    g.fillRect(-0.01, 0.58, 1.02, 0.24);
+  });
+  // curls: overlapping rings of light and shade
+  cell(CELL.curls, (g) => {
+    let seed = 11;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    for (let i = 0; i < 70; i++) {
+      const x = rnd();
+      const y = rnd();
+      const r = 0.025 + rnd() * 0.025;
+      g.strokeStyle = 'rgba(0,0,0,0.3)';
+      g.lineWidth = 0.008;
+      g.beginPath();
+      g.arc(x, y, r, 0.3, Math.PI * 1.6);
+      g.stroke();
+      g.strokeStyle = 'rgba(255,236,210,0.12)';
+      g.lineWidth = 0.006;
+      g.beginPath();
+      g.arc(x + 0.004, y + 0.006, r * 0.7, Math.PI * 1.1, Math.PI * 1.9);
+      g.stroke();
+    }
+  });
   // front cells draw in body metres: x across the chest, y the height above the ground (adult rig)
   cell(CELL.kurta, (g) => {
     const ny = 0.95 + 0.505;
@@ -203,11 +298,11 @@ function butis(g, v0, v1, rows, r) {
   }
 }
 
-function flowers(g) {
-  for (let row = 0; row < 6; row++) {
+function flowers(g, v0 = 0.08, v1 = 0.93, rows = 6) {
+  for (let row = 0; row < rows; row++) {
     for (let c = 0; c < 4; c++) {
       const u = (c + (row % 2 ? 0.5 : 0) + 0.25) / 4;
-      const v = 0.08 + row * 0.17;
+      const v = v0 + (row * (v1 - v0)) / (rows - 1);
       g.fillStyle = 'rgba(255,250,240,0.85)';
       for (let p = 0; p < 5; p++) {
         const a = (p / 5) * Math.PI * 2;
@@ -224,6 +319,7 @@ function flowers(g) {
   readable eyes with whites, iris, pupil and a catch-light; brows; a nose hint; a smile.
 */
 function paintFace(g, f) {
+  paintHairline(g, f);
   const s = f.eye;
   const ex = f.kid ? 0.039 : 0.041;
   const ey = f.kid ? -0.008 : 0.002;
@@ -396,6 +492,125 @@ function paintFace(g, f) {
       g.moveTo(sx * 0.018, ny + 0.002);
       g.quadraticCurveTo(sx * 0.03, my, sx * 0.026, my - 0.012);
       g.stroke();
+      // soft bags under the eyes
+      g.strokeStyle = 'rgba(70,30,15,0.16)';
+      g.lineWidth = 0.0022;
+      g.beginPath();
+      g.ellipse(sx * ex, ey - eh * 0.2, ew * 0.85, eh * 1.25, 0, Math.PI * 1.2, Math.PI * 1.8);
+      g.stroke();
+      g.strokeStyle = 'rgba(70,30,15,0.2)';
+      g.lineWidth = 0.0028;
     }
+    // two gentle lines across the forehead
+    g.strokeStyle = 'rgba(70,30,15,0.17)';
+    g.lineWidth = 0.0024;
+    for (const y of [0.052, 0.064]) {
+      g.beginPath();
+      g.moveTo(-0.034, y - 0.002);
+      g.quadraticCurveTo(0, y + 0.004, 0.034, y - 0.002);
+      g.stroke();
+    }
+  }
+  if (f.beard) paintBeard(g, f.beard, my);
+}
+
+/*
+  The hairline, painted where the hair meets the forehead so it is a shaped, soft edge instead of
+  the straight step between two rings of the head: a man's with set-back temples and sideburns, a
+  woman's swept from a centre parting to frame the face. The hair shell rises from just above it.
+*/
+function paintHairline(g, f) {
+  const ink = f.ink ?? INK;
+  const kid = !!f.kid;
+  const elder = !!f.lines;
+  const top = 0.15;
+  g.save();
+  g.fillStyle = ink;
+  const path = (k) => {
+    g.beginPath();
+    if (f.hl === 'm') {
+      // about one nose-length above the brows, the temples set back a touch, then down the sides
+      // to the sideburns
+      const c = (kid ? 0.098 : elder ? 0.112 : 0.103) + k;
+      const tmp = (kid ? 0.104 : elder ? 0.122 : 0.11) + k;
+      g.moveTo(-0.13, top);
+      g.lineTo(-0.13, 0.05);
+      g.quadraticCurveTo(-0.1 + k, 0.058, -0.094 + k, 0.08);
+      g.bezierCurveTo(-0.09 + k, tmp, -0.075 + k, tmp + 0.002, -0.056, tmp);
+      g.quadraticCurveTo(-0.025, c - 0.001, 0, c);
+      g.quadraticCurveTo(0.025, c - 0.001, 0.056, tmp);
+      g.bezierCurveTo(0.075 - k, tmp + 0.002, 0.09 - k, tmp, 0.094 - k, 0.08);
+      g.quadraticCurveTo(0.1 - k, 0.058, 0.13, 0.05);
+      g.lineTo(0.13, top);
+      g.closePath();
+    } else {
+      // swept from a centre parting down to frame the face
+      const c = (kid ? 0.094 : 0.104) + k;
+      for (const sx of [-1, 1]) {
+        g.moveTo(sx * 0.0045, top);
+        g.lineTo(sx * 0.0045, c + 0.004);
+        g.bezierCurveTo(sx * 0.03, c, sx * 0.068, c - 0.01 - k, sx * 0.084 - sx * k, 0.045);
+        g.quadraticCurveTo(sx * 0.093 - sx * k, 0.015, sx * 0.097 - sx * k, -0.01);
+        g.lineTo(sx * 0.13, -0.01);
+        g.lineTo(sx * 0.13, top);
+        g.closePath();
+      }
+    }
+  };
+  // a soft fringe of baby hairs, then the hair itself
+  g.globalAlpha = 0.3;
+  path(-0.004);
+  g.fill();
+  g.globalAlpha = 1;
+  path(0);
+  g.fill();
+  // strands: light and dark, combed back from the hairline
+  g.lineCap = 'round';
+  for (let i = 0; i < 22; i++) {
+    const x = -0.085 + i * 0.0081;
+    const sx = f.hl === 'f' ? Math.sign(x || 1) : 1;
+    g.strokeStyle = i % 3 ? 'rgba(0,0,0,0.25)' : 'rgba(255,232,205,0.16)';
+    g.lineWidth = 0.0022;
+    g.beginPath();
+    const y0 = f.hl === 'm' ? 0.108 + Math.abs(x) * 0.1 : 0.108 - Math.abs(x) * 0.35;
+    g.moveTo(x, y0);
+    g.quadraticCurveTo(x + sx * 0.01, y0 + 0.02, x + sx * 0.02, top);
+    g.stroke();
+  }
+  g.restore();
+}
+
+/* A full beard along the jaw and round the chin, leaving the lips clear (head units). */
+function paintBeard(g, color, my) {
+  const shape = (grow) => {
+    g.beginPath();
+    g.moveTo(-0.098 - grow, 0.004);
+    g.quadraticCurveTo(-0.096 - grow, -0.09, -0.045, -0.13 - grow);
+    g.quadraticCurveTo(0, -0.15 - grow, 0.045, -0.13 - grow);
+    g.quadraticCurveTo(0.096 + grow, -0.09, 0.098 + grow, 0.004);
+    g.lineTo(0.082 - grow, 0.004);
+    g.quadraticCurveTo(0.074 - grow, -0.04, 0.042, my - 0.004 + grow);
+    g.quadraticCurveTo(0.022, my - 0.02 + grow, 0, my - 0.018 + grow);
+    g.quadraticCurveTo(-0.022, my - 0.02 + grow, -0.042, my - 0.004 + grow);
+    g.quadraticCurveTo(-0.074 + grow, -0.04, -0.082 + grow, 0.004);
+    g.closePath();
+  };
+  // a soft stubble edge, then the beard itself
+  g.globalAlpha = 0.35;
+  g.fillStyle = color;
+  shape(0.006);
+  g.fill();
+  g.globalAlpha = 1;
+  shape(0);
+  g.fill();
+  // a few strands so it reads as hair, not paint
+  g.strokeStyle = 'rgba(0,0,0,0.18)';
+  g.lineWidth = 0.0018;
+  for (let i = 0; i < 16; i++) {
+    const x = -0.07 + i * 0.0094;
+    g.beginPath();
+    g.moveTo(x, my - 0.03 - Math.abs(x) * 0.2);
+    g.lineTo(x * 0.92, my - 0.055 - (0.07 - Math.abs(x)) * 0.25);
+    g.stroke();
   }
 }

@@ -1,5 +1,7 @@
 import * as THREE from 'three';
-import { Character, LOOK_OPTIONS, randomPlayerLook } from './character.js';
+import { Character, LOOK_OPTIONS, randomPlayerLook, resolveLook } from './character.js';
+
+const HER_STYLES = new Set(['saree', 'lehenga', 'salwar', 'long']);
 import { profile, normalizeHandle } from './profile.js';
 import { pick } from './utils.js';
 import { settings } from './settings.js';
@@ -161,6 +163,7 @@ export class Customizer {
         else this.apply({ [field]: v });
       });
     };
+    chips('body', LOOK_OPTIONS.body);
     chips('style', LOOK_OPTIONS.style);
     chips('hairStyle', LOOK_OPTIONS.hairStyle);
     chips('extras', LOOK_OPTIONS.extras);
@@ -170,14 +173,25 @@ export class Customizer {
   toggleExtra(id) {
     const L = this.look;
     if (id === 'dupatta' || id === 'bangles') this.apply({ [id]: L[id] ? null : L.accent });
+    // a beard goes off -> dark -> grey -> off
+    else if (id === 'beard') this.apply({ beard: !L.beard ? 'dark' : L.beard === 'grey' ? false : 'grey' });
     else this.apply({ [id]: !L[id] });
   }
 
   apply(partial) {
     const L = this.look;
+    const was = resolveLook(L).fem ? 'f' : 'm';
     Object.assign(L, partial);
-    // a chosen outfit or hairstyle re-decides the build (randomised looks carry one)
-    if ('style' in partial || 'hairStyle' in partial) delete L.body;
+    // the outfit decides the build (a saree, lehenga, salwar or anarkali is hers, a sherwani his;
+    // a kurta or casual keeps the build there was); Him / Her is the explicit override, and swaps
+    // an outfit that body does not wear
+    if ('style' in partial) L.body = HER_STYLES.has(L.style) ? 'f' : L.style === 'sherwani' ? 'm' : was;
+    else if ('hairStyle' in partial && !L.body) L.body = was;
+    if ('body' in partial) {
+      if (L.body === 'm' && HER_STYLES.has(L.style)) L.style = 'kurta';
+      if (L.body === 'f' && L.style === 'sherwani') L.style = 'salwar';
+      if (L.body === 'f') L.moustache = L.beard = false;
+    }
     if ('accent' in partial) {
       L.turban = L.accent;
       if (L.dupatta) L.dupatta = L.accent;
@@ -198,7 +212,9 @@ export class Customizer {
       const f = box.dataset.field;
       box.querySelectorAll('.chip').forEach((b) => {
         const v = b.dataset.v;
-        b.classList.toggle('on', f === 'extras' ? !!L[v] : L[f] === v);
+        const cur = f === 'body' ? (resolveLook(L).fem ? 'f' : 'm') : f === 'style' ? resolveLook(L).style : L[f];
+        b.classList.toggle('on', f === 'extras' ? !!L[v] : cur === v);
+        if (f === 'extras' && v === 'beard') b.lastChild.textContent = L.beard === 'grey' ? 'Grey beard' : 'Beard';
       });
     });
   }

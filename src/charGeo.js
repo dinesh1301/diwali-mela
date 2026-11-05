@@ -13,8 +13,8 @@ import { CELL, FACE_W, FACE_H, FRONT_W, FRONT_Y0, FRONT_H } from './charAtlas.js
   the bind matrices trivial: inverse = translate(-restPosition).
 */
 
-export const BONE = { hips: 0, torso: 1, head: 2, shR: 3, elR: 4, shL: 5, elL: 6, hipR: 7, knR: 8, hipL: 9, knL: 10 };
-export const BONE_COUNT = 11;
+export const BONE = { hips: 0, torso: 1, head: 2, shR: 3, elR: 4, shL: 5, elL: 6, hipR: 7, knR: 8, hipL: 9, knL: 10, anR: 11, anL: 12 };
+export const BONE_COUNT = 13;
 
 const smooth = (a, b, x) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
@@ -44,6 +44,8 @@ class Builder {
     this.cuv = [];
     this.si = [];
     this.sw = [];
+    this.glow = [];
+    this.skinHex = -1;
     this.body = [];
     this.headIdx = [];
     this.idx = this.body;
@@ -55,10 +57,18 @@ class Builder {
     this.nor.push(nx, ny, nz);
     const c = lin(hex);
     this.col.push(c[0], c[1], c[2]);
+    // skin keeps a little light of its own at night, so dark faces keep their eyes and brows
+    this.glow.push(hex === this.skinHex ? 1 : 0);
     if (uv) this.cuv.push(uv[0], uv[1], uv[2], uv[3]);
     else this.cuv.push(0, 0, 1, 0);
     // weights: up to four [bone, weight] pairs, strongest kept, normalised
     let list = w;
+    if (list.length > 1) {
+      // the same bone named twice is one weight
+      const m = new Map();
+      for (const [b, v] of list) m.set(b, (m.get(b) ?? 0) + v);
+      if (m.size < list.length) list = [...m];
+    }
     if (list.length > 4) list = [...list].sort((a, b) => b[1] - a[1]).slice(0, 4);
     let sum = 0;
     for (const p of list) sum += p[1];
@@ -76,6 +86,7 @@ class Builder {
     g.setAttribute('normal', new THREE.Float32BufferAttribute(this.nor, 3));
     g.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
     g.setAttribute('cuv', new THREE.Float32BufferAttribute(this.cuv, 4));
+    g.setAttribute('glow', new THREE.Float32BufferAttribute(this.glow, 1));
     g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(this.si, 4));
     g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(this.sw, 4));
     const all = this.body.concat(this.headIdx);
@@ -101,7 +112,7 @@ const _n = new THREE.Vector3();
   the side axis and b along the "front" axis (up, or opts.up, or +z). A ring with a = b = 0 closes
   the tube. opts: seg (radial segments), color(x,y,z,i,j,th) -> hex, weight(x,y,z,i) -> pairs,
   uv(x,y,z,i,j,th,s) -> [u,v,cell,mask], keep(x,y,z) -> bool (drops quads), loop (closed path),
-  radius(i,th) -> multiplier.
+  radius(i,th) -> multiplier, warp(v: Vector3) moves each vertex before the normals are taken.
 */
 function sweep(B, pts, o) {
   const n = o.seg;
@@ -143,6 +154,12 @@ function sweep(B, pts, o) {
       P[off + 2] = pt.p[2] + _F.z * ca + _S.z * sa;
     }
   }
+  if (o.warp) {
+    for (let q = 0; q < P.length; q += 3) {
+      o.warp(_a.fromArray(P, q));
+      _a.toArray(P, q);
+    }
+  }
   const at = (i, j, v) => v.fromArray(P, (i * (n + 1) + j) * 3);
   const base = B.n;
   for (let i = 0; i < m; i++) {
@@ -169,6 +186,8 @@ function sweep(B, pts, o) {
         const sg = i === 0 ? -1 : 1;
         _n.set(t[0] * sg, t[1] * sg, t[2] * sg);
       } else if (_n.x * ox + _n.y * oy + _n.z * oz < 0) _n.negate();
+      // below `levelBelow` the normals lean level, so a cap (the crotch) shades like the legs
+      if (o.levelBelow != null && y < o.levelBelow) _n.normalize().y *= 0.25;
       _n.normalize();
       const th = (j / n) * TAU;
       B.vert(x, y, z, _n.x, _n.y, _n.z, o.color(x, y, z, i, j, th, c[1]), o.uv ? o.uv(x, y, z, i, j, th, arc[i]) : o.cuv, o.weight(x, y, z, i));
@@ -253,20 +272,32 @@ function cutAt(pts, cuts, eps = 0.0035) {
 
 // ---------- looks resolved into a build ----------
 
-const FEM_STYLES = new Set(['long', 'saree', 'lehenga', 'salwar']);
+export const FEM_STYLES = new Set(['long', 'saree', 'lehenga', 'salwar', 'frock']);
 const FEM_HAIR = new Set(['open', 'bun', 'braid', 'pony', 'veil']);
-export const STYLES = ['kurta', 'sherwani', 'long', 'saree', 'lehenga', 'salwar', 'casual'];
+export const STYLES = ['kurta', 'sherwani', 'long', 'saree', 'lehenga', 'salwar', 'casual', 'frock'];
+
+/** Hair light enough to read as grey (an elder's, or a chosen grey). */
+export const isGrey = (hex) => ((hex >> 16) & 255) + ((hex >> 8) & 255) + (hex & 255) > 3 * 0x70;
 
 /** What a look means for the body: build, age, garment and face. */
 export function resolveLook(L) {
-  const style = STYLES.includes(L.style) ? L.style : 'kurta';
+  let style = STYLES.includes(L.style) ? L.style : 'kurta';
   const age = L.age ?? ((L.scale ?? 1) < 0.8 ? 'kid' : 'adult');
-  // saree, lehenga, salwar and anarkali always take the feminine build, a sherwani the masculine;
-  // otherwise the look's body (random crowds set it), else the hair and bindi decide
-  const fem = FEM_STYLES.has(style) ? true : style === 'sherwani' ? false : L.body ? L.body === 'f' : FEM_HAIR.has(L.hairStyle) || !!L.bindi;
+  // an explicit body (the customiser's Him / Her, or a random crowd look) decides the build;
+  // otherwise the outfit does (saree, lehenga, salwar and anarkali are hers, a sherwani his),
+  // else the hair and bindi
+  const fem = L.body ? L.body === 'f' : FEM_STYLES.has(style) ? true : style === 'sherwani' ? false : FEM_HAIR.has(L.hairStyle) || !!L.bindi;
+  // and the outfit follows a body that cannot wear it
+  if (!fem && FEM_STYLES.has(style)) style = 'kurta';
+  if (fem && style === 'sherwani') style = 'long';
   const kid = age === 'kid';
-  const face = kid ? (fem ? 'girl' : 'boy') : age === 'teen' ? (fem ? 'teenF' : 'teenM') : age === 'elder' ? (fem ? 'elderF' : 'elderM') : fem ? 'woman' : 'man';
-  return { style, age, fem, kid, face };
+  if (kid && fem && style === 'saree') style = 'frock';
+  if (!kid && style === 'frock') style = 'long';
+  // a beard: dark, or grey with grey hair (or when asked for)
+  const beard = !fem && !kid && age !== 'teen' && L.beard ? (L.beard === 'grey' || (L.beard !== 'dark' && isGrey(L.hair ?? 0)) ? 'grey' : 'dark') : null;
+  let face = kid ? (fem ? 'girl' : 'boy') : age === 'teen' ? (fem ? 'teenF' : 'teenM') : age === 'elder' ? (fem ? 'elderF' : 'elderM') : fem ? 'woman' : 'man';
+  if (beard) face = age === 'elder' ? (beard === 'grey' ? 'elderMBeard' : 'elderMBeardDark') : beard === 'grey' ? 'manBeardGrey' : 'manBeard';
+  return { style, age, fem, kid, face, beard };
 }
 
 /** Skeleton proportions (body space, before the look's overall scale). */
@@ -283,20 +314,22 @@ export function rigFor(R) {
     upper: 0.29 * (kid ? 0.92 : 1),
     fore: 0.27 * (kid ? 0.92 : 1),
     headPivot: 0.585 * k,
-    hs: kid ? 1.3 : R.age === 'teen' ? 1.04 : R.fem ? 0.96 : 1,
+    // adults' heads about 1/7 of their height; kids keep their big heads
+    hs: kid ? 1.3 : R.age === 'teen' ? 0.99 : R.fem ? 0.9 : 0.94,
     k,
+    ankle: 0.95 - 0.02 - 0.44 - 0.43,
   };
 }
 
 // torso rings: [y above the hips joint, half-width, half-depth, depth offset]
 const TORSO_M = [
-  [-0.16, 0, 0, 0], [-0.152, 0.06, 0.05, 0], [-0.125, 0.135, 0.092, 0], [-0.06, 0.163, 0.106, -0.004], [0.02, 0.165, 0.104, 0],
+  [-0.205, 0, 0, 0.004], [-0.195, 0.088, 0.05, 0.004], [-0.16, 0.16, 0.086, 0.002], [-0.06, 0.163, 0.106, -0.004], [0.02, 0.165, 0.104, 0],
   [0.12, 0.156, 0.1, 0.006], [0.22, 0.164, 0.108, 0.012], [0.31, 0.175, 0.117, 0.014], [0.39, 0.19, 0.113, 0.006],
   [0.445, 0.196, 0.1, -0.004], [0.488, 0.172, 0.086, -0.008], [0.518, 0.11, 0.07, -0.006], [0.535, 0.068, 0.061, 0],
   [0.58, 0.06, 0.057, 0.004], [0.64, 0.056, 0.053, 0.002], [0.66, 0, 0, 0],
 ];
 const TORSO_F = [
-  [-0.16, 0, 0, 0], [-0.152, 0.065, 0.05, 0], [-0.12, 0.15, 0.098, -0.004], [-0.05, 0.183, 0.114, -0.01], [0.03, 0.17, 0.104, 0],
+  [-0.2, 0, 0, 0.002], [-0.19, 0.09, 0.05, 0.002], [-0.15, 0.168, 0.092, -0.004], [-0.05, 0.183, 0.114, -0.01], [0.03, 0.17, 0.104, 0],
   [0.12, 0.136, 0.09, 0.004], [0.2, 0.146, 0.098, 0.01], [0.27, 0.16, 0.112, 0.022], [0.33, 0.163, 0.116, 0.022],
   [0.39, 0.166, 0.1, 0.006], [0.44, 0.172, 0.09, -0.004], [0.482, 0.15, 0.076, -0.006], [0.512, 0.092, 0.06, -0.004],
   [0.53, 0.058, 0.053, 0], [0.58, 0.052, 0.05, 0.004], [0.64, 0.049, 0.047, 0.002], [0.66, 0, 0, 0],
@@ -350,6 +383,8 @@ export function buildPerson(L, { low = false, split = false } = {}) {
   const shoes = L.shoes ?? 0x5c2a12;
   const style = R.style;
   const casual = style === 'casual';
+  const frock = style === 'frock';
+  B.skinHex = skin;
 
   const headY = hy + G.headPivot;
   const cy = headY + 0.118 * hs; // head centre
@@ -378,21 +413,28 @@ export function buildPerson(L, { low = false, split = false } = {}) {
     const t = smooth(-0.02 * G.k, 0.24 * G.k, yr);
     const h = smooth(0.565 * G.k, 0.66 * G.k, yr);
     const out = [];
+    // the tops of the shoulders ride along with a raised arm a little, so the joint never bulges
+    const sk = 0.3 * smooth(0.1, 0.17, Math.abs(x)) * smooth(0.36, 0.42, yr / G.k) * (1 - smooth(0.47, 0.52, yr / G.k));
     if (1 - t > 0) out.push([BONE.hips, 1 - t]);
-    if (t * (1 - h) > 0) out.push([BONE.torso, t * (1 - h)]);
+    if (t * (1 - h) * (1 - sk) > 0) out.push([BONE.torso, t * (1 - h) * (1 - sk)]);
+    if (sk > 0) out.push([x < 0 ? BONE.shR : BONE.shL, t * (1 - h) * sk]);
     if (h > 0) out.push([BONE.head, h]);
     // the crotch follows the thighs a little so it never tears open in a stride
-    const lg = 0.45 * smooth(-0.06, -0.15, yr);
+    const lg = 0.55 * smooth(-0.05, -0.17, yr);
     if (lg > 0) {
       const sR = smooth(0.06, -0.06, x);
       out.push([BONE.hipR, lg * sR], [BONE.hipL, lg * (1 - sR)]);
     }
     return out.length ? out : one(BONE.torso);
   };
+  const ankleY = hy - 0.02 - G.thigh - G.shin;
   const legBones = (y, side) => {
     const kneeY = hy - 0.02 - G.thigh;
     const t = smooth(kneeY + 0.06, kneeY - 0.06, y);
-    return side < 0 ? [[BONE.hipR, 1 - t], [BONE.knR, t]] : [[BONE.hipL, 1 - t], [BONE.knL, t]];
+    const a = smooth(ankleY + 0.05, ankleY - 0.01, y);
+    return side < 0
+      ? [[BONE.hipR, 1 - t], [BONE.knR, t * (1 - a)], [BONE.anR, a]]
+      : [[BONE.hipL, 1 - t], [BONE.knL, t * (1 - a)], [BONE.anL, a]];
   };
   // skirts and long hems: the pelvis at the waist, sharing out to both legs towards the hem
   const skirtW = (follow, y0, y1) => (x, y) => {
@@ -409,9 +451,10 @@ export function buildPerson(L, { low = false, split = false } = {}) {
   };
 
   // ---------- torso ----------
-  const SK0 = { kurta: 0.08, sherwani: 0.08, salwar: 0.08, long: 0.12, saree: 0.075, lehenga: 0.065 }[style];
+  const SK0 = { kurta: 0.08, sherwani: 0.08, salwar: 0.08, long: 0.12, saree: 0.075, lehenga: 0.065, frock: 0.15 }[style];
   const fronted = style === 'kurta' ? CELL.kurta : style === 'sherwani' ? CELL.sherwani : casual ? CELL.tee : style === 'salwar' ? CELL.floral : -1;
   const midriff = style === 'saree' || style === 'lehenga';
+  const TEE_HEM = -0.085;
   const neckDip = midriff ? 0.07 : style === 'sherwani' ? -0.02 : casual ? 0.025 : 0.035;
   const blouse = style === 'saree' ? bottom : top;
   const skirtC = style === 'lehenga' ? bottom : top;
@@ -425,28 +468,39 @@ export function buildPerson(L, { low = false, split = false } = {}) {
       if (yr < 0.2) return skin;
       return blouse;
     }
-    if (casual && yr < -0.035) return bottom;
-    if (casual && yr < -0.015) return 0x3b2a1a; // belt
+    if (casual && yr < TEE_HEM) return bottom; // an untucked tee over the jeans
+    if (frock && yr > 0.13 && yr < 0.175) return accent; // a sash at the waist
     if (style === 'sherwani' && yr > 0.5) return 0xe0b24a; // collar band
     return top;
   };
-  const tCuts = midriff ? [0.07, 0.2] : casual ? [-0.035, -0.015] : style === 'sherwani' ? [0.5] : [];
-  tCuts.push(0.535 - Math.max(0, neckDip), 0.535);
+  const tCuts = midriff ? [0.07, 0.2] : casual ? [TEE_HEM] : style === 'sherwani' ? [0.5] : frock ? [0.13, 0.175] : [];
+  // the neckline dips at the front: ring pairs along the dip keep the skin-to-cloth edge crisp all
+  // the way round (one pair at the top alone left a soft smear at the sides and the back)
+  const dip = Math.max(0, neckDip);
+  if (dip > 0) for (const f of low ? [0.5] : [0.33, 0.67]) tCuts.push(0.535 - dip * f);
+  tCuts.push(0.535 - dip, 0.535);
   let tRows = rows;
   if (low) tRows = rows.filter((r, i) => ![2, 4, 7, 12].includes(i));
   // under a skirt or a long hem the body below its top shrinks out of the way (no z-fighting)
   const tuck = (y) => (SK0 == null ? 1 : lerp(1, 0.84, smooth(SK0 * G.k + 0.025, SK0 * G.k - 0.05, y)));
-  sweep(B, cutAt(tRows.map(([y, a, b, c]) => ({ p: [0, hy + y, c], a: a * tuck(y), b: b * tuck(y) })), tCuts.map((y) => hy + y * G.k)), {
+  const torsoPts = cutAt(tRows.map(([y, a, b, c]) => ({ p: [0, hy + y, c], a: a * tuck(y), b: b * tuck(y) })), tCuts.map((y) => hy + y * G.k));
+  sweep(B, torsoPts, {
     level: true,
+    levelBelow: hy - 0.1,
+    // the tee hangs a little loose over the jeans, its hem standing proud as a lip
+    radius: casual ? (i) => 1 + 0.07 * smooth(hy + 0.06 * G.k, hy + TEE_HEM * G.k + 0.004, torsoPts[i].p[1]) * (torsoPts[i].p[1] > hy + TEE_HEM * G.k ? 1 : 0) : null,
     seg: S(18, 10),
     up: [0, 0, 1],
     color: torsoColor,
     weight: torsoW,
     uv: (x, y, z, i, j, th) => {
       const yr = (y - hy) / G.k;
-      if (fronted < 0 || yr > 0.535 - neckDip * Math.max(0, Math.cos(th)) ** 2) return null;
-      if (fronted === CELL.floral) return [(th / TAU) * 4, (yr + 0.2) / 0.8, fronted + 2, 1];
-      return [0.5 + x / (2 * FRONT_W), (yr + hy - FRONT_Y0) / FRONT_H, fronted + 2, (z - 0.02) / 0.1];
+      if (fronted < 0) return null;
+      // skin above the neckline keeps the garment's cell with no mask: a cell id that changed
+      // across a triangle would smear other cells into the edge
+      const bare = yr > 0.535 - neckDip * Math.max(0, Math.cos(th)) ** 2 || (midriff && yr > 0.07 && yr < 0.2);
+      if (fronted === CELL.floral) return [(th / TAU) * 4, (yr + 0.2) / 0.8, fronted + 2, bare ? 0 : 1];
+      return [0.5 + x / (2 * FRONT_W), (yr + hy - FRONT_Y0) / FRONT_H, fronted + 2, bare ? 0 : (z - 0.02) / 0.1];
     },
   });
 
@@ -457,8 +511,10 @@ export function buildPerson(L, { low = false, split = false } = {}) {
     sherwani: { y0: 0.08, y1: -0.52, hem: [0.198, 0.142], follow: 0.72, color: top, band: 0xd4a017, bandW: 0.02, front: CELL.sherwani },
     salwar: { y0: 0.08, y1: -0.5, hem: [0.218, 0.16], follow: 0.7, color: top, band: accent, bandW: 0.03, cell: CELL.floral },
     long: { y0: 0.12, y1: -0.885, hem: [0.36, 0.34], follow: 0.85, color: top, cell: CELL.skirt, flare: 1.5 },
-    saree: { y0: 0.075, y1: -0.915, hem: [0.235, 0.205], follow: 0.9, color: skirtC, cell: CELL.skirt, flare: 1.2 },
+    // the saree's pleats fan out at the front (one wrap of the pleats cell round the skirt)
+    saree: { y0: 0.075, y1: -0.915, hem: [0.235, 0.205], follow: 0.9, color: skirtC, cell: CELL.pleats, wrap: 1, flare: 1.2, pleats: 0.07 },
     lehenga: { y0: 0.065, y1: R.kid ? -0.84 : -0.9, hem: [0.38, 0.36], follow: 0.8, color: skirtC, cell: CELL.lehenga, flare: 1.4 },
+    frock: { y0: 0.15, y1: -0.42, hem: [0.27, 0.24], follow: 0.55, color: top, cell: CELL.frock, flare: 0.75, cover: [0.1, 0.11] },
   }[style];
   if (SK) {
     const K = S(10, 5);
@@ -486,19 +542,54 @@ export function buildPerson(L, { low = false, split = false } = {}) {
     const last = pts[pts.length - 1];
     pts.push({ p: [0, last.p[1] + 0.012, last.p[2]], a: last.a * 0.96, b: last.b * 0.96 });
     const yHem = hy + y1;
-    sweep(B, cutAt(pts.reverse(), SK.band ? [yHem + SK.bandW] : []), {
+    const skPts = cutAt(pts.reverse(), SK.band ? [yHem + SK.bandW] : []);
+    sweep(B, skPts, {
       level: true,
       seg: S(20, 10),
+      // pleats: a fuller fan of cloth down the front, growing towards the hem
+      radius: SK.pleats ? (i, th) => 1 + SK.pleats * smooth(hy + y0, yHem, skPts[i].p[1]) * Math.max(0, Math.cos(th)) ** 3 : null,
       color: (x, y, z, i, j, th, ry) => (SK.band && ry < yHem + SK.bandW ? SK.band : SK.color),
       weight: skirtW(SK.follow, hy + y0, yHem),
       uv:
         SK.cell != null
-          ? (x, y, z, i, j, th) => [(th / TAU) * 4, (y - yHem) / (hy + y0 - yHem), SK.cell + 2, 1]
+          ? (x, y, z, i, j, th) => [(th / TAU) * (SK.wrap ?? 4), (y - yHem) / (hy + y0 - yHem), SK.cell + 2, 1]
           : SK.front != null
             ? (x, y, z) => [0.5 + x / (2 * FRONT_W), (y - FRONT_Y0) / FRONT_H, SK.front + 2, (z - 0.03) / 0.1]
             : null,
     });
   }
+
+  // the outside of the body at a height (yRel), skirt included, for drapes that hang over it
+  let skirtAt = null;
+  if (SK) {
+    const yTop = hy + SK.y0 * G.k;
+    const yHem = hy + SK.y1;
+    const prof = [];
+    const K = 12;
+    for (let k = 0; k <= K; k++) {
+      const t = k / K;
+      const y = lerp(yTop, yHem, t);
+      const [ha, hb, hc] = at(Math.max(y - hy, -0.11));
+      const f = Math.pow(t, SK.flare ?? 1.6);
+      prof.push([y, lerp(ha, SK.hem[0], f) + 0.012, lerp(hb, SK.hem[1], f) + 0.012, lerp(hc, at(SK.y0 * G.k)[2] * 0.5, t)]);
+    }
+    skirtAt = (y) => {
+      for (let k = 0; k < K; k++) {
+        if (y >= prof[k + 1][0]) {
+          const t = (y - prof[k][0]) / (prof[k + 1][0] - prof[k][0]);
+          return [0, 1, 2].map((q) => lerp(prof[k][q + 1], prof[k + 1][q + 1], t));
+        }
+      }
+      return prof[K].slice(1);
+    };
+  }
+  const onBody = (yRel, th, off = 0) => {
+    if (!skirtAt || hy + yRel > hy + SK.y0 * G.k) return onTorso(yRel, th, off);
+    const [a, b, c] = skirtAt(hy + yRel);
+    // a pleated front stands proud of the skirt's ellipse
+    const pf = SK.pleats ? 1 + SK.pleats * smooth(hy + SK.y0 * G.k, hy + SK.y1, hy + yRel) * Math.max(0, Math.cos(th)) ** 3 : 1;
+    return [Math.sin(th) * (a * pf + off), hy + yRel, c + Math.cos(th) * (b * pf + off)];
+  };
 
   tally('skirt');
   // ---------- arms ----------
@@ -509,8 +600,8 @@ export function buildPerson(L, { low = false, split = false } = {}) {
       [-0.24, 0.044], [-0.15, 0.049], [-0.06, 0.05], [0.0, 0.048], [0.025, 0.042], [0.044, 0.027], [0.054, 0],
     ];
   const armK = R.fem || R.kid ? 0.86 : 1;
-  const sleeveEnd = { saree: -0.13, lehenga: -0.13, casual: -0.15, salwar: -0.4, long: -0.42 }[style] ?? -0.545;
-  const sleeveLoose = sleeveEnd < -0.5 && style !== 'sherwani' ? 0.006 : 0.003;
+  const sleeveEnd = { saree: -0.13, lehenga: -0.13, casual: -0.15, salwar: -0.4, long: -0.42, frock: -0.1 }[style] ?? -0.545;
+  const sleeveLoose = frock ? 0.012 : sleeveEnd < -0.5 && style !== 'sherwani' ? 0.006 : 0.003;
   const sleeveC = style === 'saree' ? bottom : top;
   for (const side of [-1, 1]) {
     const sx = side * G.shX;
@@ -531,7 +622,8 @@ export function buildPerson(L, { low = false, split = false } = {}) {
       color: (x, y) => (y >= sy + sleeveEnd * lenK ? sleeveC : skin),
       weight: (x, y) => {
         const t = smooth(ey + 0.05, ey - 0.05, y);
-        const tt = 0.4 * smooth(sy - 0.02, sy + 0.08, y);
+        // the cap above the joint stays mostly with the chest, so raised arms do not bulge there
+        const tt = 0.62 * smooth(sy - 0.035, sy + 0.06, y);
         return [[sh, (1 - t) * (1 - tt)], [el, t * (1 - tt)], [BONE.torso, tt]].filter((p) => p[1] > 1e-4);
       },
     });
@@ -544,10 +636,11 @@ export function buildPerson(L, { low = false, split = false } = {}) {
       HAND.map(([y, a, b], k) => ({ p: [sx - side * 0.004 * k * 0.5, wy + y * hk, 0.004], a: a * hk, b: b * hk })),
       { seg: S(8, 4), color: () => skin, weight: () => one(el) }
     );
-    const TH = [[-0.006, 0.028, 0], [-0.02, 0.036, 0.009], [-0.036, 0.044, 0.0105], [-0.052, 0.048, 0.009], [-0.062, 0.049, 0]];
+    // the thumb angles away from the palm, so it reads as a thumb and not part of the mitten
+    const TH = [[-0.004, 0.03, 0], [-0.016, 0.041, 0.0092], [-0.031, 0.051, 0.0102], [-0.046, 0.058, 0.0088], [-0.056, 0.061, 0]];
     sweep(
       B,
-      TH.map(([y, z, r]) => ({ p: [sx - side * 0.012 * hk, wy + y * hk, z * hk], a: r * hk, b: r * hk })),
+      TH.map(([y, z, r], k) => ({ p: [sx - side * (0.012 + 0.001 * k) * hk, wy + y * hk, z * hk], a: r * hk, b: r * hk })),
       { seg: S(6, 3), up: [side, 0, 0], color: () => skin, weight: () => one(el) }
     );
     if (L.bangles) {
@@ -568,17 +661,18 @@ export function buildPerson(L, { low = false, split = false } = {}) {
   tally('arms');
   // ---------- legs and feet ----------
   const LEG = low
-    ? [[-0.905, 0, 0], [-0.875, 0.036, 0], [-0.68, 0.055, -0.008], [-0.47, 0.051, 0], [-0.32, 0.068, 0.004], [-0.06, 0.088, 0], [0.02, 0.07, 0], [0.05, 0, 0]]
+    ? [[-0.905, 0, 0], [-0.875, 0.036, 0], [-0.68, 0.055, -0.008], [-0.47, 0.051, 0], [-0.32, 0.068, 0.004], [-0.08, 0.08, 0], [0.0, 0.064, 0], [0.03, 0, 0]]
     : [
       [-0.905, 0, 0], [-0.895, 0.026, 0], [-0.875, 0.036, 0], [-0.8, 0.042, -0.002], [-0.68, 0.055, -0.008], [-0.57, 0.057, -0.006],
-      [-0.47, 0.051, 0], [-0.42, 0.054, 0.002], [-0.32, 0.068, 0.004], [-0.18, 0.081, 0.006], [-0.06, 0.088, 0], [0.005, 0.08, 0], [0.035, 0.05, 0], [0.05, 0, 0],
+      [-0.47, 0.051, 0], [-0.42, 0.054, 0.002], [-0.32, 0.068, 0.004], [-0.18, 0.081, 0.006], [-0.08, 0.08, 0], [-0.02, 0.07, 0], [0.015, 0.05, 0], [0.03, 0, 0],
     ];
   const longSkirt = style === 'long' || style === 'saree' || style === 'lehenga';
   const legK = R.kid ? 0.95 : 1;
   const trouser = (y, r) => {
     if (longSkirt) return r;
     if (style === 'salwar') return r > 0.03 ? Math.max(r, y > -0.8 ? 0.088 : lerp(0.088, 0.046, smooth(-0.8, -0.87, y))) : r;
-    if (casual) return r > 0.03 ? Math.max(r + 0.008, 0.056) : r;
+    // jeans: a little ease on the leg, none at the top where the thigh meets the hip
+    if (casual) return r > 0.03 ? Math.max(r + 0.008 * smooth(-0.02, -0.12, y), 0.056) : r;
     if (style === 'sherwani') return r > 0.03 ? r + 0.004 : r; // churidar
     return r > 0.03 ? Math.max(r + 0.012 * smooth(0, -0.1, y), y < -0.8 ? 0.05 : 0.064) : r; // pyjama
   };
@@ -587,12 +681,13 @@ export function buildPerson(L, { low = false, split = false } = {}) {
     const ly = hy - 0.02;
     let pts = LEG.map(([y, r, c]) => ({ y, p: [lx, ly + y, c], a: trouser(y, r) * legK * 0.97, b: trouser(y, r) * legK }));
     if (longSkirt) {
-      // under a floor-length skirt only the shins and ankles are ever seen
-      pts = pts.filter((q) => q.y < -0.62);
+      // under a floor-length skirt only the ankles are ever seen (a longer shin pokes through the
+      // skirt at the knee when she sits)
+      pts = pts.filter((q) => q.y < -0.76);
       const t = pts[pts.length - 1];
       pts.push({ y: t.y + 0.01, p: [lx, t.p[1] + 0.01, t.p[2]], a: 0, b: 0 });
     }
-    const legC = longSkirt ? skin : bottom;
+    const legC = longSkirt || frock ? skin : bottom;
     sweep(B, cutAt(pts, style === 'salwar' ? [ly - 0.84] : []), {
       level: true,
       seg: S(10, 6),
@@ -604,7 +699,7 @@ export function buildPerson(L, { low = false, split = false } = {}) {
       },
     });
     // shoes: mojari / juttis with a curled toe for festive wear, rounder trainers for casual
-    const kn = side < 0 ? BONE.knR : BONE.knL;
+    const kn = side < 0 ? BONE.anR : BONE.anL;
     const curl = casual ? 0 : 0.018;
     const FOOT = casual
       ? [[-0.07, 0, 0], [-0.064, 0.03, 0.03], [-0.045, 0.041, 0.044], [0.0, 0.045, 0.045], [0.06, 0.049, 0.04], [0.11, 0.046, 0.034], [0.145, 0.034, 0.024], [0.16, 0, 0]]
@@ -629,25 +724,37 @@ export function buildPerson(L, { low = false, split = false } = {}) {
   const faceUv = (x, y, z) => [0.5 + x / hs / (2 * FACE_W), 0.5 + (y - cy) / hs / (2 * FACE_H), CELL[R.face] + 2, z / HC];
   // the hairline: on the unit head, hair where dy is above a threshold that drops from the
   // forehead to the nape
+  // hair pulled back (a bun, braid or pony) sits close over the tops of the ears; open hair and a
+  // man's short cut are fuller
+  const hairStyle0 = L.hairStyle ?? 'short';
+  const pulled = hairStyle0 === 'bun' || hairStyle0 === 'braid' || hairStyle0 === 'pony';
   const hl = R.fem
-    ? { front: 0.74, side: -0.45, back: -0.82 }
+    ? { front: 0.78, side: pulled ? -0.22 : -0.45, back: -0.82 }
     : R.age === 'elder'
-      ? { front: 0.74, side: 0.08, back: -0.5 }
-      : { front: 0.7, side: 0.1, back: -0.55 };
-  if (R.kid) hl.front -= 0.06;
+      ? { front: 0.86, side: 0.08, back: -0.5 }
+      : { front: 0.8, side: 0.1, back: -0.58 };
+  if (R.kid) hl.front -= 0.05;
   // a plateau across the forehead, dropping at the temples to the ears and round to the nape
   const hairThr = (dx, dz) => {
-    if (dz <= 0) return lerp(hl.side, hl.back, smooth(0, 0.8, -dz));
-    const t = lerp(hl.side, hl.front, smooth(0.15, 0.85, dz));
-    // long hair frames the face in a soft arch; short hair has a side parting
-    return t + (R.fem ? -0.35 * dx * dx : 0.14 * dx * smooth(0.3, 0.9, dz));
+    const ax = Math.abs(dx);
+    if (dz <= 0) return lerp(hl.side, hl.back, smooth(0, 0.8, -dz)) - (R.fem ? 0 : 0.2 * Math.exp(-(((dz + 0.05) / 0.2) ** 2)) * smooth(0.7, 0.95, ax));
+    let t = lerp(hl.side, hl.front, smooth(0.15, 0.85, dz));
+    if (R.fem) return t - 0.35 * dx * dx; // long hair frames the face in a soft arch
+    // short hair: a side parting, temples set back a little (an M, not a helmet's straight edge),
+    // and sideburns down in front of the ears
+    t += 0.14 * dx * smooth(0.3, 0.9, dz);
+    t += (R.age === 'elder' ? 0.2 : 0.12) * smooth(0.22, 0.5, ax) * smooth(0.45, 0.8, dz);
+    t += 0.3 * Math.exp(-(((dz - 0.42) / 0.16) ** 2)) * smooth(0.55, 0.85, ax); // the temples
+    t -= 0.32 * Math.exp(-(((dz - 0.08) / 0.12) ** 2)) * smooth(0.7, 0.95, ax); // sideburns
+    return t;
   };
   const dir = (x, y, z) => [x / HA, (y - cy) / HB, z / HC];
   const isHair = (x, y, z) => {
     const [dx, dy, dz] = dir(x, y, z);
     // a centre parting and a soft widow's peak for long hair
     const part = R.fem && dz > 0.5 ? 0.06 * Math.max(0, 1 - Math.abs(dx) * 6) : 0;
-    return dy > hairThr(dx, dz) + part;
+    // at the front the face cell paints the hairline; the head's own colour turns to hair behind it
+    return dy > hairThr(dx, dz) + part + 0.16 * smooth(0.3, 0.65, dz);
   };
   const hairStyle = L.hairStyle ?? 'short';
   const covered = hairStyle === 'turban';
@@ -673,12 +780,35 @@ export function buildPerson(L, { low = false, split = false } = {}) {
     }
     return pts;
   };
+  /*
+    The skull and face: the egg of rings shaped by a warp in head units, so the head reads as a
+    head and not a ball: the jaw narrows to a chin that sits forward and down, the cheekbones carry
+    a little width, the forehead slopes back and the occiput is fuller, tucking in above the neck.
+    Every shell laid over the head (hair, veil, cap) takes the same warp, so they still fit.
+  */
+  const headWarp = (v) => {
+    const dx = v.x / HA;
+    const dy = (v.y - cy) / HB;
+    const dz = v.z / HC;
+    const l = Math.hypot(dx, dy, dz) || 1;
+    const uy = dy / l;
+    const uz = dz / l;
+    const front = Math.max(0, uz);
+    const back = Math.max(0, -uz);
+    const jaw = smooth(0.0, -0.8, uy);
+    const chin = smooth(-0.4, -0.92, uy) * front * front;
+    v.x *= (1 - 0.17 * jaw * (0.55 + 0.45 * front)) * (1 + 0.035 * Math.exp(-(((uy + 0.12) / 0.22) ** 2)) * front);
+    v.z += 0.018 * hs * chin * l - 0.01 * hs * smooth(0.3, 0.9, uy) * front * l;
+    v.y -= 0.016 * hs * chin * l;
+    v.z *= 1 - 0.2 * smooth(-0.15, -0.85, uy) * back + 0.06 * smooth(-0.3, 0.3, uy) * (1 - smooth(0.5, 1, uy)) * back;
+  };
   const HK = S(14, 9);
   sweep(B, headRings(HK), {
     level: true,
     seg: S(18, 12),
     up: [0, 0, 1],
     radius: (i, th) => (Math.cos(th) > 0 ? 1 - 0.04 * Math.cos(th) : 1 + 0.04 * -Math.cos(th)),
+    warp: headWarp,
     color: (x, y, z) => (!covered && isHair(x, y, z) ? hair : skin),
     weight: headW,
     uv: faceUv,
@@ -692,28 +822,48 @@ export function buildPerson(L, { low = false, split = false } = {}) {
 
   tally('head');
   // hair volume: a shell over the scalp that pinches to the skin at the hairline
+  const curlyHair = hairStyle === 'curly';
   const shell = (thick, color, keepExtra = 0, bump = 0) => {
     const pts = headRings(HK);
     sweep(B, pts, {
       level: true,
       seg: S(18, 12),
       up: [0, 0, 1],
-      radius: (i, th) => {
-        const ph = -Math.PI / 2 + (i / HK) * Math.PI;
-        const dy = Math.sin(ph);
-        const dz = Math.cos(th) * Math.cos(ph);
-        const dx = Math.sin(th) * Math.cos(ph);
+      radius: (i, th) => (Math.cos(th) > 0 ? 1 - 0.04 * Math.cos(th) : 1 + 0.04 * -Math.cos(th)),
+      // the hair grows outwards from the head's centre (along its normal), so a fringe lifts off
+      // the forehead instead of jutting forwards like a visor
+      warp: (v) => {
+        const dx0 = v.x / HA;
+        const dy0 = (v.y - cy) / HB;
+        const dz0 = v.z / HC;
+        const l = Math.hypot(dx0, dy0, dz0) || 1;
+        const dx = dx0 / l;
+        const dy = dy0 / l;
+        const dz = dz0 / l;
         const thr = hairThr(dx, dz) + keepExtra;
-        const v = smooth(thr - 0.02, thr + 0.3, dy);
-        const b = bump ? bump * Math.abs(Math.sin(th * 7 + i) * Math.sin(i * 2.3 + th * 3)) : 0;
-        // volume on the crown and a lift at the front (a quiff for short hair)
-        const lift = 0.05 * Math.max(0, dy) + (R.fem ? 0.02 : 0.045) * Math.max(0, dz) * Math.max(0, dy);
-        return (Math.cos(th) > 0 ? 1 - 0.04 * Math.cos(th) : 1 + 0.04 * -Math.cos(th)) * (1 + v * (thick + lift + b));
+        // a soft rise from the hairline, slower at the front (a fringe, not a ledge)
+        const ramp = smooth(thr - 0.02, thr + 0.3 + 0.25 * Math.max(0, dz), dy);
+        const th = Math.atan2(dx, dz);
+        const b = bump ? bump * (0.55 + 0.45 * Math.sin(th * 5 + dy * 9)) * Math.abs(Math.sin(dy * 11 + th * 4)) : 0;
+        // volume on the crown and at the back, a lift at the front (a quiff for short hair);
+        // short hair stays close at the sides, long hair puffs a little over the ears
+        const crown = 0.08 * Math.max(0, dy) ** 1.3 + 0.04 * Math.max(0, -dz) * smooth(-0.5, 0.4, dy);
+        const lift = (R.fem ? 0.03 : 0.07) * Math.max(0, dz) * Math.max(0, dy) ** 2;
+        // (a short cut fades to almost nothing over the ears and at the sideburns)
+        const sides = R.fem ? (pulled ? 1 - 0.55 * Math.abs(dx) * smooth(0.4, -0.2, dy) : 1 + 0.45 * Math.abs(dx) * smooth(-0.5, 0.2, dy)) : 1 - 0.93 * smooth(0.45, 0.85, Math.abs(dx)) * smooth(0.65, 0.1, dy);
+        const f = 0.004 + ramp * (thick * sides + crown + lift + b);
+        headWarp(v);
+        v.x *= 1 + f;
+        v.y = cy + (v.y - cy) * (1 + f);
+        v.z *= 1 + f;
       },
+      // strands (or curls) painted over the hair colour
+      uv: (x, y, z, i, j, th) => (curlyHair ? [(th / TAU) * 4, (i / HK) * 2.2, CELL.curls + 2, 1] : [(th / TAU) * 3, i / HK, CELL.hair + 2, 1]),
       keep: (x, y, z) => {
         const [dx, dy, dz] = dir(x, y, z);
         const l = Math.hypot(dx, dy, dz) || 1;
-        return dy / l > hairThr(dx / l, dz / l) + keepExtra - 0.04;
+        // at the front the shell starts just behind the painted hairline
+        return dy / l > hairThr(dx / l, dz / l) + keepExtra - 0.04 + 0.07 * smooth(0.3, 0.65, dz / l);
       },
       color: () => color,
       weight: headW,
@@ -736,8 +886,14 @@ export function buildPerson(L, { low = false, split = false } = {}) {
       const b = k === 0 || k === K ? 0 : lerp(depth * hs, 0.03, t);
       pts.push({ p: [0, y, z], a, b });
     }
-    sweep(B, pts.reverse(), { seg: S(12, 8), color: () => color, weight: hangW(cy - 0.08, yBot + 0.15) });
+    sweep(B, pts.reverse(), {
+      seg: S(12, 8),
+      color: () => color,
+      weight: hangW(cy - 0.08, yBot + 0.15),
+      uv: (x, y, z, i, j, th) => [(th / TAU) * 3, 0.15 + (0.7 * i) / K, CELL.hair + 2, 1],
+    });
   };
+  const strands = (k = 1) => (x, y, z, i, j, th) => [(th / TAU) * 2, (i * 0.12) / k, CELL.hair + 2, 1];
 
   if (hairStyle === 'turban') {
     const N = S(40, 22);
@@ -754,14 +910,26 @@ export function buildPerson(L, { low = false, split = false } = {}) {
     const tc = L.turban ?? accent;
     sweep(B, pts, { seg: S(6, 4), color: () => tc, weight: headW });
     blob(B, [0, cy + 0.07 * hs, -0.01], [0.088 * hs, 0.05 * hs, 0.095 * hs], { rings: S(6, 4), seg: S(14, 9), color: () => tc, weight: headW });
-    blob(B, [0, cy + 0.075 * hs, 0.122 * hs], [0.014, 0.018, 0.01], { rings: 3, seg: 6, color: () => 0xd4a017, weight: headW });
-    blob(B, [0, cy + 0.1 * hs, 0.125 * hs], [0.008, 0.03, 0.006], { rings: 3, seg: 5, color: () => 0xfff4e0, weight: headW });
+    // the sarpech: a gold jewel with a ruby at its heart, and the turra fan of pleated cloth
+    // standing up behind it, a little to one side
+    blob(B, [0, cy + 0.075 * hs, 0.122 * hs], [0.015, 0.019, 0.01], { rings: 3, seg: 6, color: () => 0xd4a017, weight: headW });
+    blob(B, [0, cy + 0.076 * hs, 0.131 * hs], [0.006, 0.007, 0.004], { rings: 3, seg: 5, color: () => 0xc1121f, weight: headW });
+    const fan = [];
+    const FN = S(5, 3);
+    for (let k = 0; k <= FN; k++) {
+      const t = k / FN;
+      const end = k === 0 || k === FN;
+      const w = end ? 0 : 0.03 * hs * Math.sin(t * Math.PI) ** 0.6 * (0.7 + 0.6 * t);
+      fan.push({ p: [0.022 * hs + 0.01 * t, cy + (0.1 + 0.075 * t) * hs, (0.1 - 0.035 * t) * hs], a: w, b: end ? 0 : 0.006, up: [0, 0.4, 1] });
+    }
+    sweep(B, fan, { seg: S(6, 4), color: (x, y) => (y > cy + 0.16 * hs ? 0xe8b84a : tc), weight: headW });
   } else if (hairStyle === 'veil') {
     shell(0.05, hair);
     const vc = L.dupatta ?? accent;
     const veil = headRings(HK, 1.12, true);
     sweep(B, veil, {
       seg: S(18, 12),
+      warp: headWarp,
       keep: (x, y, z) => {
         const [dx, dy, dz] = dir(x, y, z);
         return dz < 0.55 - dy * 0.2 && dy > -0.25 + (dz > 0 ? 0.6 * dz : 0);
@@ -772,9 +940,22 @@ export function buildPerson(L, { low = false, split = false } = {}) {
     curtain(vc, 0.13 * hs, 0.2, hy + 0.36, 0.085);
   } else {
     const curly = hairStyle === 'curly';
-    shell(curly ? 0.12 : hairStyle === 'open' ? 0.11 : R.fem ? 0.06 : 0.065, hair, 0, curly ? 0.07 : 0);
+    shell(curly ? 0.13 : hairStyle === 'open' ? 0.11 : R.fem ? 0.05 : 0.07, hair, 0, curly ? 0.08 : 0);
     if (hairStyle === 'open') curtain(hair, 0.112 * hs, 0.13, hy + 0.32);
-    if (hairStyle === 'bun') blob(B, [0, cy + 0.035 * hs, -HC - 0.03 * hs], [0.052 * hs, 0.048 * hs, 0.045 * hs], { rings: S(7, 5), seg: S(10, 7), color: () => hair, weight: headW });
+    if (hairStyle === 'bun') {
+      const bc = [0, cy + 0.035 * hs, -HC - 0.03 * hs];
+      blob(B, bc, [0.052 * hs, 0.048 * hs, 0.045 * hs], { rings: S(7, 5), seg: S(10, 7), color: () => hair, weight: headW, uv: strands(0.5) });
+      // a gajra: a string of jasmine buds round the bun, leaning back over its lower half
+      const N = S(14, 8);
+      const ring = [];
+      for (let q = 0; q < N; q++) {
+        const a = (q / N) * TAU;
+        const r = 0.054 * hs;
+        const bud = q % 2 ? 0.0065 : 0.0095;
+        ring.push({ p: [bc[0] + Math.sin(a) * r, bc[1] - 0.012 * hs + Math.cos(a) * 0.012 * hs, bc[2] - 0.006 * hs + Math.cos(a) * r * 0.62], a: bud, b: bud, up: [Math.sin(a), 0, Math.cos(a)] });
+      }
+      sweep(B, ring, { seg: low ? 3 : 4, loop: true, color: () => 0xfdf6e3, weight: headW });
+    }
     if (hairStyle === 'pony') {
       blob(B, [0, cy + 0.05 * hs, -HC - 0.005], [0.024 * hs, 0.024 * hs, 0.02 * hs], { rings: 3, seg: 6, color: () => accent, weight: headW });
       const P = [[0.05, -0.115, 0], [0.045, -0.14, 0.032], [0.0, -0.165, 0.038], [-0.07, -0.17, 0.034], [-0.15, -0.15, 0.026], [-0.22, -0.125, 0.014], [-0.25, -0.115, 0]];
@@ -782,6 +963,7 @@ export function buildPerson(L, { low = false, split = false } = {}) {
         seg: S(8, 5),
         color: () => hair,
         weight: hangW(cy - 0.05, cy - 0.25),
+        uv: strands(0.6),
       });
     }
     if (hairStyle === 'braid') {
@@ -800,7 +982,12 @@ export function buildPerson(L, { low = false, split = false } = {}) {
         const r = end ? 0 : (0.026 - 0.01 * t) * (1 + (low ? 0 : 0.25 * Math.abs(Math.sin(k * 1.9))));
         P.push({ p: [0, y, z], a: r, b: r * 0.8, up: [0, 0, -1] });
       }
-      sweep(B, P, { seg: S(7, 5), color: (x, y) => (y < yBot + 0.035 ? accent : hair), weight: hangW(cy - 0.12, hy + 0.45) });
+      sweep(B, P, { seg: S(7, 5), color: (x, y) => (y < yBot + 0.035 ? accent : hair), weight: hangW(cy - 0.12, hy + 0.45), uv: (x, y, z, i, j, th) => [(th / TAU) * 2, i * 0.5, CELL.hair + 2, y < yBot + 0.035 ? 0 : 1] });
+      // a paranda: a gold bead and a tassel in the accent colour hanging from the braid's tie
+      const ez = P[P.length - 2].p[2];
+      blob(B, [0, yBot - 0.004, ez], [0.011, 0.011, 0.011], { rings: 3, seg: 5, color: () => 0xd4a017, weight: () => one(BONE.torso) });
+      const TS = [[-0.01, 0], [-0.016, 0.009], [-0.05, 0.016], [-0.075, 0.019], [-0.082, 0]];
+      sweep(B, TS.map(([dy, r]) => ({ p: [0, yBot + dy, ez - 0.004], a: r, b: r * 0.8 })), { seg: S(6, 4), level: true, color: () => accent, weight: () => one(BONE.torso) });
     }
     if (hairStyle === 'topi') {
       blob(B, [0, cy + 0.085 * hs, -0.004], [0.088 * hs, 0.05 * hs, 0.122 * hs], { rings: S(6, 4), seg: S(14, 9), color: (x, y) => (y < cy + 0.06 * hs ? 0xe9dfc9 : 0xf6efe0), weight: headW });
@@ -809,6 +996,7 @@ export function buildPerson(L, { low = false, split = false } = {}) {
       const cap = headRings(HK, 1.1, true);
       sweep(B, cap, {
         seg: S(18, 12),
+        warp: headWarp,
         keep: (x, y, z) => (y - cy) / HB > 0.32,
         color: () => accent,
         weight: headW,
@@ -830,7 +1018,8 @@ export function buildPerson(L, { low = false, split = false } = {}) {
       const r = k === 0 || k === N ? 0 : 0.0075 * (1 - 0.6 * e * e) + 0.0025;
       P.push({ p: [x, y, z], a: r, b: r * 0.6, up: [x * 2, 0, 1] });
     }
-    sweep(B, P, { seg: S(6, 4), color: () => hair, weight: headW });
+    const mc = R.beard === 'grey' && !isGrey(hair) ? 0xd6d0c6 : R.beard === 'dark' && isGrey(hair) ? 0x1c110a : hair;
+    sweep(B, P, { seg: S(6, 4), color: () => mc, weight: headW });
   }
   if (L.glasses) {
     const rim = 0x2b2118;
@@ -851,28 +1040,38 @@ export function buildPerson(L, { low = false, split = false } = {}) {
   B.idx = B.body;
 
   // ---------- drapes: pallu, dupatta, stole, necklace ----------
+  // below the waist a drape moves as the skirt under it does, so a stride never pokes through
+  const hangSkirt = SK ? skirtW(SK.follow, hy + SK.y0 * G.k, hy + SK.y1) : null;
   const drape = (path, color, cell, thickness = 0.008) => {
     const pts = path.map(([yr, th, off, w]) => {
-      const p = onTorso(yr * G.k, th, off);
+      const p = onBody(yr * G.k, th, off);
       const up = [Math.sin(th), yr > 0.44 ? 0.9 : 0.08, Math.cos(th)];
       return { p, a: w / 2, b: thickness, up };
     });
-    let len = 0;
-    for (let i = 1; i < pts.length; i++) len += Math.hypot(...pts[i].p.map((v, k) => v - pts[i - 1].p[k]));
     sweep(B, pts, {
       seg: S(6, 4),
       color: () => color,
       weight: (x, y) => {
+        if (hangSkirt && y < hy - 0.05) {
+          const t = smooth(hy - 0.05, hy - 0.2, y);
+          const w = hangSkirt(x, y);
+          return [[BONE.hips, 1 - t], ...w.map(([b, v]) => [b, v * t])];
+        }
         const t = smooth(hy + 0.05, hy - 0.25, y);
         return [[BONE.torso, 1 - t * 0.6], [BONE.hips, t * 0.6]].filter((p) => p[1] > 1e-4);
       },
       uv: cell != null ? (x, y, z, i, j, th, s) => [s / 0.22, 0.5 + 0.5 * Math.sin(th), cell + 2, 1] : null,
     });
-    void len;
   };
   if (style === 'saree') {
+    /*
+      A nivi drape: the pallu rises from the pleats at the right hip, crosses the chest wide (as
+      cloth, not a sash), goes over the left shoulder and falls freely down the back past the hips,
+      its zari edges along both sides.
+    */
     drape(
-      [[0.05, -0.95, 0.03, 0.12], [0.12, -0.62, 0.022, 0.14], [0.2, -0.3, 0.02, 0.15], [0.28, 0.02, 0.022, 0.155], [0.35, 0.32, 0.02, 0.15], [0.42, 0.62, 0.018, 0.14], [0.47, 1.05, 0.02, 0.13], [0.49, 1.6, 0.02, 0.12], [0.44, 2.3, 0.02, 0.13], [0.32, 2.65, 0.024, 0.16], [0.14, 2.8, 0.032, 0.18], [-0.08, 2.85, 0.045, 0.2], [-0.3, 2.87, 0.062, 0.21]],
+      [[0.06, -0.9, 0.026, 0.13], [0.13, -0.6, 0.02, 0.17], [0.21, -0.28, 0.019, 0.2], [0.29, 0.04, 0.02, 0.21], [0.36, 0.34, 0.019, 0.2], [0.425, 0.66, 0.017, 0.18], [0.47, 1.05, 0.018, 0.16], [0.495, 1.55, 0.02, 0.15],
+        [0.47, 2.1, 0.022, 0.19], [0.38, 2.45, 0.026, 0.24], [0.22, 2.6, 0.03, 0.27], [0.06, 2.65, 0.034, 0.29], [-0.12, 2.67, 0.03, 0.3], [-0.3, 2.68, 0.03, 0.3], [-0.46, 2.68, 0.032, 0.29]],
       top,
       CELL.pallu
     );
