@@ -193,7 +193,7 @@ export class FerrisWheel {
     this.group.add(booth);
     const sign = new THREE.Mesh(
       new THREE.PlaneGeometry(3.4, 0.95),
-      new THREE.MeshBasicMaterial({ map: signTexture(slot('ride.wheel.sign'), tk('Press R or tap Ride Wheel', 'Walk to the steps and tap the button'), '#6a0d2b'), color: new THREE.Color(1, 1, 1) })
+      new THREE.MeshBasicMaterial({ map: signTexture(slot('ride.wheel.sign'), tk('Press R or tap Ride Wheel', 'Walk to the steps and tap the button', 'Ek chakkar aasmaan ka'), '#6a0d2b'), color: new THREE.Color(1, 1, 1) })
     );
     sign.position.set(5.5, 2.95, 5.92);
     this.group.add(sign);

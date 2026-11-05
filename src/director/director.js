@@ -225,9 +225,10 @@ function ramleelaStill(cfg) {
     c.fillText(top, w / 2, h * 0.13);
     c.font = '700 40px Poppins, sans-serif';
     c.lineWidth = 8;
-    c.strokeText('STARTING SOON', w / 2, h * 0.955);
+    // under the title line, not at the screen's foot (the shot's wide end crops that edge)
+    c.strokeText('STARTING SOON', w / 2, h * 0.215);
     c.fillStyle = '#ffd166';
-    c.fillText('STARTING SOON', w / 2, h * 0.955);
+    c.fillText('STARTING SOON', w / 2, h * 0.215);
   } else {
     c.font = '600 30px Poppins, sans-serif';
     c.fillStyle = 'rgba(255,231,163,0.85)';

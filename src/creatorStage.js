@@ -1022,11 +1022,23 @@ export function personaliseIntro(cfg) {
 
 // ---------- the Ramleela board ----------
 
-/** How the handle reads on a sign: '@priyanka.codes', or a LinkedIn name as it is ('Ravi Kumar'). */
+/**
+ * How the handle reads on a sign: '@priyanka.codes' on Instagram; on LinkedIn (which has no
+ * @handles) a name as it is ('Ravi Kumar') or the profile path ('in/ravikumar').
+ */
 export function handleLabel(cfg) {
-  const h = cfg?.handle;
+  const h = String(cfg?.handle ?? '').trim().replace(/^@/, '');
   if (!h) return '';
-  return /\s/.test(h) ? h : `@${h}`;
+  if (/\s/.test(h)) return h;
+  return cfg.platform === 'linkedin' ? `in/${h.replace(/^in\//, '')}` : `@${h}`;
+}
+
+/** `text` cut with an ellipsis so it is at most maxW wide in the current font. */
+function ellipsize(c, text, maxW) {
+  if (c.measureText(text).width <= maxW) return text;
+  let t = text;
+  while (t.length > 4 && c.measureText(`${t}…`).width > maxW) t = t.slice(0, -1);
+  return `${t}…`;
 }
 
 /** A small Instagram / LinkedIn glyph, `s` px square, top-left at x, y. */
@@ -1116,12 +1128,11 @@ function paintRamleelaBoard(c, w, h, cfg, img) {
 
   if (!cfg) {
     c.textAlign = 'center';
-    fitFont(c, 'TOPMATE DIWALI MELA PRESENTS', POP, '700 ', Math.round(h * 0.11), w * 0.8, 20);
-    c.fillStyle = '#ffd166';
-    c.fillText('TOPMATE DIWALI MELA PRESENTS', w / 2, h * 0.3);
-    fitFont(c, 'Ramleela', YATRA, '', Math.round(h * 0.4), w * 0.8, 40);
-    paintText(c, 'Ramleela', w / 2, h * 0.68, { fill: '#ffe7a3', stroke: '#2a0306', lw: 12, off: 6 });
-    badge('RAMAYAN SHOW · AAJ RAAT', w / 2, h * 0.84, Math.round(h * 0.07));
+    const ps = fitFont(c, 'TOPMATE DIWALI MELA PRESENTS', POP, '700 ', Math.round(h * 0.14), w * 0.84, 40);
+    paintText(c, 'TOPMATE DIWALI MELA PRESENTS', w / 2, h * 0.27, { fill: '#ffd166', stroke: '#2a0306', lw: Math.max(6, ps * 0.12), off: 4 });
+    fitFont(c, 'Ramleela', YATRA, '', Math.round(h * 0.36), w * 0.8, 40);
+    paintText(c, 'Ramleela', w / 2, h * 0.62, { fill: '#ffe7a3', stroke: '#2a0306', lw: 12, off: 6 });
+    badge('RAMAYAN SHOW · AAJ RAAT', w / 2, h * 0.82, Math.round(h * 0.1));
     grain(c, w, h, rnd, 0.04, 6000);
     return;
   }
@@ -1136,10 +1147,20 @@ function paintRamleelaBoard(c, w, h, cfg, img) {
   const tx1 = w - b - 50;
   const maxW = tx1 - tx0;
   c.textAlign = 'left';
-  const presents = `${cfg.name.toUpperCase()} PRESENTS`;
-  fitFont(c, presents, POP, '700 ', Math.round(h * 0.12), maxW, 22);
-  c.fillStyle = '#ffd166';
-  c.fillText(presents, tx0, h * 0.28);
+  // the name line is the point of the board: big, bright and outlined; a long full name falls back
+  // to the first name before it would shrink below a size a phone can read
+  let presents = `${cfg.name.toUpperCase()} PRESENTS`;
+  let ps = fitFont(c, presents, POP, '700 ', Math.round(h * 0.15), maxW, 20);
+  if (ps < h * 0.1 && cfg.first && cfg.first !== cfg.name) {
+    presents = `${cfg.first.toUpperCase()} PRESENTS`;
+    ps = fitFont(c, presents, POP, '700 ', Math.round(h * 0.15), maxW, 20);
+  }
+  if (ps < h * 0.1) {
+    ps = Math.round(h * 0.1);
+    c.font = `700 ${ps}px ${POP}`;
+    presents = ellipsize(c, presents, maxW);
+  }
+  paintText(c, presents, tx0, h * 0.29, { fill: '#ffd166', stroke: '#2a0306', lw: Math.max(6, ps * 0.12), off: 4 });
   fitFont(c, 'Ramleela', YATRA, '', Math.round(h * 0.36), maxW, 40);
   paintText(c, 'Ramleela', tx0, h * 0.62, { fill: '#ffe7a3', stroke: '#2a0306', lw: 12, off: 6 });
 
@@ -1152,13 +1173,14 @@ function paintRamleelaBoard(c, w, h, cfg, img) {
   if (label) {
     const icon = fs * 1.2;
     const room = maxW - badgeW - 40 - (cfg.platform ? icon + 18 : 0);
-    const hs = fitFont(c, label, POP, '600 ', fs, room, 24);
+    // a long handle shrinks only so far (still readable on a phone), then is cut with an ellipsis
+    const hs = fitFont(c, label, POP, '600 ', fs, room, Math.round(h * 0.075));
     if (cfg.platform) platformIcon(c, cfg.platform, tx0, rowY - icon / 2, icon);
     const lx = cfg.platform ? tx0 + icon + 18 : tx0;
     c.font = `600 ${hs}px ${POP}`;
     c.textAlign = 'left';
     c.fillStyle = '#fff1c4';
-    c.fillText(label, lx, rowY + hs * 0.36);
+    c.fillText(ellipsize(c, label, room), lx, rowY + hs * 0.36);
     badge('STARTING SOON', tx1 - badgeW / 2, rowY, fs);
   } else {
     badge('STARTING SOON', tx0 + badgeW / 2, rowY, fs);

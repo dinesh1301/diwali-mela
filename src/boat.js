@@ -320,10 +320,16 @@ export class BoatRide {
     }
     const sign = new THREE.Mesh(
       new THREE.PlaneGeometry(2.6, 0.73),
-      new THREE.MeshBasicMaterial({ map: signTexture(slot('ride.boat.sign'), tk('Row a boat · press E at the jetty', 'Row a boat · tap the button at the jetty'), '#13306b'), color: new THREE.Color(1, 1, 1), side: THREE.DoubleSide })
+      new THREE.MeshBasicMaterial({ map: signTexture(slot('ride.boat.sign'), tk('Row a boat · press E at the jetty', 'Row a boat · tap the button at the jetty', 'Row a boat on the river'), '#13306b'), color: new THREE.Color(1, 1, 1) })
     );
     sign.position.set(x + 2.6, 2.2, -43.4);
     scene.add(sign);
+    // two faces, so the sign reads (not mirrored) from the river side too
+    const back = new THREE.Mesh(sign.geometry, sign.material);
+    back.position.copy(sign.position);
+    back.position.z -= 0.01;
+    back.rotation.y = Math.PI;
+    scene.add(back);
     scene.add(beam(V(x + 2.6, 0, -43.4), V(x + 2.6, 1.85, -43.4), 0.06, postMat));
     world.colliders.push({ type: 'circle', x: x + 2.6, z: -43.4, r: 0.15 });
     const lamp = new THREE.PointLight(0xffb46b, 30, 14, 2);

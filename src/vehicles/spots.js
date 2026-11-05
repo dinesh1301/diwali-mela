@@ -110,7 +110,7 @@ export function buildAirfield(ctx, lights) {
   scene.add(floor);
   world.colliders.push({ type: 'box', minX: hx - 5.5, maxX: hx + 5.5, minZ: hz - 5.2, maxZ: hz + 5.2 });
   world.tall.push({ type: 'box', minX: hx - 5.5, maxX: hx + 5.5, minZ: hz - 5.2, maxZ: hz + 5.2, h: 7 });
-  sign(scene, slot('ride.airfield.sign'), tk('Walk up to a plane or heli and press E to fly', 'Walk up to a plane or heli and tap the button to fly'), '#13306b', hx - 5.9, 5.2, hz, -Math.PI / 2, 6);
+  sign(scene, slot('ride.airfield.sign'), tk('Walk up to a plane or heli and press E to fly', 'Walk up to a plane or heli and tap the button to fly', 'Planes and helis · take to the sky'), '#13306b', hx - 5.9, 5.2, hz, -Math.PI / 2, 6);
   warm(scene, hx - 3, 4.5, hz, 60, 20);
   warm(scene, a.x, 6, a.z - 20, 90, 26); // over the plane's parking spot
   warm(scene, a.x + 12, 9, a.z + 16, 26, 24); // over the helipad

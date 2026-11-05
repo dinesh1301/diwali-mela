@@ -7,5 +7,8 @@
 export const TOUCH =
   typeof matchMedia === 'function' && (matchMedia('(pointer: coarse)').matches || new URLSearchParams(location.search).has('touch'));
 
-/** keyText on a keyboard, tapText on a touch screen. */
-export const tk = (keyText, tapText) => (TOUCH ? tapText : keyText);
+const DIRECTOR = typeof location !== 'undefined' && new URLSearchParams(location.search).has('director');
+
+/** keyText on a keyboard, tapText on a touch screen; in a trailer capture (?director) the control-free
+ *  `filmText` when given, so no in-world sign films a keyboard hint. */
+export const tk = (keyText, tapText, filmText) => (DIRECTOR && filmText ? filmText : TOUCH ? tapText : keyText);

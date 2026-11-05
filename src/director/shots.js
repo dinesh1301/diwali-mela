@@ -228,7 +228,16 @@ export const SHOTS = {
       const [balloon, rings] = m.games.games;
       state.balloon = balloon;
       state.rings = rings;
-      fill(rings.booth.group, [0, 3.0, 1.6], 6, 9);
+      // a soft fill low over the counter (not up under the canopy, where it blew the cloth out)
+      fill(rings.booth.group, [0, 1.9, 3.2], 4, 7);
+      // nothing between the lens and either game sign: a hanging bulb strand in the lane ran down
+      // the middle of both signs ('Gubba•a Phod'), so every prop in the sightline wedge goes
+      state.cleared = 0;
+      for (const g of [balloon, rings]) {
+        const w = (x, y, z) => g.booth.group.localToWorld(new THREE.Vector3(x, y, z));
+        const cams = [w(0.1, 2.75, 11.2), w(-0.2, 2.5, 10.2), w(-0.15, 2.75, 11.0), w(0.15, 2.5, 10.0), w(0, 2.6, 10.6)];
+        state.cleared += clearSightline(m, cams, w(0, 3.2, 1.8), { halfW: 3.4, yLo: 0.6, yHi: 9, keep: [g.booth.group, m.player.char?.root], nearEnd: 1.2 });
+      }
       m.games.play(balloon);
       // which balloons get popped, and when (one honest miss)
       state.plan = [[0.5, 8], [1.15, 15], [1.8, 3], [2.5, -1], [3.1, 20], [3.75, 10], [4.35, 17]];
@@ -444,11 +453,20 @@ export const SHOTS = {
         return { f: 0.85, s: Math.max(-1, Math.min(1, -off * 2.5)) };
       };
       state.b = b;
-      fill(b.group, [0, 2.4, 0], 3, 7);
-      // a few wish lanterns already drifting up over the water
+      // the low camera looks up into the canopy: a fill up there (and the full-strength lantern glow
+      // under it) blew the marigolds and bulbs into a white band, so light the rower from in front
+      fill(b.group, [0.6, 0.9, -1.4], 2.5, 5);
+      const dimmed = new Set();
+      b.group.traverse((o) => {
+        if (o.isPointLight && o.intensity > 2.5) o.intensity *= 0.5; // the lantern glow, not our fill
+        const mt = o.isMesh && o.material;
+        if (mt?.isMeshBasicMaterial && mt.color.r > 1 && !dimmed.has(mt)) dimmed.add(mt.color.multiplyScalar(0.55) && mt); // HDR canopy bulbs
+      });
+      // a few wish lanterns already drifting up over the water (no name pills: they clip at the caption)
       for (let i = 0; i < 6; i++) {
         const p = new THREE.Vector3(10 + i * 4 - 6, 1, -64 - (i % 3) * 3);
-        m.lanterns.releaseAt(p.x, p.y, p.z, 0.2, 0.3, 'Shubh Deepavali');
+        m.lanterns.releaseAt(p.x, p.y, p.z, 0.2, 0.3, '');
+        m.lanterns.mine.at(-1).label.visible = false;
       }
     },
     camera({ u, cam, H, state }) {
@@ -471,7 +489,12 @@ export const SHOTS = {
     dayT: 26,
     setup({ m }) {
       m.player.teleport(-20, 50, 0);
-      for (let i = 0; i < 4; i++) m.lanterns.releaseAt(-36 + i * 4, 1, 66 + (i % 2) * 3, 0.1, -0.2, 'Diwali'); // well clear of the lens
+      // wish lanterns rise from behind the stage, off to both sides: never across the creator's board,
+      // and no name pills in a trailer
+      for (const [x, z] of [[-42, 86], [-39, 90], [-21, 88], [-18, 85]]) {
+        m.lanterns.releaseAt(x, 1, z, 0, 0.1, '');
+        m.lanterns.mine.at(-1).label.visible = false;
+      }
     },
     camera({ u, cam, H }) {
       const k = H.easeInOut(Math.min(1, u / 0.62)); // the pull-back

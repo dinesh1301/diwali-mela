@@ -162,6 +162,7 @@ export class Tambola {
     );
     sign.position.set(0, 4.2, 5.9);
     g.add(sign);
+    this.sign = sign; // the Tambola place chip frames it clear of the phone HUD
     const pts = [];
     for (let i = 0; i <= 8; i++) {
       const a = (i / 8) * Math.PI * 2 + Math.PI / 8;
@@ -345,7 +346,10 @@ export class Tambola {
     } catch {
       // ignore
     }
-    player.standUp(POS.x, POS.z + 6.8, 0);
+    // back on your feet just outside the tent, facing it: the follow camera (behind you) stays out in
+    // the open instead of inside the canopy
+    player.standUp(POS.x, POS.z + 6.8, Math.PI);
+    player.cam.pitch = 0.22;
     player.cam.targetDist = 5;
     this.active = false;
     if (mine) shops.givePrize('gift');

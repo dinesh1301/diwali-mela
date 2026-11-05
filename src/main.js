@@ -478,6 +478,8 @@ async function init() {
       if (player.mode === 'busy' || player.mode === 'anim') return;
       player.teleport(...PLACES[id]);
       frameMelaScreen();
+      if (TOUCH && id === 'ramleela' && rlBoard.mesh) frameSign(rlBoard.mesh.localToWorld(new THREE.Vector3(0, rlBoard.mesh.geometry.parameters.height / 2, 0)));
+      if (TOUCH && id === 'tambola' && tambola.sign) frameSign(tambola.sign.localToWorld(new THREE.Vector3(0, tambola.sign.geometry.parameters.height / 2, 0)));
     },
     onMute() {
       muted = !muted;
@@ -562,6 +564,70 @@ async function init() {
    */
   const _top = new THREE.Vector3();
   const _tgt = new THREE.Vector3();
+  /** True when the local nametag projects onto the Ramleela board (seen from the benches). */
+  const _ntp = new THREE.Vector3();
+  const _bb = new THREE.Box3();
+  const _bc = new THREE.Vector3();
+  function tagOverBoard() {
+    const bm = rlBoard.mesh;
+    const sp = nameTag.sprite;
+    if (!bm || !sp || Math.abs(player.pos.x - bm.parent.position.x) > 25 || Math.abs(player.pos.z - bm.parent.position.z) > 40) return false;
+    if (!bm.geometry.boundingBox) bm.geometry.computeBoundingBox();
+    _bb.copy(bm.geometry.boundingBox).applyMatrix4(bm.matrixWorld);
+    let x0 = 2, x1 = -2, y0 = 2, y1 = -2;
+    for (let i = 0; i < 8; i++) {
+      _bc.set(i & 1 ? _bb.max.x : _bb.min.x, i & 2 ? _bb.max.y : _bb.min.y, i & 4 ? _bb.max.z : _bb.min.z).project(camera);
+      if (_bc.z > 1) return false; // behind the camera
+      x0 = Math.min(x0, _bc.x), x1 = Math.max(x1, _bc.x), y0 = Math.min(y0, _bc.y), y1 = Math.max(y1, _bc.y);
+    }
+    sp.getWorldPosition(_ntp).project(camera);
+    return _ntp.z < 1 && _ntp.x > x0 - 0.15 && _ntp.x < x1 + 0.15 && _ntp.y > y0 - 0.06 && _ntp.y < y1 + 0.06;
+  }
+
+  /**
+   * Phones: tilts the follow camera up (lower pitch) until a sign's top edge `top` clears the top
+   * HUD, the way frameMelaScreen does for the Mela Screen. Used by the place chips that land in front
+   * of a sign (the Ramleela board, the Tambola Tent), and backs the camera off a little if tilting
+   * alone can't do it. Desktop (where it already clears) is left alone.
+   */
+  function frameSign(top) {
+    if (!top || player.mode !== 'walk') return;
+    // the top HUD, the places bar and the chips under it (the Ravan countdown)
+    const rects = ['hud-top', 'places', 'chips']
+      .map((id) => document.getElementById(id))
+      .filter((e) => e && getComputedStyle(e).display !== 'none')
+      .map((e) => e.getBoundingClientRect())
+      .filter((r) => r.height > 0);
+    const cr = renderer.domElement.getBoundingClientRect();
+    if (!rects.length || !cr.height) return;
+    const want = Math.max(...rects.map((r) => r.bottom)) - cr.top + cr.height * 0.03;
+    const c = player.cam;
+    const pos = camera.position.clone();
+    const quat = camera.quaternion.clone();
+    _tgt.set(player.pos.x, player.pos.y + 1.55 * (player.char.look.scale ?? 1), player.pos.z);
+    const clears = () => ((1 - top.clone().project(camera).y) / 2) * cr.height >= want;
+    const place = (p, d) => {
+      camera.position.set(Math.sin(c.yaw) * Math.cos(p), Math.sin(p), Math.cos(c.yaw) * Math.cos(p)).multiplyScalar(d).add(_tgt);
+      camera.lookAt(_tgt);
+      camera.updateMatrixWorld();
+    };
+    let done = false;
+    for (let d = c.dist; d <= c.dist + 4 && !done; d += 1) {
+      for (let p = c.pitch; p >= -0.3; p -= 0.02) {
+        place(p, d);
+        if (clears()) {
+          c.pitch = p;
+          c.dist = c.targetDist = d;
+          done = true;
+          break;
+        }
+      }
+    }
+    camera.position.copy(pos);
+    camera.quaternion.copy(quat);
+    camera.updateMatrixWorld();
+  }
+
   function frameMelaScreen() {
     const s = billboard.size;
     const dz = player.pos.z - billboard.pos.z;
@@ -823,6 +889,7 @@ async function init() {
   let zone = null;
   let zoneTimer = 0;
   let helpKey = '';
+  let tagBase = false;
   let vehKind = null;
   const joyLabel = document.querySelector('#joystick .joy-label');
   const jumpBtn = document.getElementById('jumpBtn');
@@ -882,12 +949,15 @@ async function init() {
       // the stick says what it does now
       if (TOUCH) joyLabel.textContent = owner === boat ? 'Row' : owner === vehicles ? (vehicles.active.kind === 'car' ? 'Drive' : 'Fly') : 'Walk';
       if (TOUCH) jumpBtn.classList.toggle('boat-hidden', owner === boat); // nothing to jump in a boat
-      nameTag.setVisible(mode !== 'game' && !director); // the close game cameras sit right behind the head; director shots have no tag
+      tagBase = mode !== 'game' && !director; // the close game cameras sit right behind the head; director shots have no tag
+      nameTag.setVisible(tagBase && !tagOverBoard());
       ui.setPrompt(null);
       ui.setPrompt2(null);
       if (mode === 'ride') ui.setHelp(owner === vehicles ? vehicles.active.help : owner ? owner.help : HELP.ride);
       else if (mode !== 'game') ui.setHelp(HELP[mode] ?? HELP.walk);
     }
+    // the visitor's own tag never sits over the creator's '<Name> presents · Ramleela' board
+    if (tagBase && (frameNo & 7) === 0) nameTag.setVisible(!tagOverBoard());
     const kind = vehicles.active?.kind ?? null;
     if (kind !== vehKind) {
       vehKind = kind;
@@ -898,8 +968,9 @@ async function init() {
     const canInteract = started && mode === 'walk' && !ui.modalOpen;
     const best = interactions.update(t, player, canInteract);
     if (mode === 'ride') {
-      ui.setPrompt(owner?.promptLabel?.() ?? 'Get off');
-      ui.setPrompt2(owner?.prompt2Label?.() ?? null);
+      // at the Tambola table the panel's own 'Leave the table' is the way out: no ghost 'Get off' behind it
+      ui.setPrompt(tambola.active ? null : owner?.promptLabel?.() ?? 'Get off');
+      ui.setPrompt2(tambola.active ? null : owner?.prompt2Label?.() ?? null);
     }
     if (mode === 'walk') {
       ui.setPrompt(best ? interactions.label(best) : null);
