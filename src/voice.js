@@ -109,6 +109,11 @@ export class Voice {
   }
 
   toggle() {
+    // voice rides the creator room's socket: the plain mela is single-player, so there is no one to hear
+    if (!this.live && !this.net.enabled) {
+      this.ctx.ui.toast('🎤 Voice chat works in a creator’s mela, with their other visitors', 3000);
+      return;
+    }
     return this.live ? this.disable() : this.enable();
   }
 

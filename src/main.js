@@ -436,6 +436,7 @@ async function init() {
     boards: () => net.boards,
     wishes: () => net.wishes,
     online: () => net.online,
+    roomLabel: () => (net.connected ? roomLabel : ''),
     onAction(action) {
       if (started) track('activity', { what: action, zone, mode: player.mode });
       switch (action) {
@@ -514,13 +515,16 @@ async function init() {
   Object.assign(ctx, { ui, passport });
   const net = new Net(ctx);
   ctx.net = net;
+  if (!net.enabled) document.querySelector('#micBtn')?.classList.add('hidden'); // single-player page: nobody to talk to
   const voice = new Voice(ctx, net);
   ctx.voice = voice;
   voice.on('state', () => ui.setMic(voice.live, false));
   voice.on('level', (talking) => ui.setMic(voice.live, talking));
   net.on('boards', () => ui.refreshBoards());
   net.on('wishes', () => ui.refreshBoards());
-  net.on('online', (n) => ui.setChip('online', n > 1 ? `👥 ${n} at the mela` : ''));
+  // multiplayer is per creator: the chip names whose mela this is ("Rahul’s mela · 3 here")
+  const roomLabel = net.room ? `${cfg?.first || cfg?.name || net.room}’s mela` : '';
+  net.on('online', (n) => ui.setChip('online', net.connected && roomLabel ? `👥 ${roomLabel} · ${n > 1 ? `${n} here` : 'just you'}` : ''));
   net.on('status', (ok) => {
     if (!ok) ui.setChip('online', '');
   });
