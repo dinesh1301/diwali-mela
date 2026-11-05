@@ -28,8 +28,12 @@ Two small pieces run alongside the static site:
   leaderboards and the wish wall). Attached to the Vite dev/preview server at `/ws`; on its own:
 
   ```bash
-  node server/realtime.mjs            # ws://localhost:8787/ws, data in server/data.json
+  node server/realtime.mjs            # ws://localhost:8787/ws?room=<slug>, data in server/rooms/
   ```
+
+  Multiplayer is per creator: only a creator's mela (`/<slug>` on the service, or `?c=<slug>`)
+  connects, to that creator's room. The plain mela is single-player (no socket at all), and the
+  hub refuses an upgrade with no room, `room=public` or a room its `allowRoom()` does not know.
 
   Point a deployed site at it with `VITE_WS_URL=wss://your-host/ws` at build time. Without a
   reachable server the mela still works: scores and wishes stay in the visitor's browser.

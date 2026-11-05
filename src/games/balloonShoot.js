@@ -1,7 +1,7 @@
 import { tk } from '../touch.js';
 import * as THREE from 'three';
 import { canvasTexture, pick, clamp } from '../utils.js';
-import { toyGunMesh } from '../items.js';
+import { toyGunMesh, balloonGeometry } from '../items.js';
 import { tintEmissive } from '../merge.js';
 import { seg } from '../lod.js';
 
@@ -46,7 +46,7 @@ export class BalloonShoot {
     }
 
     // all 24 balloons are one instanced mesh; a popped one is scaled to nothing and its hits ignored
-    const geo = new THREE.SphereGeometry(0.2, seg(16, 10), seg(12, 8)).scale(1, 1.15, 1);
+    const geo = balloonGeometry(seg(16, 10), seg(12, 8)); // teardrop: neck down, floating up
     const mat = tintEmissive(new THREE.MeshStandardMaterial({ roughness: 0.3, emissive: new THREE.Color(0.25, 0.25, 0.25) }));
     this.balloons = [];
     this.balloonMesh = new THREE.InstancedMesh(geo, mat, 24);

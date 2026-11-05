@@ -3,6 +3,7 @@ import { canvasTexture, hdr, rand, pick } from './utils.js';
 import { Character, randomLook } from './character.js';
 import { mergeStatic } from './merge.js';
 import { seg } from './lod.js';
+import { balloonGeometry } from './items.js';
 
 export const STALL = { W: 5.2, D: 3.6, H: 2.9 };
 const TOP = 1.22; // counter surface height
@@ -250,8 +251,8 @@ function addGoods(g, type, diyaSpots) {
       break;
     }
     case 'toys': {
-      const balloon = new THREE.SphereGeometry(0.22, seg(14, 10), seg(10, 7));
-      balloon.scale(1, 1.18, 1);
+      // teardrop balloons (neck and string at the bottom), a touch bigger than a held one
+      const balloon = balloonGeometry(seg(14, 10), seg(10, 7)).clone().scale(1.1, 1.1, 1.1);
       const palette = [0xff006e, 0xffbe0b, 0x3a86ff, 0x8338ec, 0x06d6a0, 0xfb5607, 0xff5d8f];
       const strings = [];
       for (const sx of [-1, 1]) {
@@ -263,7 +264,7 @@ function addGoods(g, type, diyaSpots) {
           const by = H - 0.2 + rand(0, 1.3);
           const bz = az + rand(-0.3, 0.3);
           add(balloon, std(c, 0.3, { emissive: new THREE.Color(c).multiplyScalar(0.25) }), bx, by, bz);
-          strings.push(new THREE.Vector3(bx, by - 0.25, bz), new THREE.Vector3(ax, 1.3, az));
+          strings.push(new THREE.Vector3(bx, by - 0.26, bz), new THREE.Vector3(ax, 1.3, az));
         }
       }
       g.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(strings), new THREE.LineBasicMaterial({ color: 0xdddddd })));

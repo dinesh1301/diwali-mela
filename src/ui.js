@@ -447,7 +447,10 @@ export function createUI(h) {
     openBoards() {
       renderBoards();
       const n = h.online?.() ?? 1;
-      boardsEl.querySelector('.online').textContent = n > 1 ? `👥 ${n} at the mela right now` : 'Scores and wishes are shared with everyone when the mela server is running.';
+      const room = h.roomLabel?.() ?? '';
+      boardsEl.querySelector('.online').textContent = room
+        ? `👥 ${room} · ${n > 1 ? `${n} here right now` : 'just you right now'}. Scores and wishes are shared with this mela's visitors.`
+        : 'Scores and wishes stay on this device. Open a creator’s mela link to meet their other visitors.';
       openModal(boardsEl);
     },
 
@@ -463,12 +466,13 @@ export function createUI(h) {
       box.innerHTML = `
         <label class="srow"><span>Graphics</span>
           <select data-set="quality"><option value="auto">Auto (${settings.detected})</option><option value="high">High · shadows & reflections</option><option value="low">Low · phones</option></select></label>
-        <label class="srow"><span>Music</span>
+        <label class="srow"><span>Soundtrack</span>
           <select data-set="music"><option value="song">Diwali song</option><option value="band">Mela band (royalty-free)</option></select></label>
+        <label class="srow"><span>Music</span><input type="range" min="0" max="1" step="0.05" data-set="musicVolume" aria-label="Music volume" /></label>
+        <label class="srow"><span>Voices</span><input type="range" min="0" max="1" step="0.05" data-set="voiceVolume" aria-label="Voices volume (people speaking)" /></label>
         <label class="srow check"><input type="checkbox" data-set="reduceMotion" /><span>Reduce motion (gentler camera and rides)</span></label>
         <label class="srow"><span>Voice chat</span>
           <select data-set="voice"><option value="open">Open mic (voice activated)</option><option value="ptt">${tk('Push to talk (hold the Talk key)', 'Push to talk (hold the 🎤 button)')}</option></select></label>
-        <label class="srow"><span>Voice volume</span><input type="range" min="0" max="1" step="0.05" data-set="voiceVolume" /></label>
         <div class="keys desktop-only"><div class="keys-title">Key bindings <button type="button" class="ghost tiny" data-resetkeys>Reset</button></div>${keysHtml}
           <p class="muted small">Movement is W A S D or the arrow keys. Click a key to change it, then press the new key.</p></div>
         <p class="srow-note muted small" data-note></p>`;
@@ -477,6 +481,7 @@ export function createUI(h) {
       box.querySelector('[data-set="reduceMotion"]').checked = settings.reduceMotion;
       box.querySelector('[data-set="voice"]').value = settings.voice;
       box.querySelector('[data-set="voiceVolume"]').value = settings.voiceVolume;
+      box.querySelector('[data-set="musicVolume"]').value = settings.musicVolume;
       box.querySelectorAll('[data-set]').forEach((el) =>
         el.addEventListener(el.type === 'range' ? 'input' : 'change', () => {
           const key = el.dataset.set;

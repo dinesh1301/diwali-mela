@@ -181,12 +181,12 @@ export class Ambience {
       // the band: not positional, replaces the song when chosen
       this.band = ctx.createGain();
       this.band.gain.value = 0;
-      this.band.connect(master);
+      this.band.connect(this.audio.musicBus ?? master);
       this.bandDhol = this.makeDhol(this.band, 0.7, true);
       this.makeDrone(this.band);
     }
     if (!this.band) return;
-    if (on) this.band.connect(master);
+    if (on) this.band.connect(this.audio.musicBus ?? master);
     this.band.gain.setTargetAtTime(on ? 0.5 : 0, ctx.currentTime, 0.5);
     clearTimeout(this.bandOff);
     // once faded out, unplug the drone so its oscillators stop costing anything
