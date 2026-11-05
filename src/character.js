@@ -2,16 +2,60 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { pick, rand, clamp } from './utils.js';
 import { lowDetail } from './lod.js';
+import { charAtlas } from './charAtlas.js';
+import { buildPerson, BONE_COUNT } from './charGeo.js';
 
 /*
-  A procedural low-poly person. Every body part is a vertex-coloured shape fully weighted to one
-  joint, and all of them are merged into a single SkinnedMesh whose bones are the joint groups
-  themselves, so a whole character is one draw call (two for the player, whose face can flush).
-  Locomotion and action poses are computed as joint targets each frame and eased towards, which
-  blends them for free. Phones build the crowd with fewer segments; the player keeps full detail.
+  A procedural person (charGeo.js): one smooth SkinnedMesh with real blended weights, so elbows,
+  knees, the waist, the neck and skirts bend, painted by vertex colours plus one shared atlas
+  (charAtlas.js) for faces and zari borders. A whole character is one draw call (two for the
+  player, whose face can flush). Locomotion and action poses are computed as joint targets each
+  frame and eased towards, which blends them for free. Phones build the crowd with fewer
+  segments; the player keeps full detail.
 */
 
-export const charMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75 });
+/*
+  The shared material. Props elsewhere (rides, stalls, vehicles) also merge into it through
+  shape()/merged(); they carry no `cuv` attribute, which reads as zero and leaves them plain.
+  People set cuv.z >= 1: a soft warm rim (the stylised film look), and from 2 up an atlas cell
+  blended over the vertex colour by the painted alpha.
+*/
+function patchCharacter(mat) {
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.charAtlas = { value: charAtlas() };
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute vec4 cuv;\nvarying vec4 vCuv;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCuv = cuv;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform sampler2D charAtlas;\nvarying vec4 vCuv;')
+      .replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+if (vCuv.z > 1.5) {
+  float cell = floor(vCuv.z - 1.5);
+  vec2 org = vec2(mod(cell, 4.0), floor(cell / 4.0)) * 0.25;
+  vec2 l = vec2(fract(vCuv.x), clamp(vCuv.y, 0.0, 1.0));
+  vec2 g = vCuv.xy * 0.244;
+  vec4 tx = textureGrad(charAtlas, org + (0.012 + l * 0.976) * 0.25, dFdx(g), dFdy(g));
+  float m = clamp((vCuv.w - 0.15) / 0.3, 0.0, 1.0);
+  diffuseColor.rgb = diffuseColor.rgb * (1.0 - tx.a * m) + tx.rgb * m;
+}`
+      )
+      .replace(
+        '#include <emissivemap_fragment>',
+        `#include <emissivemap_fragment>
+if (vCuv.z > 0.5) {
+  float rim = 1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);
+  totalEmissiveRadiance += diffuseColor.rgb * vec3(1.0, 0.85, 0.7) * (rim * rim * rim) * 0.22;
+}`
+      );
+  };
+  mat.customProgramCacheKey = () => 'mela-char-1';
+  return mat;
+}
+
+const makeMaterial = () => patchCharacter(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.72 }));
+export const charMaterial = makeMaterial();
 
 export function paint(geo, hex) {
   const c = new THREE.Color(hex);
@@ -33,10 +77,7 @@ const _s = new THREE.Vector3();
 const _p = new THREE.Vector3();
 const _w = new THREE.Vector3();
 
-// Bones are bound with identity inverses: each part's geometry is authored in its joint's space,
-// so bone.matrixWorld alone places it (attached bind mode cancels the mesh's own transform).
 const IDENTITY = new THREE.Matrix4();
-const BONE_INVERSES = Array.from({ length: 10 }, () => new THREE.Matrix4());
 // joints move inside this sphere (body space), whatever the pose: arms up reach about 2.1 m
 const BOUNDS = new THREE.Sphere(new THREE.Vector3(0, 1.0, 0), 1.35);
 
@@ -65,12 +106,16 @@ export function merged(parts, material = charMaterial) {
 
 // ---------- looks ----------
 
-const SKIN = [0x8d5524, 0xc68642, 0xe0ac69, 0xa8754a, 0x6f4422, 0xb07a52];
+const SKIN = [0x8d5524, 0xc68642, 0xe0ac69, 0xa8754a, 0x6f4422, 0xb07a52, 0xd99a6c, 0x5a3820];
 const TOPS = [0xffb703, 0xe63946, 0x2a9d8f, 0x8338ec, 0xff006e, 0xfb8500, 0xfff1d0, 0x219ebc, 0x9b2226, 0x06d6a0, 0xf72585, 0xffd166];
 const BOTTOMS = [0xfff1d0, 0xf5ebe0, 0x2b2d42, 0xe9d8a6, 0x6c584c];
 const HAIR = [0x140c08, 0x2b1a10, 0x3d2817];
+const GREY = [0xb9b2a8, 0x9c958c, 0xd8d2c8];
 const ACCENTS = [0xff7a00, 0xe0218a, 0xffd166, 0xc1121f, 0x2a9d8f, 0x3a86ff, 0xffffff];
 const SHOES = [0x5c2a12, 0x8b1e3f, 0x3b2a1a, 0xd4a017];
+const SAREES = [0xc1121f, 0xe0218a, 0x7b2cbf, 0x1f9d55, 0xff7a00, 0x0f4c81, 0xffb703, 0x9b2226, 0x06a77d];
+const SHERWANI = [0x7a1f3d, 0x1d3557, 0xf1e3c6, 0x2d6a4f, 0x5e2b7e, 0xc9a227];
+const DENIM = [0x2f4a7a, 0x3a5a8c, 0x23324f];
 
 /** Everything the avatar customiser can pick from (Among Us style: palettes + a few toggles). */
 export const LOOK_OPTIONS = {
@@ -82,15 +127,24 @@ export const LOOK_OPTIONS = {
   shoes: SHOES,
   style: [
     { id: 'kurta', label: 'Kurta', icon: '👕' },
+    { id: 'sherwani', label: 'Sherwani', icon: '🤵' },
     { id: 'long', label: 'Anarkali', icon: '👗' },
+    { id: 'saree', label: 'Saree', icon: '🥻' },
+    { id: 'lehenga', label: 'Lehenga', icon: '💃' },
+    { id: 'salwar', label: 'Salwar', icon: '🧕' },
+    { id: 'casual', label: 'Casual', icon: '👟' },
   ],
   hairStyle: [
     { id: 'short', label: 'Short', icon: '💇' },
+    { id: 'curly', label: 'Curly', icon: '🌀' },
     { id: 'open', label: 'Open', icon: '💁' },
     { id: 'bun', label: 'Bun', icon: '🎀' },
     { id: 'braid', label: 'Braid', icon: '🧶' },
+    { id: 'pony', label: 'Pony', icon: '🎗️' },
     { id: 'turban', label: 'Pagdi', icon: '👳' },
-    { id: 'topi', label: 'Topi', icon: '🧢' },
+    { id: 'topi', label: 'Topi', icon: '⛵' },
+    { id: 'cap', label: 'Cap', icon: '🧢' },
+    { id: 'veil', label: 'Veil', icon: '🧕' },
   ],
   extras: [
     { id: 'dupatta', label: 'Dupatta', icon: '🧣' },
@@ -101,31 +155,51 @@ export const LOOK_OPTIONS = {
   ],
 };
 
+const chance = (p) => Math.random() < p;
+
 export function randomLook({ kid = false } = {}) {
-  const fem = Math.random() < 0.5;
+  const fem = chance(0.5);
   const accent = pick(ACCENTS);
+  const age = kid ? 'kid' : chance(0.14) ? 'elder' : chance(0.16) ? 'teen' : 'adult';
+  const elder = age === 'elder';
+  const teen = age === 'teen';
+  let style;
+  if (fem) style = kid ? pick(['lehenga', 'lehenga', 'long', 'salwar']) : teen ? pick(['casual', 'salwar', 'lehenga', 'long']) : elder ? pick(['saree', 'saree', 'salwar']) : pick(['saree', 'saree', 'lehenga', 'salwar', 'long']);
+  else style = kid ? pick(['kurta', 'kurta', 'casual']) : teen ? pick(['casual', 'casual', 'kurta']) : elder ? 'kurta' : pick(['kurta', 'kurta', 'kurta', 'sherwani', 'casual']);
+  let hairStyle;
+  if (fem) hairStyle = elder ? pick(['bun', 'bun', 'veil']) : kid ? pick(['braid', 'pony', 'open', 'bun']) : pick(['bun', 'braid', 'braid', 'open', 'pony', 'veil']);
+  else hairStyle = elder ? pick(['turban', 'topi', 'short', 'turban']) : style === 'casual' ? pick(['short', 'curly', 'cap']) : pick(['short', 'short', 'curly', 'turban', 'topi']);
+  if (hairStyle === 'veil' && style === 'saree') hairStyle = 'bun';
+  const top = style === 'saree' || style === 'lehenga' ? pick(SAREES) : style === 'sherwani' ? pick(SHERWANI) : pick(TOPS);
+  let bottom = pick(BOTTOMS);
+  if (style === 'casual') bottom = pick(DENIM);
+  if (style === 'saree') bottom = pick([0xffd166, 0xd4a017, top, 0x2b2d42]);
+  if (style === 'lehenga') bottom = pick(SAREES.filter((c) => c !== top));
   return {
     skin: pick(SKIN),
-    top: pick(TOPS),
-    bottom: pick(BOTTOMS),
-    shoes: pick(SHOES),
-    hair: pick(HAIR),
-    style: fem && Math.random() < 0.6 ? 'long' : 'kurta',
-    hairStyle: fem ? pick(['bun', 'braid', 'braid', 'open']) : pick(['short', 'short', 'short', 'turban', 'topi']),
+    top,
+    bottom,
+    shoes: style === 'casual' ? pick([0x2b2d42, 0xe63946, 0x3a86ff, 0xf2f2f2]) : pick(SHOES),
+    hair: elder ? pick(GREY) : pick(HAIR),
+    style,
+    body: fem ? 'f' : 'm',
+    age,
+    hairStyle,
     accent,
     turban: accent,
-    dupatta: fem && Math.random() < 0.7 ? pick(TOPS) : null,
-    bindi: fem && Math.random() < 0.6,
-    bangles: fem && Math.random() < 0.5 ? pick([0xe63946, 0xffd166, 0x2a9d8f]) : null,
-    moustache: !fem && !kid && Math.random() < 0.3,
-    glasses: !kid && Math.random() < 0.15,
-    scale: kid ? rand(0.6, 0.7) : rand(0.95, 1.05),
+    dupatta: fem && style !== 'saree' && style !== 'casual' && (style === 'lehenga' || chance(0.7)) ? pick([...TOPS, 0xffd166]) : hairStyle === 'veil' ? pick(TOPS) : null,
+    bindi: fem && !kid && chance(0.7),
+    bangles: fem && chance(0.6) ? pick([0xe63946, 0xffd166, 0x2a9d8f, 0xd4a017]) : null,
+    moustache: !fem && !kid && !teen && chance(elder ? 0.8 : 0.35),
+    glasses: !kid && chance(elder ? 0.5 : 0.1),
+    scale: kid ? rand(0.6, 0.7) : teen ? rand(0.9, 0.95) : fem ? rand(0.92, 0.98) : rand(0.97, 1.05),
   };
 }
 
 /** A fresh look for a new visitor: random, but with the accent colour tying pagdi/dupatta/bangles together. */
 export function randomPlayerLook() {
-  const look = randomLook();
+  let look = randomLook();
+  while (look.age !== 'adult') look = randomLook();
   look.scale = 1;
   if (look.dupatta) look.dupatta = look.accent;
   if (look.bangles) look.bangles = look.accent;
@@ -136,14 +210,14 @@ export const PLAYER_LOOKS = [
   { name: 'Saffron kurta', skin: 0xc68642, top: 0xff9f1c, bottom: 0xfff1d0, shoes: 0x5c2a12, hair: 0x140c08, style: 'kurta', hairStyle: 'short', dupatta: null, bindi: false, bangles: null },
   { name: 'Pink anarkali', skin: 0xe0ac69, top: 0xf72585, bottom: 0xffd166, shoes: 0xd4a017, hair: 0x140c08, style: 'long', hairStyle: 'braid', dupatta: 0xffd166, bindi: true, bangles: 0xe63946 },
   { name: 'Royal blue & pagdi', skin: 0x8d5524, top: 0x3a4fd8, bottom: 0xf5ebe0, shoes: 0x8b1e3f, hair: 0x140c08, style: 'kurta', hairStyle: 'turban', turban: 0xff7a00, dupatta: null, bindi: false, bangles: null },
-  { name: 'Green lehenga', skin: 0xa8754a, top: 0x1f9d55, bottom: 0xe0218a, shoes: 0xd4a017, hair: 0x2b1a10, style: 'long', hairStyle: 'bun', dupatta: 0xff006e, bindi: true, bangles: 0xffd166 },
+  { name: 'Green lehenga', skin: 0xa8754a, top: 0x1f9d55, bottom: 0xe0218a, shoes: 0xd4a017, hair: 0x2b1a10, style: 'lehenga', hairStyle: 'bun', dupatta: 0xff006e, bindi: true, bangles: 0xffd166 },
 ];
 
 // ---------- poses ----------
 
 const lerp = THREE.MathUtils.lerp;
 const DEFAULTS = {
-  hipsY: 0.95, torsoX: 0, torsoY: 0, headX: 0, headY: 0,
+  hipsY: 0.95, hipsX: 0, hipsRY: 0, hipsRZ: 0, torsoX: 0, torsoY: 0, torsoZ: 0, headX: 0, headY: 0,
   armRX: 0, armRZ: -0.07, elbowR: -0.15, elbowRZ: 0,
   armLX: 0, armLZ: 0.07, elbowL: -0.15, elbowLZ: 0,
   legRX: 0, legRZ: 0, kneeR: 0.05, legLX: 0, legLZ: 0, kneeL: 0.05,
@@ -290,6 +364,7 @@ const POSES = {
   },
 };
 
+
 export class Character {
   constructor(look = randomLook(), { ownMaterial = false, lod = !ownMaterial } = {}) {
     this.look = { ...look };
@@ -299,12 +374,11 @@ export class Character {
     this._tick = lodSlot++ % 3;
     this._acc = 0;
     this._shadow2 = (this.low ? 25 : 40) ** 2;
-    this.material = ownMaterial ? charMaterial.clone() : charMaterial;
-    this.headMaterial = ownMaterial ? charMaterial.clone() : charMaterial;
+    this.material = ownMaterial ? makeMaterial() : charMaterial;
+    this.headMaterial = ownMaterial ? makeMaterial() : charMaterial;
 
     this.root = new THREE.Group();
     this.body = new THREE.Group();
-    this.body.scale.setScalar(look.scale ?? 1);
     this.root.add(this.body);
     this.hips = new THREE.Group();
     this.hips.position.y = 0.95;
@@ -312,30 +386,23 @@ export class Character {
     this.torso = new THREE.Group();
     this.hips.add(this.torso);
     this.head = new THREE.Group();
-    this.head.position.y = 0.6;
     this.torso.add(this.head);
     this.headTop = new THREE.Object3D();
-    this.headTop.position.y = 0.32;
     this.head.add(this.headTop);
 
-    this.arms = [-1, 1].map((s) => {
+    this.arms = [-1, 1].map(() => {
       const shoulder = new THREE.Group();
-      shoulder.position.set(s * 0.215, 0.47, 0);
       this.torso.add(shoulder);
       const elbow = new THREE.Group();
-      elbow.position.y = -0.29;
       shoulder.add(elbow);
       const hand = new THREE.Group();
-      hand.position.y = -0.27;
       elbow.add(hand);
       return { shoulder, elbow, hand };
     });
-    this.legs = [-1, 1].map((s) => {
+    this.legs = [-1, 1].map(() => {
       const hip = new THREE.Group();
-      hip.position.set(s * 0.1, -0.02, 0);
       this.hips.add(hip);
       const knee = new THREE.Group();
-      knee.position.y = -0.44;
       hip.add(knee);
       return { hip, knee };
     });
@@ -347,6 +414,7 @@ export class Character {
     this.build();
 
     this.t = Math.random() * 10;
+    this.seed = Math.random() * 100;
     this.phase = 0;
     this.action = null;
     this.actionParam = 0;
@@ -355,6 +423,7 @@ export class Character {
     this.holdL = null; // 'holdUp'
     this.cur = { ...DEFAULTS };
     this._T = { ...DEFAULTS };
+    this._gaze = { x: 0, y: 0, t: 0 };
   }
 
   build() {
@@ -364,112 +433,39 @@ export class Character {
       this.mesh.geometry.dispose();
       this.mesh.skeleton.dispose();
     }
-    const S = this.low ? (h, l) => l : (h) => h; // segment counts: full, phone crowd
-    const bones = [];
-    const body = [];
-    let headGeo = null;
-    // one joint's parts, merged and fully weighted to that joint
-    const add = (joint, parts, isHead = false) => {
-      const g = mergeGeometries(parts);
-      for (const p of parts) p.dispose();
-      const n = g.attributes.position.count;
-      const idx = new Uint16Array(n * 4);
-      const wt = new Float32Array(n * 4);
-      for (let i = 0; i < n; i++) {
-        idx[i * 4] = bones.length;
-        wt[i * 4] = 1;
-      }
-      g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(idx, 4));
-      g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(wt, 4));
-      bones.push(joint);
-      if (isHead) headGeo = g;
-      else body.push(g);
-    };
-
-    const long = L.style === 'long';
-    const profile = long
-      ? [[0.34, -0.82], [0.27, -0.45], [0.19, -0.05], [0.2, 0.18], [0.215, 0.32], [0.2, 0.44], [0.15, 0.52], [0.07, 0.56]]
-      : [[0.25, -0.36], [0.21, -0.18], [0.19, 0], [0.2, 0.18], [0.215, 0.32], [0.2, 0.44], [0.15, 0.52], [0.07, 0.56]];
-    const torso = [
-      shape(new THREE.LatheGeometry(profile.map(([x, y]) => new THREE.Vector2(x, y)), S(16, 10)), L.top, [], [], [1, 1, 0.78]),
-      shape(new THREE.CylinderGeometry(0.055, 0.06, 0.12, S(8, 5)), L.skin, [0, 0.6, 0]),
-      shape(new THREE.BoxGeometry(0.03, 0.3, 0.02), 0xd4a017, [0, 0.33, 0.165]),
-    ];
-    if (long) torso.push(shape(new THREE.TorusGeometry(0.335, 0.016, S(4, 3), S(24, 12)), 0xd4a017, [0, -0.8, 0], [Math.PI / 2, 0, 0], [1, 1, 0.78]));
-    if (L.dupatta) torso.push(shape(new THREE.TorusGeometry(0.21, 0.032, S(6, 4), S(18, 10), Math.PI * 1.15), L.dupatta, [0, 0.3, 0], [Math.PI / 2, 0, 0.65], [1, 0.8, 1]));
-    add(this.torso, torso);
-
-    const head = [
-      shape(new THREE.SphereGeometry(0.12, S(16, 10), S(12, 7)), L.skin, [0, 0.1, 0], [], [0.92, 1.08, 0.98]),
-      shape(new THREE.SphereGeometry(0.017, S(6, 4), S(5, 3)), 0x1a1110, [-0.04, 0.12, 0.105]),
-      shape(new THREE.SphereGeometry(0.017, S(6, 4), S(5, 3)), 0x1a1110, [0.04, 0.12, 0.105]),
-      shape(new THREE.SphereGeometry(0.02, S(6, 4), S(5, 3)), L.skin, [0, 0.085, 0.118]),
-    ];
-    const accent = L.accent ?? L.turban ?? 0xff7a00;
-    if (L.hairStyle === 'turban') {
-      head.push(
-        shape(new THREE.SphereGeometry(0.135, S(16, 10), S(10, 6), 0, Math.PI * 2, 0, Math.PI / 2), L.turban ?? accent, [0, 0.12, -0.005], [], [1, 0.95, 1.05]),
-        shape(new THREE.TorusGeometry(0.118, 0.04, S(6, 4), S(18, 10)), L.turban ?? accent, [0, 0.135, 0], [Math.PI / 2, 0, 0], [1, 1.08, 1]),
-        shape(new THREE.SphereGeometry(0.02, S(6, 4), S(5, 3)), 0xd4a017, [0, 0.16, 0.14])
-      );
-    } else {
-      head.push(shape(new THREE.SphereGeometry(0.128, S(16, 10), S(10, 6), 0, Math.PI * 2, 0, Math.PI * 0.55), L.hair, [0, 0.11, -0.008], [-0.35, 0, 0], [0.95, 1.08, 1.02]));
-      if (L.hairStyle === 'bun') head.push(shape(new THREE.SphereGeometry(0.06, S(10, 6), S(8, 5)), L.hair, [0, 0.17, -0.1]));
-      if (L.hairStyle === 'braid') head.push(shape(new THREE.CylinderGeometry(0.035, 0.02, 0.45, S(6, 4)), L.hair, [0, -0.12, -0.12], [0.15, 0, 0]));
-      if (L.hairStyle === 'open') {
-        head.push(
-          shape(new THREE.SphereGeometry(0.13, S(14, 8), S(10, 6), 0, Math.PI * 2, 0, Math.PI * 0.5), L.hair, [0, 0.09, -0.03], [Math.PI * 0.5, 0, 0], [0.98, 1.05, 1.5]),
-          shape(new THREE.BoxGeometry(0.22, 0.3, 0.07), L.hair, [0, -0.08, -0.1], [0.12, 0, 0])
-        );
-      }
-      if (L.hairStyle === 'topi') {
-        // a Gandhi-style cap: a folded cream band with a boat-shaped crown
-        head.push(
-          shape(new THREE.CylinderGeometry(0.115, 0.125, 0.07, S(16, 10)), 0xf6efe0, [0, 0.19, -0.005], [], [1, 1, 0.92]),
-          shape(new THREE.SphereGeometry(0.11, S(14, 8), S(8, 5), 0, Math.PI * 2, 0, Math.PI / 2), 0xf6efe0, [0, 0.2, -0.005], [], [0.72, 0.5, 1.05])
-        );
-      }
-    }
-    if (L.bindi) head.push(shape(new THREE.SphereGeometry(0.009, S(6, 4), S(4, 2)), 0xd00000, [0, 0.155, 0.112]));
-    if (L.moustache) head.push(shape(new THREE.CapsuleGeometry(0.011, 0.05, S(3, 1), S(6, 4)), L.hair, [0, 0.06, 0.112], [0, 0, Math.PI / 2], [1, 1, 0.6]));
-    if (L.glasses) {
-      const rim = 0x2b2118;
-      head.push(
-        shape(new THREE.TorusGeometry(0.03, 0.0045, S(6, 3), S(14, 8)), rim, [-0.042, 0.118, 0.112]),
-        shape(new THREE.TorusGeometry(0.03, 0.0045, S(6, 3), S(14, 8)), rim, [0.042, 0.118, 0.112]),
-        shape(new THREE.BoxGeometry(0.026, 0.006, 0.006), rim, [0, 0.122, 0.114]),
-        shape(new THREE.BoxGeometry(0.006, 0.006, 0.1), rim, [-0.075, 0.12, 0.06]),
-        shape(new THREE.BoxGeometry(0.006, 0.006, 0.1), rim, [0.075, 0.12, 0.06])
-      );
-    }
-    add(this.head, head, true);
-
-    for (const a of this.arms) {
-      add(a.shoulder, [shape(new THREE.CapsuleGeometry(0.052, 0.2, S(3, 2), S(8, 6)), L.top, [0, -0.14, 0])]);
-      const lower = [
-        shape(new THREE.CapsuleGeometry(0.045, 0.18, S(3, 2), S(8, 6)), L.top, [0, -0.12, 0]),
-        shape(new THREE.SphereGeometry(0.048, S(8, 5), S(6, 4)), L.skin, [0, -0.27, 0], [], [0.9, 1.1, 0.8]),
-      ];
-      if (L.bangles) {
-        for (let k = 0; k < 3; k++) lower.push(shape(new THREE.TorusGeometry(0.047, 0.01, S(5, 3), S(14, 8)), L.bangles, [0, -0.2 - k * 0.022, 0], [Math.PI / 2, 0, 0]));
-      }
-      add(a.elbow, lower);
-    }
-    for (const g of this.legs) {
-      add(g.hip, [shape(new THREE.CylinderGeometry(0.078, 0.066, 0.44, S(8, 6)), L.bottom, [0, -0.22, 0])]);
-      add(g.knee, [
-        shape(new THREE.CylinderGeometry(0.064, 0.05, 0.43, S(8, 6)), L.bottom, [0, -0.215, 0]),
-        shape(new THREE.BoxGeometry(0.1, 0.06, 0.24), L.shoes, [0, -0.45, 0.05]),
-      ]);
-    }
-
-    // the head goes last: a character with its own head material draws it as a second group
+    this.body.scale.setScalar(L.scale ?? 1);
     const split = this.headMaterial !== this.material;
-    const all = mergeGeometries(body);
-    const geo = mergeGeometries([all, headGeo], split);
-    for (const g of [...body, all, headGeo]) g.dispose();
-    const mesh = new THREE.SkinnedMesh(geo, split ? [this.material, this.headMaterial] : this.material);
-    mesh.bind(new THREE.Skeleton(bones, BONE_INVERSES), IDENTITY);
+    const { geometry, rig: G, look: R, headTopY } = buildPerson(L, { low: this.low, split });
+    this.kind = R;
+    // joints at the rig's rest offsets (their rotations are posed every frame)
+    this.torso.position.set(0, 0, 0);
+    this.head.position.set(0, G.headPivot, 0);
+    this.headTop.position.set(0, headTopY, 0);
+    this.arms.forEach((a, i) => {
+      const s = i === 0 ? -1 : 1;
+      a.shoulder.position.set(s * G.shX, G.shY, 0);
+      a.elbow.position.set(0, -G.upper, 0);
+      a.hand.position.set(0, -G.fore, 0);
+    });
+    this.legs.forEach((g, i) => {
+      const s = i === 0 ? -1 : 1;
+      g.hip.position.set(s * G.legX, -0.02, 0);
+      g.knee.position.set(0, -G.thigh, 0);
+    });
+    // bones are translations at rest, so each inverse is the negated rest position (body space)
+    const rest = [
+      [0, G.hy, 0], [0, G.hy, 0], [0, G.hy + G.headPivot, 0],
+      [-G.shX, G.hy + G.shY, 0], [-G.shX, G.hy + G.shY - G.upper, 0],
+      [G.shX, G.hy + G.shY, 0], [G.shX, G.hy + G.shY - G.upper, 0],
+      [-G.legX, G.hy - 0.02, 0], [-G.legX, G.hy - 0.02 - G.thigh, 0],
+      [G.legX, G.hy - 0.02, 0], [G.legX, G.hy - 0.02 - G.thigh, 0],
+    ];
+    const inverses = rest.map(([x, y, z]) => new THREE.Matrix4().makeTranslation(-x, -y, -z));
+    const bones = [this.hips, this.torso, this.head, this.arms[0].shoulder, this.arms[0].elbow, this.arms[1].shoulder, this.arms[1].elbow, this.legs[0].hip, this.legs[0].knee, this.legs[1].hip, this.legs[1].knee];
+    if (bones.length !== BONE_COUNT) throw new Error('rig mismatch');
+
+    const mesh = new THREE.SkinnedMesh(geometry, split ? [this.material, this.headMaterial] : this.material);
+    mesh.bind(new THREE.Skeleton(bones, inverses), IDENTITY);
     mesh.boundingSphere = BOUNDS.clone();
     mesh.castShadow = true;
     mesh.receiveShadow = true;
@@ -477,6 +473,16 @@ export class Character {
     this.body.add(mesh);
     this.mesh = mesh;
     this.meshes = [mesh];
+
+    // gait character: long skirts take shorter steps, elders walk gently, women sway the hips
+    const longSkirt = R.style === 'long' || R.style === 'saree' || R.style === 'lehenga';
+    this.gait = {
+      stride: longSkirt ? 0.72 : R.age === 'elder' ? 0.8 : 1,
+      sway: R.fem ? 1.7 : 1,
+      arm: R.fem ? 0.75 : R.kid ? 1.15 : 1,
+      stoop: R.age === 'elder' ? 0.09 : 0,
+      spread: longSkirt ? 0.12 : R.style === 'sherwani' || R.style === 'kurta' || R.style === 'salwar' ? 0.1 : 0.08,
+    };
   }
 
   /**
@@ -538,28 +544,51 @@ export class Character {
   animate(dt, { speed = 0, grounded = true } = {}) {
     this.t += dt;
     const t = this.t;
+    const g = this.gait;
     const walk = Math.min(1, speed / 2.8);
+    const still = 1 - walk;
     const run = clamp((speed - 3.2) / 2.8, 0, 1);
-    const cycle = 1.5 + run * 1.2;
+    const cycle = (1.5 + run * 1.2) * (g.stride < 1 ? 0.85 : 1);
     if (speed > 0.05) this.phase += (dt * Math.PI * 2 * speed) / cycle;
     const s = Math.sin(this.phase);
     const c = Math.cos(this.phase);
-    const amp = 0.45 * walk + 0.35 * run;
+    const amp = (0.45 * walk + 0.35 * run) * g.stride;
+
+    // idle life: breathing, a slow weight shift, and a gaze that wanders now and then
+    const breath = Math.sin(t * 1.55 + this.seed);
+    const shift = Math.sin(t * 0.37 + this.seed * 1.7);
+    const gz = this._gaze;
+    gz.t -= dt;
+    if (gz.t <= 0) {
+      gz.t = 1.8 + Math.random() * 3.5;
+      const look = Math.random() < 0.65;
+      gz.y = look ? (Math.random() - 0.5) * 1.1 : 0;
+      gz.x = look ? (Math.random() - 0.6) * 0.25 : 0;
+    }
 
     const T = Object.assign(this._T, DEFAULTS);
-    T.hipsY = 0.95 - Math.abs(c) * (0.03 * walk + 0.05 * run);
-    T.torsoX = 0.04 * walk + 0.18 * run + Math.sin(t * 1.7) * 0.012 * (1 - walk);
-    T.torsoY = s * 0.1 * amp;
-    T.headX = -T.torsoX * 0.6;
+    T.hipsY = 0.95 - Math.abs(c) * (0.03 * walk + 0.05 * run) - still * 0.004 * (1 + breath);
+    // the pelvis: drops on the swinging side, turns with the leading leg, shifts over the stance foot
+    T.hipsRZ = c * 0.045 * walk * g.sway + shift * 0.022 * still;
+    T.hipsRY = s * 0.11 * amp;
+    T.hipsX = -c * 0.012 * walk * g.sway + shift * 0.012 * still;
+    T.torsoZ = -T.hipsRZ * 0.75;
+    T.torsoX = g.stoop + 0.04 * walk + 0.18 * run + breath * 0.012 * still;
+    T.torsoY = -T.hipsRY * 1.5 - s * 0.05 * amp;
+    T.headX = -T.torsoX * 0.6 - g.stoop * 0.6 + gz.x * still;
+    T.headY = -T.torsoY * 0.8 + gz.y * (still * 0.85 + 0.15);
     T.legRX = -s * amp;
     T.legLX = s * amp;
-    T.kneeR = 0.05 + Math.max(0, c) * amp * 1.6;
-    T.kneeL = 0.05 + Math.max(0, -c) * amp * 1.6;
-    T.armRX = s * amp * 0.85;
-    T.armLX = -s * amp * 0.85;
-    T.armRZ = -0.07 - Math.sin(t * 1.7) * 0.02 * (1 - walk);
-    T.armLZ = 0.07 + Math.sin(t * 1.7) * 0.02 * (1 - walk);
-    T.elbowR = T.elbowL = -(0.15 + walk * 0.1 + run * 1.1);
+    T.kneeR = 0.05 + Math.max(0, c) * amp * 1.6 + still * Math.max(0, shift) * 0.1;
+    T.kneeL = 0.05 + Math.max(0, -c) * amp * 1.6 + still * Math.max(0, -shift) * 0.1;
+    const arm = amp * 0.85 * g.arm;
+    T.armRX = s * arm;
+    T.armLX = -s * arm;
+    T.armRZ = -g.spread - breath * 0.015 * still;
+    T.armLZ = g.spread + breath * 0.015 * still;
+    // elbows bend more as the arm swings forward, as they do
+    T.elbowR = -(0.18 + walk * 0.12 + Math.max(0, -s) * arm * 0.6 + run * 1.1);
+    T.elbowL = -(0.18 + walk * 0.12 + Math.max(0, s) * arm * 0.6 + run * 1.1);
 
     if (!grounded) {
       T.legRX = -0.55;
@@ -584,22 +613,29 @@ export class Character {
       T.armLZ = 0.15;
       T.elbowL = -0.7;
     }
-    if (this.action && POSES[this.action]) POSES[this.action](T, this.actionParam, t, this);
+    if (this.action && POSES[this.action]) {
+      POSES[this.action](T, this.actionParam, t, this);
+      // a posed body keeps its pelvis square
+      T.hipsRY *= 0.3;
+      T.hipsRZ *= 0.3;
+    }
 
     const k = 1 - Math.exp(-dt * (this.snappy ? 30 : 14));
     const C = this.cur;
     for (const key in T) C[key] += (T[key] - C[key]) * k;
 
-    this.hips.position.y = C.hipsY;
-    this.torso.rotation.set(C.torsoX, C.torsoY, 0);
+    this.hips.position.set(C.hipsX, C.hipsY, 0);
+    this.hips.rotation.set(0, C.hipsRY, C.hipsRZ);
+    this.torso.rotation.set(C.torsoX, C.torsoY, C.torsoZ);
     this.head.rotation.set(C.headX, C.headY, 0);
     this.arms[0].shoulder.rotation.set(C.armRX, 0, C.armRZ);
     this.arms[0].elbow.rotation.set(C.elbowR, 0, C.elbowRZ);
     this.arms[1].shoulder.rotation.set(C.armLX, 0, C.armLZ);
     this.arms[1].elbow.rotation.set(C.elbowL, 0, C.elbowLZ);
-    this.legs[0].hip.rotation.set(C.legRX, 0, C.legRZ);
+    // the legs stay planted against the pelvis yaw so the feet keep pointing ahead
+    this.legs[0].hip.rotation.set(C.legRX, -C.hipsRY, C.legRZ - C.hipsRZ);
     this.legs[0].knee.rotation.x = C.kneeR;
-    this.legs[1].hip.rotation.set(C.legLX, 0, C.legLZ);
+    this.legs[1].hip.rotation.set(C.legLX, -C.hipsRY, C.legLZ - C.hipsRZ);
     this.legs[1].knee.rotation.x = C.kneeL;
   }
 }

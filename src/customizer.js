@@ -176,6 +176,8 @@ export class Customizer {
   apply(partial) {
     const L = this.look;
     Object.assign(L, partial);
+    // a chosen outfit or hairstyle re-decides the build (randomised looks carry one)
+    if ('style' in partial || 'hairStyle' in partial) delete L.body;
     if ('accent' in partial) {
       L.turban = L.accent;
       if (L.dupatta) L.dupatta = L.accent;
